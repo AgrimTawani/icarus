@@ -1,4 +1,4 @@
-# Simulation: Coordinate and Unit Conventions
+# Icarus Coordinate and Unit Conventions
 
 ## Units
 

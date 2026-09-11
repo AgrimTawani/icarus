@@ -1,4 +1,4 @@
-# Development Dependencies
+# Icarus Development Dependencies
 
 This file records the host software required to develop and test the Icarus
 drone autonomy stack on Ubuntu 24.04.
@@ -41,7 +41,7 @@ drone autonomy stack on Ubuntu 24.04.
   `third_party/ardupilot/.venv`
 
 Python DCM, testing, evaluation, and fine-tuning dependencies are declared in
-[`requirements.txt`](../requirements.txt).
+[`requirements.txt`](../../requirements.txt).
 
 ## C++ Autonomy Core
 

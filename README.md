@@ -16,11 +16,11 @@ they are not yet a flight-ready autonomy implementation.
 
 1. Read the [project goal](docs/GOAL.md).
 2. Check the [master plan](docs/MASTER-PLAN.md) and
-   [current status](docs/PROJECT-STATUS.md).
-3. Understand the [software architecture](docs/SOFTWARE-ARCHITECTURE.md)
-   and [simulation connections](docs/SIMULATION-CONNECTIONS.md).
-4. Follow [getting started](docs/GETTING-STARTED.md) and the
-   [simulation operator guide](docs/SIMULATION-OPERATIONS.md).
+   [current status](docs/reference/PROJECT-STATUS.md).
+3. Understand the [software architecture](docs/architecture/SOFTWARE-ARCHITECTURE.md)
+   and [simulation connections](docs/architecture/SIMULATION-CONNECTIONS.md).
+4. Follow [getting started](docs/guides/GETTING-STARTED.md) and the
+   [simulation operator guide](docs/guides/SIMULATION-OPERATIONS.md).
 
 The complete documentation index is [docs/README.md](docs/README.md).
 
@@ -47,5 +47,5 @@ gets direct motor, MAVLink, shell or unrestricted operating-system access.
 Phases 0–5 are complete. Phase 6—the unified, operator-friendly launch and
 manual-test surface—is next. The strong-wind scenario is deliberately retained
 as a failing stress case until wind-force and control calibration are completed.
-See [PROJECT-STATUS.md](docs/PROJECT-STATUS.md) for exact evidence and
+See [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

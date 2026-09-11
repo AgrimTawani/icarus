@@ -1,4 +1,4 @@
-# Simulation: Phase 5 Acceptance — 2026-09-12
+# Phase 5 Simulation Acceptance — 2026-09-12
 
 Status: **passed**. Phase 5 now provides strict, deterministic environment and
 scenario layers. This is not obstacle-avoidance autonomy; route execution and

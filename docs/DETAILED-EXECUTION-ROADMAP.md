@@ -130,7 +130,7 @@ inside and outside them.
       the horizontal center of gravity within 5 mm of frame center, and preserve
       at least 2.18:1 thrust-to-weight at the initial 70% output ceiling.
 
-Deliverable: [`VEHICLE-MARK4-V2-BOM.md`](VEHICLE-MARK4-V2-BOM.md)
+Deliverable: [`vehicle/MARK4-V2-BOM.md`](vehicle/MARK4-V2-BOM.md)
 
 ### 0.2 Freeze the first mission set
 
@@ -145,7 +145,7 @@ Deliverable: [`VEHICLE-MARK4-V2-BOM.md`](VEHICLE-MARK4-V2-BOM.md)
 - [x] Reject an unsafe action.
 - [x] Recover from one simulated action failure.
 
-Deliverable: [`V1-MISSIONS.md`](V1-MISSIONS.md)
+Deliverable: [`reference/V1-MISSIONS.md`](reference/V1-MISSIONS.md)
 
 ### 0.3 Freeze initial safety limits
 
@@ -198,7 +198,7 @@ Deliverable: [`scripts/simulation/run_iris_smoke_test.sh`](../scripts/simulation
 - [x] Simulation time and SITL time remain synchronized through lockstep.
 - [x] Clean shutdown leaves no stale simulator processes or occupied ports.
 
-Deliverable: [`SIM-CONNECTION-BASELINE.md`](SIM-CONNECTION-BASELINE.md)
+Deliverable: [`simulation/CONNECTION-BASELINE.md`](simulation/CONNECTION-BASELINE.md)
 
 ### Phase 1 exit gate
 
@@ -236,7 +236,7 @@ simulation/
 - [x] Document camera and lidar optical frames.
 - [x] Create a visible axis/debug model for verification.
 
-Deliverable: [`SIM-COORDINATE-FRAMES.md`](SIM-COORDINATE-FRAMES.md)
+Deliverable: [`simulation/COORDINATE-FRAMES.md`](simulation/COORDINATE-FRAMES.md)
 
 ### Phase 2 exit gate
 
@@ -248,7 +248,7 @@ Deliverable: [`SIM-COORDINATE-FRAMES.md`](SIM-COORDINATE-FRAMES.md)
 
 ## Phase 3: Build the Mark4 V2 Digital Twin
 
-Completed simulation gate, 2026-09-12: [Phase 3–4 acceptance report](SIM-PHASE-3-4-COMPLETION.md).
+Completed simulation gate, 2026-09-12: [Phase 3–4 acceptance report](simulation/PHASE-3-4-COMPLETION.md).
 The user explicitly approved five consecutive automated flights in place of
 the original manual-flight gate. This is simulation acceptance, not measured
 hardware calibration or real-aircraft approval.
@@ -309,7 +309,7 @@ calibration remain future hardware-fidelity work.
 
 The profile is checked against live MAVLink parameter readback before arming.
 Configuration is verified; geofence breaches and RTL mission behavior still
-need dedicated scenario tests. See [Mark4 SITL bring-up](SIM-MARK4-SITL.md).
+need dedicated scenario tests. See [Mark4 SITL bring-up](simulation/MARK4-SITL.md).
 
 ### 3.5 Validate basic flight dynamics
 
@@ -387,7 +387,7 @@ all fused into ArduPilot. See the acceptance report for the exact SITL boundary.
 
 ## Phase 5: Build Worlds and Scenario Layers
 
-Completed simulation gate, 2026-09-12: [Phase 5 acceptance report](SIM-PHASE-5-COMPLETION.md).
+Completed simulation gate, 2026-09-12: [Phase 5 acceptance report](simulation/PHASE-5-COMPLETION.md).
 
 ### 5.1 Empty validation world
 

@@ -1,4 +1,4 @@
-# Simulation: Official Iris Connection Baseline
+# Official Iris Simulation Connection Baseline
 
 ## Result
 

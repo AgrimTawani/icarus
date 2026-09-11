@@ -1,4 +1,4 @@
-# Vehicle: Icarus Mark4 V2 Reference Build
+# Icarus Mark4 V2 Reference Build
 
 ## Status
 

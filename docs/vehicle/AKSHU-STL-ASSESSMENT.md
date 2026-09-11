@@ -1,4 +1,4 @@
-# Vehicle: Akshu STL Assessment and Adaptation Boundaries
+# Akshu STL Assessment and Adaptation Boundaries
 
 ## Source and preservation
 

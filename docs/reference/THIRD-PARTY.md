@@ -1,4 +1,4 @@
-# Third-Party Source Revisions
+# Icarus Third-Party Source Revisions
 
 External source trees are deliberately ignored and recreated beneath
 `third_party/` by `scripts/install_dependencies.sh`. Icarus-owned changes must

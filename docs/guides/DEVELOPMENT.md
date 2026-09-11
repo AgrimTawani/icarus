@@ -1,4 +1,4 @@
-# Development and Contribution Guide
+# Icarus Development and Contribution Guide
 
 ## Working Rules
 

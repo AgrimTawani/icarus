@@ -1,4 +1,4 @@
-# ADR 0002 — Preserve Contracts Across Simulation and Real Flight
+# ADR 0002: Preserve Contracts Across Simulation and Real Flight
 
 Status: accepted
 

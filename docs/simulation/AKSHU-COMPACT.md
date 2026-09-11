@@ -1,7 +1,7 @@
-# Simulation: Compact Two-Level Drone Baseline
+# Compact Two-Level Drone Simulation Baseline
 
 Flight integration now exists as a separate dynamic model. See
-[recorded flight and one-command launch](SIM-COMPACT-FLIGHT.md). The static sensor
+[recorded flight and one-command launch](COMPACT-FLIGHT.md). The static sensor
 fixture described below remains available for isolated sensor tests.
 
 Supersedes the tall `akshu_icarus_v1` packaging candidate. One shallow electronics

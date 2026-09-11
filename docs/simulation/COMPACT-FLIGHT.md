@@ -1,7 +1,7 @@
-# Simulation: Compact Flight and One-Command Launch
+# Compact Flight and One-Command Launch
 
 Original roadmap Phases 3 and 4 now pass their simulation gates, with the user's
-approved automated-flight substitution. See [acceptance evidence and scope](SIM-PHASE-3-4-COMPLETION.md).
+approved automated-flight substitution. See [acceptance evidence and scope](PHASE-3-4-COMPLETION.md).
 No hardware calibration or unrestricted autonomy is claimed.
 
 ## Run
@@ -142,7 +142,7 @@ with `scripts/simulation/test_compact_model.py`.
 ## Next boundary
 
 Phase 5 world/scenario layers are now complete; see
-[Phase 5 acceptance](SIM-PHASE-5-COMPLETION.md). Phase 6 is launcher hardening and
+[Phase 5 acceptance](PHASE-5-COMPLETION.md). Phase 6 is launcher hardening and
 the operator command surface. The typed drone API/MAVLink gateway, safety
 supervisor, LLM control, obstacle avoidance,
 real hardware validation and portable/containerized provisioning remain later

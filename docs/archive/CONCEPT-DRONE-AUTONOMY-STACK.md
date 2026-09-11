@@ -1,7 +1,7 @@
-# Archive: Drone Autonomy Stack Concept
+# Archived Concept: Drone Autonomy Stack
 
 > Historical design exploration. For the current system boundaries and status,
-> read [`SOFTWARE-ARCHITECTURE.md`](SOFTWARE-ARCHITECTURE.md).
+> read [`../architecture/SOFTWARE-ARCHITECTURE.md`](../architecture/SOFTWARE-ARCHITECTURE.md).
 
 ## 1. Final Product
 

@@ -1,8 +1,8 @@
-# Archive: Original Autonomy Roadmap
+# Archived Roadmap: Original Autonomy Plan
 
 > Historical planning document retained for context. The current plan is
-> [`MASTER-PLAN.md`](MASTER-PLAN.md), with detailed execution history in
-> [`DETAILED-EXECUTION-ROADMAP.md`](DETAILED-EXECUTION-ROADMAP.md).
+> [`../MASTER-PLAN.md`](../MASTER-PLAN.md), with detailed execution history in
+> [`../DETAILED-EXECUTION-ROADMAP.md`](../DETAILED-EXECUTION-ROADMAP.md).
 
 ## Purpose
 

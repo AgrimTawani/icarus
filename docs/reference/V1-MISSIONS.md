@@ -1,4 +1,4 @@
-# V1 Simulation Missions
+# Icarus V1 Simulation Missions
 
 ## Scope
 

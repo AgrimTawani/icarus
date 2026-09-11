@@ -1,4 +1,4 @@
-# Getting Started with Icarus
+# Icarus Getting Started
 
 ## Supported Development Host
 
@@ -14,7 +14,7 @@ git clone <repository-url> icarus
 cd icarus
 ```
 
-Read [`DEPENDENCIES.md`](DEPENDENCIES.md) before
+Read [`../reference/DEPENDENCIES.md`](../reference/DEPENDENCIES.md) before
 running the installer. The script uses `sudo`, configures the OSRF package
 repository, installs system packages, clones official ArduPilot projects,
 builds SITL and the Gazebo plugin, creates two Python environments, installs
@@ -31,7 +31,7 @@ External repositories are created under `third_party/`, project Python packages
 under `.venv/`, and ArduPilot Python packages under
 `third_party/ardupilot/.venv/`. All are local and ignored by Git. The installer
 currently follows upstream branches when rerun; the known-good revisions are
-recorded in [`THIRD-PARTY.md`](THIRD-PARTY.md), and an
+recorded in [`../reference/THIRD-PARTY.md`](../reference/THIRD-PARTY.md), and an
 executable pinning mechanism is a Phase 7 task.
 
 ## Validate the Simulation Assets

@@ -1,7 +1,7 @@
-# Archive: Custom Drone Autonomy Stack Concept
+# Archived Concept: Custom Drone Autonomy Stack
 
 > Historical design input retained for traceability. For the canonical current
-> architecture, read [`SOFTWARE-ARCHITECTURE.md`](SOFTWARE-ARCHITECTURE.md).
+> architecture, read [`../architecture/SOFTWARE-ARCHITECTURE.md`](../architecture/SOFTWARE-ARCHITECTURE.md).
 
 ## Vision
 

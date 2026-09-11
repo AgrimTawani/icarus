@@ -1,4 +1,4 @@
-# ADR 0001 — Deterministic Safety Owns Flight Authority
+# ADR 0001: Deterministic Safety Owns Flight Authority
 
 Status: accepted
 

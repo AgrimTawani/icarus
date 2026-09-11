@@ -1,6 +1,6 @@
-# Vehicle: Custom Akshu / Icarus Packaging Candidate V1
+# Custom Akshu / Icarus Packaging Candidate V1
 
-Superseded for simulation visuals by [the compact two-level chassis](SIM-AKSHU-COMPACT.md).
+Superseded for simulation visuals by [the compact two-level chassis](../simulation/AKSHU-COMPACT.md).
 Retained as design history; do not treat the tall stack as the current baseline.
 
 This is an edited assembly STL and a static Gazebo packaging model, **not a

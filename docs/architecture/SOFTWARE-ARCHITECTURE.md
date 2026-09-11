@@ -1,4 +1,4 @@
-# Software Architecture
+# Icarus Software Architecture
 
 ## Scope and Maturity
 

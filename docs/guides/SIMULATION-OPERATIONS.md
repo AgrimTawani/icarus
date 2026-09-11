@@ -1,4 +1,4 @@
-# Simulation Operator Guide
+# Icarus Simulation Operator Guide
 
 ## Standard Commands
 

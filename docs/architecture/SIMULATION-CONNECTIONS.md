@@ -1,4 +1,4 @@
-# Simulation Connections and Data Flow
+# Icarus Simulation Connections and Data Flow
 
 This is the canonical overview of the current simulator data flow. Detailed
 bring-up evidence is retained in the `SIM-*` documents.
@@ -46,7 +46,7 @@ perception and the normalized state engine belongs to Phases 8–9.
   accepted.
 - Distances are metres, angles radians internally, speeds m/s and time seconds.
 
-See [`SIM-COORDINATE-FRAMES.md`](SIM-COORDINATE-FRAMES.md)
+See [`../simulation/COORDINATE-FRAMES.md`](../simulation/COORDINATE-FRAMES.md)
 for the validated conversion details.
 
 ## Scenario Build

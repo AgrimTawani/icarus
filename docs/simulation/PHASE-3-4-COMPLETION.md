@@ -1,4 +1,4 @@
-# Simulation: Phase 3–4 Acceptance — 2026-09-12
+# Phase 3–4 Simulation Acceptance — 2026-09-12
 
 Status: **passed**, using the user's explicit approval: “Use the automated
 simulation gate.” Five consecutive automated flights replace the original five

@@ -1,4 +1,4 @@
-# ADR 0003 — Scenario Definitions Are Source; Generated Worlds Are Artifacts
+# ADR 0003: Scenario Definitions Are Source; Generated Worlds Are Artifacts
 
 Status: accepted
 

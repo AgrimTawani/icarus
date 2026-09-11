@@ -1,4 +1,4 @@
-# Icarus Repository Map
+# Repository Map
 
 ```text
 Icarus/

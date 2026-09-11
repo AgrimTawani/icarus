@@ -1,4 +1,4 @@
-# Simulation: Mark4 SITL Bring-Up
+# Mark4 SITL Bring-Up
 
 ## Commands
 
