@@ -1,0 +1,1280 @@
+{
+  "status": "STATIC PACKAGING CANDIDATE ONLY",
+  "source_sha256": "64f89254d2b68226b695534b8ea12a29d7ab912551ee680c2a2bf11897f152aa",
+  "retained_source_components": [
+    44,
+    45,
+    46,
+    47,
+    79,
+    80,
+    81,
+    82,
+    25,
+    26,
+    27,
+    28
+  ],
+  "removed_source_component_count": 215,
+  "units": "mm in assembly STL; metres in Gazebo meshes",
+  "parts": [
+    {
+      "name": "source_arm_44",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        22.676846504211426,
+        0.026519775390625,
+        -48.100006103515625
+      ],
+      "max_mm": [
+        154.25973224639893,
+        195.44314575195312,
+        -41.100006103515625
+      ]
+    },
+    {
+      "name": "source_arm_45",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        22.676846504211426,
+        -195.431884765625,
+        -48.100006103515625
+      ],
+      "max_mm": [
+        154.25973224639893,
+        -0.0152587890625,
+        -41.100006103515625
+      ]
+    },
+    {
+      "name": "source_arm_46",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        -154.2354612350464,
+        0.026519775390625,
+        -48.100006103515625
+      ],
+      "max_mm": [
+        -22.652560234069824,
+        195.44314575195312,
+        -41.100006103515625
+      ]
+    },
+    {
+      "name": "source_arm_47",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        -154.2354612350464,
+        -195.431884765625,
+        -48.100006103515625
+      ],
+      "max_mm": [
+        -22.652560234069824,
+        -0.0152587890625,
+        -41.100006103515625
+      ]
+    },
+    {
+      "name": "leg_extension_79",
+      "color": "0.08 0.10 0.13 1",
+      "description": "35 mm extension concept; source leg joint requires mechanical detailing",
+      "min_mm": [
+        67.574230959386,
+        72.97029980318045,
+        -80.00647434187525
+      ],
+      "max_mm": [
+        81.574230959386,
+        86.97029980318045,
+        -45.00647434187524
+      ]
+    },
+    {
+      "name": "extended_leg_79",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        45.438015937805176,
+        44.5263671875,
+        -190.10000610351562
+      ],
+      "max_mm": [
+        108.62417316436768,
+        120.90869140625,
+        -79.8970718383789
+      ]
+    },
+    {
+      "name": "leg_extension_80",
+      "color": "0.08 0.10 0.13 1",
+      "description": "35 mm extension concept; source leg joint requires mechanical detailing",
+      "min_mm": [
+        -80.5502140728044,
+        72.14026538236642,
+        -80.00647434187525
+      ],
+      "max_mm": [
+        -66.5502140728044,
+        86.14026538236642,
+        -45.00647434187524
+      ]
+    },
+    {
+      "name": "extended_leg_80",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        -106.8087797164917,
+        44.236907958984375,
+        -190.10000610351562
+      ],
+      "max_mm": [
+        -43.62263774871826,
+        120.61921691894531,
+        -79.8970718383789
+      ]
+    },
+    {
+      "name": "leg_extension_81",
+      "color": "0.08 0.10 0.13 1",
+      "description": "35 mm extension concept; source leg joint requires mechanical detailing",
+      "min_mm": [
+        66.68489108850926,
+        -86.29061738944348,
+        -80.00647434187525
+      ],
+      "max_mm": [
+        80.68489108850926,
+        -72.29061738944348,
+        -45.00647434187524
+      ]
+    },
+    {
+      "name": "extended_leg_81",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        43.757290840148926,
+        -120.76956176757812,
+        -190.10000610351562
+      ],
+      "max_mm": [
+        106.94344806671143,
+        -44.38726806640625,
+        -79.8970718383789
+      ]
+    },
+    {
+      "name": "leg_extension_82",
+      "color": "0.08 0.10 0.13 1",
+      "description": "35 mm extension concept; source leg joint requires mechanical detailing",
+      "min_mm": [
+        -81.06630325317383,
+        -85.9846061706543,
+        -80.00201187133788
+      ],
+      "max_mm": [
+        -67.06630325317383,
+        -71.9846061706543,
+        -45.00201187133789
+      ]
+    },
+    {
+      "name": "extended_leg_82",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Source structural geometry",
+      "min_mm": [
+        -108.21473979949951,
+        -120.33358764648438,
+        -190.10000610351562
+      ],
+      "max_mm": [
+        -45.028597831726074,
+        -43.951263427734375,
+        -79.8970718383789
+      ]
+    },
+    {
+      "name": "source_prop_25",
+      "color": "0.12 0.48 0.65 1",
+      "description": "Source 10-inch prop visual; not verified HQ geometry or handedness",
+      "min_mm": [
+        64.64291095733643,
+        58.798614501953125,
+        0.0
+      ],
+      "max_mm": [
+        265.0122346878052,
+        280.24106431007385,
+        13.954544067382812
+      ]
+    },
+    {
+      "name": "source_prop_26",
+      "color": "0.12 0.48 0.65 1",
+      "description": "Source 10-inch prop visual; not verified HQ geometry or handedness",
+      "min_mm": [
+        -264.80282378196716,
+        58.381256103515625,
+        0.0
+      ],
+      "max_mm": [
+        -65.36368083953857,
+        279.99862241744995,
+        13.954544067382812
+      ]
+    },
+    {
+      "name": "source_prop_27",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Source 10-inch prop visual; not verified HQ geometry or handedness",
+      "min_mm": [
+        -222.80251598358154,
+        -271.8833923339844,
+        0.0
+      ],
+      "max_mm": [
+        -13.786456108093262,
+        -53.137481689453125,
+        13.954544067382812
+      ]
+    },
+    {
+      "name": "source_prop_28",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Source 10-inch prop visual; not verified HQ geometry or handedness",
+      "min_mm": [
+        55.353604316711426,
+        -292.4618835449219,
+        0.0
+      ],
+      "max_mm": [
+        263.9067049026489,
+        -73.5362548828125,
+        13.954544067382812
+      ]
+    },
+    {
+      "name": "motor_1",
+      "color": "0.08 0.10 0.13 1",
+      "description": "42 x 36 mm reserved motor envelope; XRotor3115 mounting drawing still required",
+      "min_mm": [
+        117.4983491897583,
+        -194.38687133789062,
+        -41.0
+      ],
+      "max_mm": [
+        159.4983491897583,
+        -152.38687133789062,
+        -5.0
+      ]
+    },
+    {
+      "name": "motor_collar_1",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Motor visual collar",
+      "min_mm": [
+        116.9983491897583,
+        -194.88687133789062,
+        -10.0
+      ],
+      "max_mm": [
+        159.9983491897583,
+        -151.88687133789062,
+        -6.0
+      ]
+    },
+    {
+      "name": "shaft_1",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Prop shaft proxy",
+      "min_mm": [
+        135.9983491897583,
+        -175.88687133789062,
+        -7.0
+      ],
+      "max_mm": [
+        140.9983491897583,
+        -170.88687133789062,
+        15.0
+      ]
+    },
+    {
+      "name": "motor_2",
+      "color": "0.08 0.10 0.13 1",
+      "description": "42 x 36 mm reserved motor envelope; XRotor3115 mounting drawing still required",
+      "min_mm": [
+        -159.49334239959717,
+        152.38726043701172,
+        -41.0
+      ],
+      "max_mm": [
+        -117.49334239959717,
+        194.38726043701172,
+        -5.0
+      ]
+    },
+    {
+      "name": "motor_collar_2",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Motor visual collar",
+      "min_mm": [
+        -159.99334239959717,
+        151.88726043701172,
+        -10.0
+      ],
+      "max_mm": [
+        -116.99334239959717,
+        194.88726043701172,
+        -6.0
+      ]
+    },
+    {
+      "name": "shaft_2",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Prop shaft proxy",
+      "min_mm": [
+        -140.99334239959717,
+        170.88726043701172,
+        -7.0
+      ],
+      "max_mm": [
+        -135.99334239959717,
+        175.88726043701172,
+        15.0
+      ]
+    },
+    {
+      "name": "motor_3",
+      "color": "0.08 0.10 0.13 1",
+      "description": "42 x 36 mm reserved motor envelope; XRotor3115 mounting drawing still required",
+      "min_mm": [
+        117.50762653350833,
+        152.38648223876953,
+        -41.0
+      ],
+      "max_mm": [
+        159.50762653350833,
+        194.38648223876953,
+        -5.0
+      ]
+    },
+    {
+      "name": "motor_collar_3",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Motor visual collar",
+      "min_mm": [
+        117.00762653350833,
+        151.88648223876953,
+        -10.0
+      ],
+      "max_mm": [
+        160.00762653350833,
+        194.88648223876953,
+        -6.0
+      ]
+    },
+    {
+      "name": "shaft_3",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Prop shaft proxy",
+      "min_mm": [
+        136.00762653350833,
+        170.88648223876953,
+        -7.0
+      ],
+      "max_mm": [
+        141.00762653350833,
+        175.88648223876953,
+        15.0
+      ]
+    },
+    {
+      "name": "motor_4",
+      "color": "0.08 0.10 0.13 1",
+      "description": "42 x 36 mm reserved motor envelope; XRotor3115 mounting drawing still required",
+      "min_mm": [
+        -159.51263332366946,
+        -194.38687133789062,
+        -41.0
+      ],
+      "max_mm": [
+        -117.51263332366946,
+        -152.38687133789062,
+        -5.0
+      ]
+    },
+    {
+      "name": "motor_collar_4",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Motor visual collar",
+      "min_mm": [
+        -160.01263332366946,
+        -194.88687133789062,
+        -10.0
+      ],
+      "max_mm": [
+        -117.01263332366946,
+        -151.88687133789062,
+        -6.0
+      ]
+    },
+    {
+      "name": "shaft_4",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Prop shaft proxy",
+      "min_mm": [
+        -141.01263332366946,
+        -175.88687133789062,
+        -7.0
+      ],
+      "max_mm": [
+        -136.01263332366946,
+        -170.88687133789062,
+        15.0
+      ]
+    },
+    {
+      "name": "lower_plate",
+      "color": "0.08 0.10 0.13 1",
+      "description": "New widened 200 x 110 x 5 mm centre plate",
+      "min_mm": [
+        -100.0,
+        -55.0,
+        -47.5
+      ],
+      "max_mm": [
+        100.0,
+        55.0,
+        -42.5
+      ]
+    },
+    {
+      "name": "compute_shelf",
+      "color": "0.08 0.10 0.13 1",
+      "description": "New elevated compute shelf; 20.5 mm above source blade envelope",
+      "min_mm": [
+        -75.0,
+        -55.0,
+        34.5
+      ],
+      "max_mm": [
+        75.0,
+        55.0,
+        39.5
+      ]
+    },
+    {
+      "name": "deck_post_-64_-44",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Hollow M3-clearance standoff concept; plate drilling pending",
+      "min_mm": [
+        -68.0,
+        -48.0,
+        -40.0
+      ],
+      "max_mm": [
+        -60.0,
+        -40.0,
+        34.5
+      ]
+    },
+    {
+      "name": "deck_post_-64_44",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Hollow M3-clearance standoff concept; plate drilling pending",
+      "min_mm": [
+        -68.0,
+        40.0,
+        -40.0
+      ],
+      "max_mm": [
+        -60.0,
+        48.0,
+        34.5
+      ]
+    },
+    {
+      "name": "deck_post_64_-44",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Hollow M3-clearance standoff concept; plate drilling pending",
+      "min_mm": [
+        60.0,
+        -48.0,
+        -40.0
+      ],
+      "max_mm": [
+        68.0,
+        -40.0,
+        34.5
+      ]
+    },
+    {
+      "name": "deck_post_64_44",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Hollow M3-clearance standoff concept; plate drilling pending",
+      "min_mm": [
+        60.0,
+        40.0,
+        -40.0
+      ],
+      "max_mm": [
+        68.0,
+        48.0,
+        34.5
+      ]
+    },
+    {
+      "name": "thor_assembly",
+      "color": "0.24 0.28 0.31 1",
+      "description": "Reserved module + custom carrier + cooling volume including fins; NOT developer kit CAD",
+      "min_mm": [
+        -70.0,
+        -50.0,
+        42.0
+      ],
+      "max_mm": [
+        70.0,
+        50.0,
+        87.0
+      ]
+    },
+    {
+      "name": "pixhawk_6x",
+      "color": "0.15 0.18 0.22 1",
+      "description": "Conservative FC + baseboard allocation; verify chosen baseboard",
+      "min_mm": [
+        -45.0,
+        -30.0,
+        -16.0
+      ],
+      "max_mm": [
+        45.0,
+        30.0,
+        16.0
+      ]
+    },
+    {
+      "name": "esc",
+      "color": "0.17 0.42 0.25 1",
+      "description": "65 A 4-in-1 ESC reserved enclosure and connector allowance",
+      "min_mm": [
+        -27.5,
+        -27.5,
+        -65.0
+      ],
+      "max_mm": [
+        27.5,
+        27.5,
+        -53.0
+      ]
+    },
+    {
+      "name": "battery_6s_10ah",
+      "color": "0.12 0.25 0.48 1",
+      "description": "Provisional 6S 10 Ah pack envelope; select actual pack before fabrication",
+      "min_mm": [
+        -90.0,
+        -37.5,
+        -137.5
+      ],
+      "max_mm": [
+        90.0,
+        37.5,
+        -82.5
+      ]
+    },
+    {
+      "name": "mid360",
+      "color": "0.80 0.83 0.85 1",
+      "description": "Livox MID-360 nominal envelope, visual proxy, not active sensor",
+      "min_mm": [
+        -32.5,
+        -32.5,
+        103.0
+      ],
+      "max_mm": [
+        32.5,
+        32.5,
+        163.0
+      ]
+    },
+    {
+      "name": "oak_camera",
+      "color": "0.25 0.28 0.30 1",
+      "description": "Conservative OAK-D Lite-class enclosure allocation; forward +X",
+      "min_mm": [
+        129.0,
+        -50.0,
+        -56.0
+      ],
+      "max_mm": [
+        159.0,
+        50.0,
+        -24.0
+      ]
+    },
+    {
+      "name": "lw20",
+      "color": "0.12 0.18 0.21 1",
+      "description": "LW20/C nominal envelope; optical axis downward",
+      "min_mm": [
+        105.0,
+        -10.0,
+        -129.5
+      ],
+      "max_mm": [
+        135.0,
+        10.0,
+        -86.5
+      ]
+    },
+    {
+      "name": "gnss",
+      "color": "0.90 0.91 0.88 1",
+      "description": "Provisional GNSS antenna envelope below lidar scan level",
+      "min_mm": [
+        -129.5,
+        -22.5,
+        60.0
+      ],
+      "max_mm": [
+        -84.5,
+        22.5,
+        78.0
+      ]
+    },
+    {
+      "name": "cooling_fin_-44",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        -45.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        -43.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_-36",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        -37.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        -35.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_-28",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        -29.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        -27.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_-20",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        -21.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        -19.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_-12",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        -13.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        -11.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_-4",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        -5.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        -3.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_4",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        3.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        5.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_12",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        11.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        13.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_20",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        19.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        21.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_28",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        27.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        29.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_36",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        35.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        37.0,
+        93.0
+      ]
+    },
+    {
+      "name": "cooling_fin_44",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Illustrative cooling; thermal validation required",
+      "min_mm": [
+        -64.0,
+        43.0,
+        87.0
+      ],
+      "max_mm": [
+        64.0,
+        45.0,
+        93.0
+      ]
+    },
+    {
+      "name": "lidar_pedestal",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Raised lidar mount; cooling interaction needs validation",
+      "min_mm": [
+        -35.0,
+        -35.0,
+        93.0
+      ],
+      "max_mm": [
+        35.0,
+        35.0,
+        103.0
+      ]
+    },
+    {
+      "name": "compute_pad_-60_-40",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Compute mounting spacer",
+      "min_mm": [
+        -65.0,
+        -45.0,
+        39.5
+      ],
+      "max_mm": [
+        -55.0,
+        -35.0,
+        42.0
+      ]
+    },
+    {
+      "name": "compute_pad_-60_40",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Compute mounting spacer",
+      "min_mm": [
+        -65.0,
+        35.0,
+        39.5
+      ],
+      "max_mm": [
+        -55.0,
+        45.0,
+        42.0
+      ]
+    },
+    {
+      "name": "compute_pad_60_-40",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Compute mounting spacer",
+      "min_mm": [
+        55.0,
+        -45.0,
+        39.5
+      ],
+      "max_mm": [
+        65.0,
+        -35.0,
+        42.0
+      ]
+    },
+    {
+      "name": "compute_pad_60_40",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Compute mounting spacer",
+      "min_mm": [
+        55.0,
+        35.0,
+        39.5
+      ],
+      "max_mm": [
+        65.0,
+        45.0,
+        42.0
+      ]
+    },
+    {
+      "name": "esc_mount",
+      "color": "0.08 0.10 0.13 1",
+      "description": "ESC mounting spacer",
+      "min_mm": [
+        -20.0,
+        -20.0,
+        -53.0
+      ],
+      "max_mm": [
+        20.0,
+        20.0,
+        -47.5
+      ]
+    },
+    {
+      "name": "fc_isolation_pad",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Isolated FC carrier concept",
+      "min_mm": [
+        -35.0,
+        -25.0,
+        -24.0
+      ],
+      "max_mm": [
+        35.0,
+        25.0,
+        -16.0
+      ]
+    },
+    {
+      "name": "fc_support",
+      "color": "0.08 0.10 0.13 1",
+      "description": "FC support",
+      "min_mm": [
+        -37.5,
+        -27.5,
+        -42.5
+      ],
+      "max_mm": [
+        37.5,
+        27.5,
+        -24.0
+      ]
+    },
+    {
+      "name": "battery_tray",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Underslung battery tray",
+      "min_mm": [
+        -95.0,
+        -42.5,
+        -144.5
+      ],
+      "max_mm": [
+        95.0,
+        42.5,
+        -137.5
+      ]
+    },
+    {
+      "name": "tray_post_-75_-43",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Battery tray hanger outside pack",
+      "min_mm": [
+        -78.0,
+        -46.0,
+        -135.0
+      ],
+      "max_mm": [
+        -72.0,
+        -40.0,
+        -45.0
+      ]
+    },
+    {
+      "name": "tray_post_-75_43",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Battery tray hanger outside pack",
+      "min_mm": [
+        -78.0,
+        40.0,
+        -135.0
+      ],
+      "max_mm": [
+        -72.0,
+        46.0,
+        -45.0
+      ]
+    },
+    {
+      "name": "battery_strap_-75_-39",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Battery restraint sides",
+      "min_mm": [
+        -82.0,
+        -40.5,
+        -137.5
+      ],
+      "max_mm": [
+        -68.0,
+        -37.5,
+        -82.5
+      ]
+    },
+    {
+      "name": "battery_strap_-75_39",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Battery restraint sides",
+      "min_mm": [
+        -82.0,
+        37.5,
+        -137.5
+      ],
+      "max_mm": [
+        -68.0,
+        40.5,
+        -82.5
+      ]
+    },
+    {
+      "name": "strap_top_-75",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Battery restraint top",
+      "min_mm": [
+        -82.0,
+        -40.5,
+        -82.5
+      ],
+      "max_mm": [
+        -68.0,
+        40.5,
+        -79.5
+      ]
+    },
+    {
+      "name": "tray_post_75_-43",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Battery tray hanger outside pack",
+      "min_mm": [
+        72.0,
+        -46.0,
+        -135.0
+      ],
+      "max_mm": [
+        78.0,
+        -40.0,
+        -45.0
+      ]
+    },
+    {
+      "name": "tray_post_75_43",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Battery tray hanger outside pack",
+      "min_mm": [
+        72.0,
+        40.0,
+        -135.0
+      ],
+      "max_mm": [
+        78.0,
+        46.0,
+        -45.0
+      ]
+    },
+    {
+      "name": "battery_strap_75_-39",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Battery restraint sides",
+      "min_mm": [
+        68.0,
+        -40.5,
+        -137.5
+      ],
+      "max_mm": [
+        82.0,
+        -37.5,
+        -82.5
+      ]
+    },
+    {
+      "name": "battery_strap_75_39",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Battery restraint sides",
+      "min_mm": [
+        68.0,
+        37.5,
+        -137.5
+      ],
+      "max_mm": [
+        82.0,
+        40.5,
+        -82.5
+      ]
+    },
+    {
+      "name": "strap_top_75",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Battery restraint top",
+      "min_mm": [
+        68.0,
+        -40.5,
+        -82.5
+      ],
+      "max_mm": [
+        82.0,
+        40.5,
+        -79.5
+      ]
+    },
+    {
+      "name": "camera_bracket",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Forward camera shelf",
+      "min_mm": [
+        96.0,
+        -19.0,
+        -54.5
+      ],
+      "max_mm": [
+        134.0,
+        19.0,
+        -49.5
+      ]
+    },
+    {
+      "name": "camera_lens_-35",
+      "color": "0.03 0.06 0.10 1",
+      "description": "Forward optical window proxy",
+      "min_mm": [
+        158.5,
+        -42.0,
+        -47.0
+      ],
+      "max_mm": [
+        161.5,
+        -28.0,
+        -33.0
+      ]
+    },
+    {
+      "name": "camera_lens_0",
+      "color": "0.03 0.06 0.10 1",
+      "description": "Forward optical window proxy",
+      "min_mm": [
+        158.5,
+        -7.0,
+        -47.0
+      ],
+      "max_mm": [
+        161.5,
+        7.0,
+        -33.0
+      ]
+    },
+    {
+      "name": "camera_lens_35",
+      "color": "0.03 0.06 0.10 1",
+      "description": "Forward optical window proxy",
+      "min_mm": [
+        158.5,
+        28.0,
+        -47.0
+      ],
+      "max_mm": [
+        161.5,
+        42.0,
+        -33.0
+      ]
+    },
+    {
+      "name": "range_bracket",
+      "color": "0.95 0.40 0.09 1",
+      "description": "Rangefinder mounting shelf",
+      "min_mm": [
+        90.0,
+        -15.0,
+        -74.5
+      ],
+      "max_mm": [
+        130.0,
+        15.0,
+        -69.5
+      ]
+    },
+    {
+      "name": "range_post",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Range bracket support",
+      "min_mm": [
+        95.5,
+        -15.0,
+        -72.0
+      ],
+      "max_mm": [
+        100.5,
+        15.0,
+        -48.0
+      ]
+    },
+    {
+      "name": "range_spacer",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Rangefinder mount spacer",
+      "min_mm": [
+        107.5,
+        -9.0,
+        -84.0
+      ],
+      "max_mm": [
+        132.5,
+        9.0,
+        -74.5
+      ]
+    },
+    {
+      "name": "range_optic",
+      "color": "0.12 0.48 0.65 1",
+      "description": "Downward optical window",
+      "min_mm": [
+        114.0,
+        -6.0,
+        -131.0
+      ],
+      "max_mm": [
+        126.0,
+        6.0,
+        -129.0
+      ]
+    },
+    {
+      "name": "gnss_mast",
+      "color": "0.08 0.10 0.13 1",
+      "description": "Rear GNSS mast; cable routing pending",
+      "min_mm": [
+        -111.0,
+        -4.0,
+        -54.0
+      ],
+      "max_mm": [
+        -103.0,
+        4.0,
+        60.0
+      ]
+    },
+    {
+      "name": "gnss_foot",
+      "color": "0.95 0.40 0.09 1",
+      "description": "GNSS mast attachment concept",
+      "min_mm": [
+        -112.0,
+        -14.0,
+        -45.5
+      ],
+      "max_mm": [
+        -88.0,
+        14.0,
+        -40.5
+      ]
+    }
+  ],
+  "checks": {
+    "payload_AABB_overlaps": [],
+    "payload_rotor_swept_volume_intersections": [],
+    "tray_ground_clearance_mm": 45.600006103515625,
+    "blade_to_compute_shelf_vertical_gap_mm": 20.5
+  },
+  "limitations": [
+    "Not a boolean-unioned printable assembly",
+    "Fastener holes, wiring, cooling, load paths and vibration isolation need detailed CAD",
+    "Motor mount compatibility and extended landing-gear attachments unverified",
+    "Clearance checks cover reserved payload boxes, not every structural triangle or flexible blade",
+    "No new mass, inertia, thrust or flight validation; original SITL model unchanged"
+  ]
+}

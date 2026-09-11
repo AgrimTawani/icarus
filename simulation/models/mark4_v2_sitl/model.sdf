@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+ <model name="icarus_mark4_v2_10">
+  <include merge="true"><uri>model://mark4_v2</uri></include>
+  <plugin filename="IcarusMotorBridge" name="icarus::MotorBridge">
+    <topic_prefix>/icarus/vehicle_01/sitl/motor</topic_prefix>
+    <thrust_coefficient>0.000017066574223409543</thrust_coefficient>
+  </plugin>
+  <plugin filename="ArduPilotPlugin" name="ArduPilotPlugin">
+    <fdm_addr>127.0.0.1</fdm_addr><fdm_port_in>9002</fdm_port_in>
+    <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
+    <lock_step>1</lock_step><no_time_sync>1</no_time_sync>
+    <modelXYZToAirplaneXForwardZDown degrees="true">0 0 0 180 0 0</modelXYZToAirplaneXForwardZDown>
+    <gazeboXYZToNED degrees="true">0 0 0 180 0 90</gazeboXYZToNED>
+    <imuName>base_link::imu_sensor</imuName>
+    <control channel="0">
+      <jointName>rotor_01_joint</jointName>
+      <type>COMMAND</type><cmd_topic>/icarus/vehicle_01/sitl/motor/0</cmd_topic>
+      <multiplier>1</multiplier><offset>0</offset>
+      <servo_min>1000</servo_min><servo_max>2000</servo_max>
+    </control>
+    <control channel="1">
+      <jointName>rotor_02_joint</jointName>
+      <type>COMMAND</type><cmd_topic>/icarus/vehicle_01/sitl/motor/1</cmd_topic>
+      <multiplier>1</multiplier><offset>0</offset>
+      <servo_min>1000</servo_min><servo_max>2000</servo_max>
+    </control>
+    <control channel="2">
+      <jointName>rotor_03_joint</jointName>
+      <type>COMMAND</type><cmd_topic>/icarus/vehicle_01/sitl/motor/2</cmd_topic>
+      <multiplier>1</multiplier><offset>0</offset>
+      <servo_min>1000</servo_min><servo_max>2000</servo_max>
+    </control>
+    <control channel="3">
+      <jointName>rotor_04_joint</jointName>
+      <type>COMMAND</type><cmd_topic>/icarus/vehicle_01/sitl/motor/3</cmd_topic>
+      <multiplier>1</multiplier><offset>0</offset>
+      <servo_min>1000</servo_min><servo_max>2000</servo_max>
+    </control>
+  </plugin>
+ </model>
+</sdf>

@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+project(icarus_simulation_plugins LANGUAGES CXX)
+find_package(gz-sim8 REQUIRED)
+add_library(IcarusMotorBridge SHARED MotorBridge.cc)
+target_compile_features(IcarusMotorBridge PRIVATE cxx_std_17)
+target_compile_options(IcarusMotorBridge PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(IcarusMotorBridge PRIVATE gz-sim8::gz-sim8)

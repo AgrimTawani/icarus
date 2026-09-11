@@ -1,0 +1,802 @@
+<sdf version="1.9">
+  <model name="akshu_compact">
+    <static>true</static>
+    <link name="base_link">
+      <visual name="source_arm_44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_45">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_45.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_46">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_46.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_47">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_47.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_79">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_79.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_79">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_79.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_80">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_80.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_80">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_80.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_81">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_81.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_81">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_81.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_82">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_82.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_82">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_82.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_25">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_25.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_26">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_26.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_27">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_27.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_28">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_28.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="chamfered_lower_plate">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/chamfered_lower_plate.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="chamfered_top_cover">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/chamfered_top_cover.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-80_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-80_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-40_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-40_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_0_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_0_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_40_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_40_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_80_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_80_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="side_rail_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/side_rail_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-80_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-80_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-40_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-40_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_0_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_0_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_40_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_40_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_80_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_80_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="side_rail_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/side_rail_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="internal_electronics_visual">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/internal_electronics_visual.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.30 0.24 1</diffuse>
+          <ambient>0.12 0.30 0.24 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.25 0.45 1</diffuse>
+          <ambient>0.12 0.25 0.45 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_tray">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery_tray.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_-75_-43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_-75_-43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_-75_43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_-75_43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_-75">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery_strap_-75.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_-75_-39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_-75_-39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_-75_39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_-75_39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_75_-43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_75_-43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_75_43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_75_43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_75">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery_strap_75.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_75_-39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_75_-39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_75_39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_75_39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_mount">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/lidar_mount.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/lidar_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.25 0.30 0.34 1</diffuse>
+          <ambient>0.25 0.30 0.34 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_optical_band">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/lidar_optical_band.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.32 0.40 1</diffuse>
+          <ambient>0.08 0.32 0.40 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_window_-23">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_window_-23.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_window_0">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_window_0.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_window_23">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_window_23.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="gnss_patch">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/gnss_patch.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.75 0.79 0.82 1</diffuse>
+          <ambient>0.75 0.79 0.82 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/range_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_bracket">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/range_bracket.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <sensor name="rgbd" type="rgbd_camera">
+        <pose>0.135 0 -0.028 0 0 0</pose>
+        <topic>/icarus/sensors/rgbd</topic>
+        <always_on>true</always_on>
+        <update_rate>15</update_rate>
+        <camera>
+          <horizontal_fov>1.5184</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>30</far>
+          </clip>
+        </camera>
+      </sensor>
+      <sensor name="lidar" type="gpu_lidar">
+        <pose>0 0 0.028 0 0 0</pose>
+        <topic>/icarus/sensors/lidar</topic>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265</min_angle>
+              <max_angle>3.14159265</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.2618</min_angle>
+              <max_angle>0.5236</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>40</max>
+            <resolution>0.01</resolution>
+          </range>
+        </lidar>
+      </sensor>
+      <sensor name="range_down" type="gpu_lidar">
+        <pose>0.110 0 -0.108 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/range_down</topic>
+        <always_on>true</always_on>
+        <update_rate>20</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.02</min>
+            <max>40</max>
+            <resolution>0.001</resolution>
+          </range>
+        </lidar>
+      </sensor>
+      <sensor name="imu" type="imu">
+        <pose>0 0 -0.026 0 0 0</pose>
+        <topic>/icarus/sensors/imu</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu />
+      </sensor>
+      <sensor name="navsat" type="navsat">
+        <pose>-0.077 0 0.003 0 0 0</pose>
+        <topic>/icarus/sensors/navsat</topic>
+        <always_on>true</always_on>
+        <update_rate>5</update_rate>
+        <navsat />
+      </sensor>
+    </link>
+  </model>
+</sdf>

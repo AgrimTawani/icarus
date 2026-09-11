@@ -1,0 +1,1322 @@
+<sdf version="1.9">
+  <model name="icarus_compact" canonical_link="base_link">
+    <static>false</static>
+    <link name="base_link">
+      <visual name="source_arm_44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_45">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_45.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_46">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_46.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_47">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_arm_47.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_79">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_79.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_79">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_79.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_80">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_80.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_80">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_80.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_81">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_81.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_81">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_81.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_82">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/leg_extension_82.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_82">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/extended_leg_82.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/motor_collar_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/shaft_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="chamfered_lower_plate">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/chamfered_lower_plate.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="chamfered_top_cover">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/chamfered_top_cover.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-80_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-80_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-40_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-40_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_0_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_0_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_40_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_40_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_80_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_80_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="side_rail_-51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/side_rail_-51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-80_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-80_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_-40_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_-40_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_0_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_0_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_40_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_40_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="vent_rib_80_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/vent_rib_80_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="side_rail_51">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/side_rail_51.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="internal_electronics_visual">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/internal_electronics_visual.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.30 0.24 1</diffuse>
+          <ambient>0.12 0.30 0.24 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.25 0.45 1</diffuse>
+          <ambient>0.12 0.25 0.45 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_tray">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery_tray.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_-75_-43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_-75_-43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_-75_43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_-75_43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_-75">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery_strap_-75.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_-75_-39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_-75_-39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_-75_39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_-75_39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_75_-43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_75_-43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_hanger_75_43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/tray_hanger_75_43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_75">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/battery_strap_75.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_75_-39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_75_-39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_side_75_39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/strap_side_75_39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_mount">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/lidar_mount.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/lidar_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.25 0.30 0.34 1</diffuse>
+          <ambient>0.25 0.30 0.34 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_optical_band">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/lidar_optical_band.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.32 0.40 1</diffuse>
+          <ambient>0.08 0.32 0.40 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_window_-23">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_window_-23.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_window_0">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_window_0.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_window_23">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/camera_window_23.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="gnss_patch">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/gnss_patch.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.75 0.79 0.82 1</diffuse>
+          <ambient>0.75 0.79 0.82 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/range_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_bracket">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/range_bracket.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.38 0.08 1</diffuse>
+          <ambient>0.95 0.38 0.08 1</ambient>
+        </material>
+      </visual>
+      <sensor name="rgbd" type="rgbd_camera">
+        <pose>0.135 0 -0.028 0 0 0</pose>
+        <topic>/icarus/sensors/rgbd</topic>
+        <always_on>true</always_on>
+        <update_rate>15</update_rate>
+        <camera>
+          <horizontal_fov>1.5184</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>30</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.005</stddev>
+          </noise>
+        </camera>
+      </sensor>
+      <sensor name="lidar" type="gpu_lidar">
+        <pose>0 0 0.028 0 0 0</pose>
+        <topic>/icarus/sensors/lidar</topic>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265</min_angle>
+              <max_angle>3.14159265</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.2618</min_angle>
+              <max_angle>0.5236</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>40</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.002</mean>
+            <stddev>0.02</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+      <sensor name="range_down" type="gpu_lidar">
+        <pose>0.110 0 -0.108 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/range_down</topic>
+        <always_on>true</always_on>
+        <update_rate>20</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.02</min>
+            <max>40</max>
+            <resolution>0.001</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.001</mean>
+            <stddev>0.005</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+      <sensor name="imu" type="imu">
+        <pose>0 0 -0.026 0 0 0</pose>
+        <topic>/icarus/sensors/imu</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <sensor name="navsat" type="navsat">
+        <pose>-0.077 0 0.003 0 0 0</pose>
+        <topic>/icarus/sensors/navsat</topic>
+        <always_on>true</always_on>
+        <update_rate>5</update_rate>
+        <navsat>
+          <position_sensing>
+            <horizontal>
+              <noise type="gaussian">
+                <mean>0.02</mean>
+                <stddev>0.3</stddev>
+              </noise>
+            </horizontal>
+            <vertical>
+              <noise type="gaussian">
+                <mean>0.02</mean>
+                <stddev>0.3</stddev>
+              </noise>
+            </vertical>
+          </position_sensing>
+          <velocity_sensing>
+            <horizontal>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>0.05</stddev>
+              </noise>
+            </horizontal>
+            <vertical>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>0.05</stddev>
+              </noise>
+            </vertical>
+          </velocity_sensing>
+        </navsat>
+      </sensor>
+      <enable_wind>true</enable_wind>
+      <sensor name="imu_sensor" type="imu">
+        <pose>0 0 -0.026 3.141592653589793 0 0</pose>
+        <always_on>true</always_on>
+        <update_rate>1000</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <inertial>
+        <mass>4.263</mass>
+        <pose>0.0010656814449917895 0.0 -0.060117288294628216 0 0 0</pose>
+        <inertia>
+          <ixx>0.026811281182061653</ixx>
+          <iyy>0.028174725900319345</iyy>
+          <izz>0.03699154270400896</izz>
+          <ixy>-6.056977179622752e-07</ixy>
+          <ixz>0.0001292671592775039</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="chassis_collision">
+        <pose>0 0 -0.026 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.22 0.105 0.042</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="battery_collision">
+        <pose>0 0 -0.11 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.18 0.075 0.055</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="lidar_collision">
+        <pose>0 0 0.016 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.045 0.045 0.022</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="camera_collision">
+        <pose>0.121 0 -0.028 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.022 0.07 0.024</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="landing_-1">
+        <pose>0 -0.085 -0.1841 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.18 0.018 0.012</size>
+          </box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <collision name="arm_-1">
+        <pose>0 0 -0.0445 0 0 -0.896792926971224</pose>
+        <geometry>
+          <box>
+            <size>0.4438 0.024 0.007</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="landing_1">
+        <pose>0 0.085 -0.1841 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.18 0.018 0.012</size>
+          </box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <collision name="arm_1">
+        <pose>0 0 -0.0445 0 0 0.896792926971224</pose>
+        <geometry>
+          <box>
+            <size>0.4438 0.024 0.007</size>
+          </box>
+        </geometry>
+      </collision>
+      <sensor name="compass" type="magnetometer">
+        <pose>-0.077 0 0.003 0 0 0</pose>
+        <topic>/icarus/sensors/compass</topic>
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <magnetometer>
+          <x>
+            <noise type="gaussian">
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
+            </noise>
+          </z>
+        </magnetometer>
+      </sensor>
+      <sensor name="barometer" type="air_pressure">
+        <pose>0 0 -0.026 0 0 0</pose>
+        <topic>/icarus/sensors/barometer</topic>
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <air_pressure>
+          <reference_altitude>584</reference_altitude>
+          <pressure>
+            <noise type="gaussian">
+              <mean>0.5</mean>
+              <stddev>2.0</stddev>
+            </noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+    </link>
+    <self_collide>false</self_collide>
+    <link name="motor_01">
+      <pose>0.1384983491897583 -0.17338687133789063 0.0 0 0 0</pose>
+      <inertial>
+        <mass>0.020</mass>
+        <inertia>
+          <ixx>0.00008064500000000001</ixx>
+          <iyy>0.00008064500000000001</iyy>
+          <izz>0.00016129000000000002</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <enable_wind>true</enable_wind>
+      <visual name="source_prop_28">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_28.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+        <pose>-0.1384983491897583 0.17338687133789063 -0.0 0 0 0</pose>
+      </visual>
+    </link>
+    <joint name="rotor_01_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>motor_01</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e16</lower>
+          <upper>1e16</upper>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="motor_02">
+      <pose>-0.13849334239959718 0.17338726043701172 0.0 0 0 0</pose>
+      <inertial>
+        <mass>0.020</mass>
+        <inertia>
+          <ixx>0.00008064500000000001</ixx>
+          <iyy>0.00008064500000000001</iyy>
+          <izz>0.00016129000000000002</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <enable_wind>true</enable_wind>
+      <visual name="source_prop_26">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_26.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+        <pose>0.13849334239959718 -0.17338726043701172 -0.0 0 0 0</pose>
+      </visual>
+    </link>
+    <joint name="rotor_02_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>motor_02</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e16</lower>
+          <upper>1e16</upper>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="motor_03">
+      <pose>0.13850762653350832 0.17338648223876954 0.0 0 0 0</pose>
+      <inertial>
+        <mass>0.020</mass>
+        <inertia>
+          <ixx>0.00008064500000000001</ixx>
+          <iyy>0.00008064500000000001</iyy>
+          <izz>0.00016129000000000002</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <enable_wind>true</enable_wind>
+      <visual name="source_prop_25">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_25.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+        <pose>-0.13850762653350832 -0.17338648223876954 -0.0 0 0 0</pose>
+      </visual>
+    </link>
+    <joint name="rotor_03_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>motor_03</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e16</lower>
+          <upper>1e16</upper>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="motor_04">
+      <pose>-0.13851263332366945 -0.17338687133789063 0.0 0 0 0</pose>
+      <inertial>
+        <mass>0.020</mass>
+        <inertia>
+          <ixx>0.00008064500000000001</ixx>
+          <iyy>0.00008064500000000001</iyy>
+          <izz>0.00016129000000000002</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <enable_wind>true</enable_wind>
+      <visual name="source_prop_27">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/source_prop_27.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+        <pose>0.13851263332366945 0.17338687133789063 -0.0 0 0 0</pose>
+      </visual>
+    </link>
+    <joint name="rotor_04_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>motor_04</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e16</lower>
+          <upper>1e16</upper>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+        </dynamics>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-multicopter-motor-model-system" name="gz::sim::systems::MulticopterMotorModel">
+      <robotNamespace>icarus/vehicle_01</robotNamespace>
+      <jointName>rotor_01_joint</jointName>
+      <linkName>motor_01</linkName>
+      <turningDirection>ccw</turningDirection>
+      <actuator_number>0</actuator_number>
+      <commandSubTopic>actuators/motor_speed</commandSubTopic>
+      <motorType>velocity</motorType>
+      <maxRotVelocity>1634.2564983974105</maxRotVelocity>
+      <motorConstant>0.000017066574223409543</motorConstant>
+      <momentConstant>0.016</momentConstant>
+      <timeConstantUp>0.040</timeConstantUp>
+      <timeConstantDown>0.080</timeConstantDown>
+      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+      <rotorDragCoefficient>0</rotorDragCoefficient>
+      <rollingMomentCoefficient>0</rollingMomentCoefficient>
+    </plugin>
+    <plugin filename="gz-sim-multicopter-motor-model-system" name="gz::sim::systems::MulticopterMotorModel">
+      <robotNamespace>icarus/vehicle_01</robotNamespace>
+      <jointName>rotor_02_joint</jointName>
+      <linkName>motor_02</linkName>
+      <turningDirection>ccw</turningDirection>
+      <actuator_number>1</actuator_number>
+      <commandSubTopic>actuators/motor_speed</commandSubTopic>
+      <motorType>velocity</motorType>
+      <maxRotVelocity>1634.2564983974105</maxRotVelocity>
+      <motorConstant>0.000017066574223409543</motorConstant>
+      <momentConstant>0.016</momentConstant>
+      <timeConstantUp>0.040</timeConstantUp>
+      <timeConstantDown>0.080</timeConstantDown>
+      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+      <rotorDragCoefficient>0</rotorDragCoefficient>
+      <rollingMomentCoefficient>0</rollingMomentCoefficient>
+    </plugin>
+    <plugin filename="gz-sim-multicopter-motor-model-system" name="gz::sim::systems::MulticopterMotorModel">
+      <robotNamespace>icarus/vehicle_01</robotNamespace>
+      <jointName>rotor_03_joint</jointName>
+      <linkName>motor_03</linkName>
+      <turningDirection>cw</turningDirection>
+      <actuator_number>2</actuator_number>
+      <commandSubTopic>actuators/motor_speed</commandSubTopic>
+      <motorType>velocity</motorType>
+      <maxRotVelocity>1634.2564983974105</maxRotVelocity>
+      <motorConstant>0.000017066574223409543</motorConstant>
+      <momentConstant>0.016</momentConstant>
+      <timeConstantUp>0.040</timeConstantUp>
+      <timeConstantDown>0.080</timeConstantDown>
+      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+      <rotorDragCoefficient>0</rotorDragCoefficient>
+      <rollingMomentCoefficient>0</rollingMomentCoefficient>
+    </plugin>
+    <plugin filename="gz-sim-multicopter-motor-model-system" name="gz::sim::systems::MulticopterMotorModel">
+      <robotNamespace>icarus/vehicle_01</robotNamespace>
+      <jointName>rotor_04_joint</jointName>
+      <linkName>motor_04</linkName>
+      <turningDirection>cw</turningDirection>
+      <actuator_number>3</actuator_number>
+      <commandSubTopic>actuators/motor_speed</commandSubTopic>
+      <motorType>velocity</motorType>
+      <maxRotVelocity>1634.2564983974105</maxRotVelocity>
+      <motorConstant>0.000017066574223409543</motorConstant>
+      <momentConstant>0.016</momentConstant>
+      <timeConstantUp>0.040</timeConstantUp>
+      <timeConstantDown>0.080</timeConstantDown>
+      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+      <rotorDragCoefficient>0</rotorDragCoefficient>
+      <rollingMomentCoefficient>0</rollingMomentCoefficient>
+    </plugin>
+    <plugin filename="IcarusMotorBridge" name="icarus::MotorBridge">
+      <topic_prefix>/icarus/vehicle_01/sitl/motor</topic_prefix>
+      <thrust_coefficient>0.000017066574223409543</thrust_coefficient>
+    </plugin>
+    <plugin filename="ArduPilotPlugin" name="ArduPilotPlugin">
+      <fdm_addr>127.0.0.1</fdm_addr>
+      <fdm_port_in>9002</fdm_port_in>
+      <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
+      <lock_step>1</lock_step>
+      <no_time_sync>1</no_time_sync>
+      <modelXYZToAirplaneXForwardZDown degrees="true">0 0 0 180 0 0</modelXYZToAirplaneXForwardZDown>
+      <gazeboXYZToNED degrees="true">0 0 0 180 0 90</gazeboXYZToNED>
+      <imuName>base_link::imu_sensor</imuName>
+      <control channel="0">
+        <jointName>rotor_01_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/icarus/vehicle_01/sitl/motor/0</cmd_topic>
+        <multiplier>1</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+      </control>
+      <control channel="1">
+        <jointName>rotor_02_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/icarus/vehicle_01/sitl/motor/1</cmd_topic>
+        <multiplier>1</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+      </control>
+      <control channel="2">
+        <jointName>rotor_03_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/icarus/vehicle_01/sitl/motor/2</cmd_topic>
+        <multiplier>1</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+      </control>
+      <control channel="3">
+        <jointName>rotor_04_joint</jointName>
+        <type>COMMAND</type>
+        <cmd_topic>/icarus/vehicle_01/sitl/motor/3</cmd_topic>
+        <multiplier>1</multiplier>
+        <offset>0</offset>
+        <servo_min>1000</servo_min>
+        <servo_max>2000</servo_max>
+      </control>
+    </plugin>
+    <plugin filename="gz-sim-linearbatteryplugin-system" name="gz::sim::systems::LinearBatteryPlugin">
+      <battery_name>flight_battery</battery_name>
+      <voltage>25.2</voltage>
+      <open_circuit_voltage_constant_coef>25.2</open_circuit_voltage_constant_coef>
+      <open_circuit_voltage_linear_coef>-4.2</open_circuit_voltage_linear_coef>
+      <initial_charge>10</initial_charge>
+      <capacity>10</capacity>
+      <resistance>0.025</resistance>
+      <smooth_current_tau>1</smooth_current_tau>
+      <power_load>700</power_load>
+      <fix_issue_225>true</fix_issue_225>
+      <start_on_motion>true</start_on_motion>
+      <power_draining_topic>/icarus/battery/start</power_draining_topic>
+      <enable_recharge>false</enable_recharge>
+    </plugin>
+  </model>
+</sdf>

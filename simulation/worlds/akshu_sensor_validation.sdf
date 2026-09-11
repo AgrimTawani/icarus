@@ -1,0 +1,135 @@
+<sdf version="1.9">
+  <world name="icarus_sensor_validation">
+    <gravity>0 0 -9.80665</gravity>
+    <physics name="lockstep_1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics" />
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands" />
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster" />
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu" />
+    <scene>
+      <ambient>0.65 0.65 0.65</ambient>
+      <background>0.55 0.66 0.76</background>
+      <shadows>true</shadows>
+    </scene>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <latitude_deg>-35.363262</latitude_deg>
+      <longitude_deg>149.165237</longitude_deg>
+      <elevation>584</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+    <light name="sun" type="directional">
+      <pose>0 0 10 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <diffuse>0.9 0.85 0.78 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.3 -0.9</direction>
+    </light>
+    <model name="test_pad">
+      <static>true</static>
+      <link name="ground">
+        <collision name="ground_collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="ground">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.23 0.27 0.28 1</ambient>
+            <diffuse>0.23 0.27 0.28 1</diffuse>
+          </material>
+        </visual>
+        <visual name="pad">
+          <pose>0 0 0.003 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.7</radius>
+              <length>0.004</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <diffuse>0.85 0.57 0.16 1</diffuse>
+          </material>
+        </visual>
+        <visual name="pad_inner">
+          <pose>0 0 0.006 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.64</radius>
+              <length>0.004</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <diffuse>0.13 0.18 0.20 1</diffuse>
+          </material>
+        </visual>
+        <visual name="east">
+          <pose>2 0 0.003 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>2 0.025 0.003</size>
+            </box>
+          </geometry>
+          <material>
+            <diffuse>0.8 0.28 0.15 1</diffuse>
+          </material>
+        </visual>
+        <visual name="north">
+          <pose>0 2 0.003 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.025 2 0.003</size>
+            </box>
+          </geometry>
+          <material>
+            <diffuse>0.2 0.65 0.45 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <include>
+      <uri>model://akshu_compact</uri>
+      <name>icarus_compact</name>
+      <pose>0 0 1 0 0 0</pose>
+    </include>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-navsat-system" name="gz::sim::systems::NavSat" />
+    <model name="sensor_target">
+      <static>true</static>
+      <pose>3 0 1 0 0 0</pose>
+      <link name="target">
+        <visual name="target">
+          <geometry>
+            <box>
+              <size>0.2 2 2</size>
+            </box>
+          </geometry>
+          <material>
+            <diffuse>0.8 0.2 0.1 1</diffuse>
+          </material>
+        </visual>
+        <collision name="target_collision">
+          <geometry>
+            <box>
+              <size>0.2 2 2</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+  </world>
+</sdf>

@@ -1,0 +1,71 @@
+{
+  "source_sha256": "64f89254d2b68226b695534b8ea12a29d7ab912551ee680c2a2bf11897f152aa",
+  "units_assumption": "millimetres",
+  "source_origin_units": [
+    280.3875427246094,
+    264.8064298629761,
+    155.10000610351562
+  ],
+  "source_to_flu_rotation": [
+    [
+      0,
+      1,
+      0
+    ],
+    [
+      -1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      1
+    ]
+  ],
+  "motor_layout": [
+    {
+      "motor": 1,
+      "position_m": [
+        0.1384983491897583,
+        -0.17338687133789063,
+        0.0
+      ],
+      "source_motor_component": 2,
+      "source_prop_component": 28
+    },
+    {
+      "motor": 2,
+      "position_m": [
+        -0.13849334239959718,
+        0.17338726043701172,
+        0.0
+      ],
+      "source_motor_component": 1,
+      "source_prop_component": 26
+    },
+    {
+      "motor": 3,
+      "position_m": [
+        0.13850762653350832,
+        0.17338648223876954,
+        0.0
+      ],
+      "source_motor_component": 0,
+      "source_prop_component": 25
+    },
+    {
+      "motor": 4,
+      "position_m": [
+        -0.13851263332366945,
+        -0.17338687133789063,
+        0.0
+      ],
+      "source_motor_component": 3,
+      "source_prop_component": 27
+    }
+  ],
+  "triangles_input": 266716,
+  "triangles_exported": 266716,
+  "status": "Static reference only; masses, rotor handedness and physical interfaces not validated."
+}

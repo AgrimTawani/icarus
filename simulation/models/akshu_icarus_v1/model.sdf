@@ -1,0 +1,920 @@
+<sdf version="1.9">
+  <model name="akshu_icarus_v1">
+    <static>true</static>
+    <link name="packaging_candidate">
+      <visual name="source_arm_44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_arm_44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_45">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_arm_45.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_46">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_arm_46.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_arm_47">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_arm_47.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_79">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/leg_extension_79.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_79">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/extended_leg_79.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_80">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/leg_extension_80.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_80">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/extended_leg_80.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_81">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/leg_extension_81.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_81">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/extended_leg_81.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="leg_extension_82">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/leg_extension_82.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="extended_leg_82">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/extended_leg_82.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_25">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_prop_25.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_26">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_prop_26.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_27">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_prop_27.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="source_prop_28">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/source_prop_28.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_collar_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_1">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/shaft_1.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_collar_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_2">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/shaft_2.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_collar_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_3">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/shaft_3.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="motor_collar_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/motor_collar_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="shaft_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/shaft_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="lower_plate">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/lower_plate.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="compute_shelf">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/compute_shelf.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="deck_post_-64_-44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/deck_post_-64_-44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="deck_post_-64_44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/deck_post_-64_44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="deck_post_64_-44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/deck_post_64_-44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="deck_post_64_44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/deck_post_64_44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="thor_assembly">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/thor_assembly.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.24 0.28 0.31 1</diffuse>
+          <ambient>0.24 0.28 0.31 1</ambient>
+        </material>
+      </visual>
+      <visual name="pixhawk_6x">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/pixhawk_6x.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.15 0.18 0.22 1</diffuse>
+          <ambient>0.15 0.18 0.22 1</ambient>
+        </material>
+      </visual>
+      <visual name="esc">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/esc.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.17 0.42 0.25 1</diffuse>
+          <ambient>0.17 0.42 0.25 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_6s_10ah">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/battery_6s_10ah.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.25 0.48 1</diffuse>
+          <ambient>0.12 0.25 0.48 1</ambient>
+        </material>
+      </visual>
+      <visual name="mid360">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/mid360.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.80 0.83 0.85 1</diffuse>
+          <ambient>0.80 0.83 0.85 1</ambient>
+        </material>
+      </visual>
+      <visual name="oak_camera">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/oak_camera.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.25 0.28 0.30 1</diffuse>
+          <ambient>0.25 0.28 0.30 1</ambient>
+        </material>
+      </visual>
+      <visual name="lw20">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/lw20.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.18 0.21 1</diffuse>
+          <ambient>0.12 0.18 0.21 1</ambient>
+        </material>
+      </visual>
+      <visual name="gnss">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/gnss.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.90 0.91 0.88 1</diffuse>
+          <ambient>0.90 0.91 0.88 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_-44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_-44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_-36">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_-36.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_-28">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_-28.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_-20">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_-20.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_-12">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_-12.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_-4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_-4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_4">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_4.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_12">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_12.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_20">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_20.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_28">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_28.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_36">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_36.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="cooling_fin_44">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/cooling_fin_44.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="lidar_pedestal">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/lidar_pedestal.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="compute_pad_-60_-40">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/compute_pad_-60_-40.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="compute_pad_-60_40">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/compute_pad_-60_40.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="compute_pad_60_-40">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/compute_pad_60_-40.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="compute_pad_60_40">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/compute_pad_60_40.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="esc_mount">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/esc_mount.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="fc_isolation_pad">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/fc_isolation_pad.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="fc_support">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/fc_support.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_tray">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/battery_tray.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_post_-75_-43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/tray_post_-75_-43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_post_-75_43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/tray_post_-75_43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_-75_-39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/battery_strap_-75_-39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_-75_39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/battery_strap_-75_39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_top_-75">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/strap_top_-75.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_post_75_-43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/tray_post_75_-43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="tray_post_75_43">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/tray_post_75_43.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_75_-39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/battery_strap_75_-39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="battery_strap_75_39">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/battery_strap_75_39.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="strap_top_75">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/strap_top_75.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_bracket">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/camera_bracket.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_lens_-35">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/camera_lens_-35.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.06 0.10 1</diffuse>
+          <ambient>0.03 0.06 0.10 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_lens_0">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/camera_lens_0.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.06 0.10 1</diffuse>
+          <ambient>0.03 0.06 0.10 1</ambient>
+        </material>
+      </visual>
+      <visual name="camera_lens_35">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/camera_lens_35.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.06 0.10 1</diffuse>
+          <ambient>0.03 0.06 0.10 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_bracket">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/range_bracket.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_post">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/range_post.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_spacer">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/range_spacer.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="range_optic">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/range_optic.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.12 0.48 0.65 1</diffuse>
+          <ambient>0.12 0.48 0.65 1</ambient>
+        </material>
+      </visual>
+      <visual name="gnss_mast">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/gnss_mast.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.08 0.10 0.13 1</diffuse>
+          <ambient>0.08 0.10 0.13 1</ambient>
+        </material>
+      </visual>
+      <visual name="gnss_foot">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_icarus_v1/meshes/gnss_foot.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.95 0.40 0.09 1</diffuse>
+          <ambient>0.95 0.40 0.09 1</ambient>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

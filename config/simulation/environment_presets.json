@@ -1,0 +1,14 @@
+{
+  "mixed_village": {
+    "description": "Populated two-storey village edge with roads, buildings, walls and trees; 5 m clear launch radius.",
+    "obstacles": [
+      {"name": "village_house_nw", "type": "building", "center_m": [-11, 9, 3], "size_m": [8, 6, 6]},
+      {"name": "village_house_ne", "type": "building", "center_m": [11, 9, 3], "size_m": [7, 6, 6]},
+      {"name": "village_workshop", "type": "building", "center_m": [11, -11, 2.5], "size_m": [9, 7, 5]},
+      {"name": "village_wall_sw", "type": "wall", "center_m": [-11, -8, 1.25], "size_m": [8, 0.3, 2.5]},
+      {"name": "village_tree_west", "type": "tree", "center_m": [-7, 5, 0], "radius_m": 0.3, "height_m": 4.5, "canopy_radius_m": 1.8, "canopy_collision": "enabled"},
+      {"name": "village_tree_east", "type": "tree", "center_m": [7, 6, 0], "radius_m": 0.32, "height_m": 5, "canopy_radius_m": 2, "canopy_collision": "enabled"},
+      {"name": "village_tree_south", "type": "tree", "center_m": [-6, -7, 0], "radius_m": 0.28, "height_m": 4.2, "canopy_radius_m": 1.7, "canopy_collision": "enabled"}
+    ]
+  }
+}

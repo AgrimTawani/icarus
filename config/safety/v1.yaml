@@ -1,0 +1,52 @@
+schema_version: icarus.safety.v1
+profile: simulation_v1
+
+geofence:
+  max_altitude_m: 30.0
+  max_distance_from_home_m: 100.0
+  action_on_breach: rtl
+
+motion:
+  max_horizontal_speed_m_s: 5.0
+  max_climb_speed_m_s: 2.5
+  max_descent_speed_m_s: 1.5
+  max_tilt_deg: 30.0
+
+battery:
+  minimum_takeoff_percent: 50.0
+  rtl_percent: 30.0
+  land_percent: 20.0
+
+state_health:
+  max_state_age_ms: 500
+  mavlink_heartbeat_timeout_ms: 2000
+  require_attitude: true
+  require_altitude: true
+  require_ekf_healthy: true
+  require_position_for_navigation: true
+  require_home_for_takeoff: true
+
+command:
+  acknowledgement_timeout_ms: 2000
+  maximum_retries: 1
+  reject_unknown_actions: true
+  reject_out_of_bounds_arguments: true
+
+failure_actions:
+  dcm_timeout: hold
+  dcm_invalid_output: hold
+  state_stale: hold_then_rtl
+  state_stale_rtl_delay_s: 5.0
+  mavlink_loss: rtl
+  companion_computer_loss: rtl
+  critical_sensor_failure: land_or_rtl
+
+manual_override:
+  enabled: true
+  operator_has_priority: true
+  cancel_autonomous_action: true
+  llm_may_disable: false
+
+simulation:
+  initial_motor_output_ceiling_percent: 70.0
+  episode_timeout_s: 120.0

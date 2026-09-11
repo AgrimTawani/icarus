@@ -1,0 +1,35 @@
+# Local Python and tool environments
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# Runtime output and recordings
+logs/
+*.BIN
+*.bin
+*.log
+core
+core.*
+
+# External source trees are recreated by scripts/install_dependencies.sh.
+# Their exact known-good revisions are documented in docs/reference/THIRD-PARTY.md.
+third_party/
+
+# Build products
+build/
+cmake-build-*/
+simulation/plugins/build/
+
+# Generated Phase 5 models and worlds
+simulation/models/phase5_*/
+simulation/worlds/generated/
+
+# Editor and operating-system state
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

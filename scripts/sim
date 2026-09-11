@@ -1,0 +1,9 @@
+#!/usr/bin/python3
+"""Run Icarus simulation from any working directory."""
+
+import os
+import sys
+from pathlib import Path
+
+launcher = Path(__file__).resolve().parent / "simulation/launch_compact.py"
+os.execv("/usr/bin/python3", ["/usr/bin/python3", str(launcher), *sys.argv[1:]])
