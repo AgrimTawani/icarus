@@ -16,6 +16,7 @@ from sensor_health import SensorChannel
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--directory", required=True, type=Path)
+    parser.add_argument("--include-wind", action="store_true")
     args = parser.parse_args()
     from gz.msgs10.battery_state_pb2 import BatteryState
     from gz.msgs10.fluid_pressure_pb2 import FluidPressure
@@ -25,6 +26,7 @@ def main():
     from gz.msgs10.magnetometer_pb2 import Magnetometer
     from gz.msgs10.navsat_pb2 import NavSat
     from gz.msgs10.stringmsg_pb2 import StringMsg
+    from gz.msgs10.vector3d_pb2 import Vector3d
     from gz.transport13 import Node
 
     output = args.directory / "sensors"
@@ -45,6 +47,8 @@ def main():
             5,
         ),
     ]
+    if args.include_wind:
+        specs.append(("wind", "/icarus/environment/wind", Vector3d, 10))
     files = {
         name: (output / (name + ".pbstream")).open("wb") for name, _, _, _ in specs
     }

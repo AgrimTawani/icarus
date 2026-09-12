@@ -23,7 +23,7 @@ Other modes:
 ```bash
 ./scripts/sim                   # Same automated test, headless
 ./scripts/sim --preflight-only  # Sensor/navigation checks, never arms
-./scripts/sim --sensor-profile noisy --seed 104
+./scripts/sim --seed 104
 ```
 
 Ctrl+C stops the owned simulation processes. Closing the GUI during the test is
@@ -38,7 +38,8 @@ for local simulation; it does not accept a real aircraft endpoint.
    are installed and no unrelated process is terminated.
 3. Create an isolated Gazebo partition and fresh per-run SITL EEPROM directory.
 4. Start Gazebo with rendering, SITL and the sensor recorder. Require repeated
-   messages on all nine sensor channels before running the controller.
+   messages on all nine physical sensor channels plus the atmosphere stream
+   before running the controller.
 5. Read back every configured ArduPilot parameter and await GPS/navigation
    readiness before arming. Parameter responses have bounded retries.
 6. Monitor child processes, recorder heartbeat and stale streams during flight.
@@ -59,15 +60,21 @@ visuals and mounts. Its four propeller meshes move with their own revolute links
 their body-frame offsets are preserved. Motor geometry uses the imported
 approximately 443.8 mm stretched-X diagonal, not the old square-X coordinates.
 
-Total simulation mass remains 4.343 kg, with four 20 g rotor allocations. The
-base centre of mass and full inertia tensor are recalculated from explicit box
-mass allocations in `mass_properties.json`. Motor rise/decay, thrust mapping,
-torque and output limits reuse the tested provisional model. Landing contacts
-use simple skids; detailed mesh contact and propeller strikes are not simulated.
-The mass allowances are not proof that the real Thor hardware fits this chassis.
+`config/simulation/vehicle_components.json` is the component-level source of
+truth. The builder automatically derives total/base mass, centre of gravity and
+the full inertia tensors using each component's geometry, mass and mounting
+transform, including separate propeller link inertias. It writes the inputs,
+provenance and source hash to `mass_properties.json`; no aggregate mass, CG or
+inertia tensor is manually copied into the generated SDF. Total mass is currently
+4.343 kg. Inputs marked as design targets still require as-built measurement.
 
-ArduPilot's JSON bridge consumes a dedicated 1,000 Hz **FRD** IMU plus Gazebo
-state. The separately recorded 200 Hz public IMU uses **FLU**. ArduPilot's GPS,
+Motor rise/decay, thrust mapping, torque and output limits reuse the tested
+provisional model. Landing contacts use simple skids; detailed mesh contact and
+propeller strikes are not simulated.
+
+ArduPilot's JSON bridge consumes a dedicated 1,000 Hz **FRD** IMU with the same
+single physical-noise configuration used by the public sensor model. The
+separately recorded 200 Hz public IMU uses **FLU**. ArduPilot's GPS,
 compass, barometer and battery remain SITL-generated; the public Gazebo streams
 are independently tested but are **not yet fused into navigation or
 obstacle avoidance**. Gazebo world poses are ENU; MAVLink local positions are NED.
@@ -86,6 +93,8 @@ directory containing:
   messages, with RGB/depth pixel payloads removed; `schema.json` records types/topics and format; `index.jsonl` records
   simulation timestamps, receipt times and byte offsets.
 - `sensors/health.json`: received/recorded counts, freshness and byte budget.
+- `sensors/wind.pbstream`: seeded three-axis local wind samples used by the
+  aerodynamic model.
 - `recording_verified.json`: numeric integrity checks only; no preview files.
 
 Recording is intentionally downsampled: RGB/depth ≤1 Hz, lidar ≤5 Hz, range

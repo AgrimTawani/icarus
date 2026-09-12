@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "coordinate_frame": "base_link FLU, metres",
+  "status": "component source of truth; replace design-target inputs with as-built measurements when available",
+  "components": [
+    {"id": "carbon_structure", "link": "base_link", "mass_kg": 0.350, "center_m": [0, 0, -0.045], "shape": "box", "dimensions_m": [0.228, 0.110, 0.042], "provenance": "design target for custom plates, arms and rails"},
+    {"id": "compute_assembly", "link": "base_link", "mass_kg": 0.900, "center_m": [0, 0, -0.026], "shape": "box", "dimensions_m": [0.140, 0.100, 0.034], "provenance": "flight compute assembly design limit"},
+    {"id": "battery_6s_10ah", "link": "base_link", "mass_kg": 1.350, "center_m": [0, 0, -0.110], "shape": "box", "dimensions_m": [0.180, 0.075, 0.055], "provenance": "selected battery envelope; as-built pack must be weighed"},
+    {"id": "esc_and_motor_wiring", "link": "base_link", "mass_kg": 0.150, "center_m": [0, 0, -0.055], "shape": "box", "dimensions_m": [0.055, 0.055, 0.012], "provenance": "selected ESC plus harness mass budget"},
+    {"id": "pixhawk_6x", "link": "base_link", "mass_kg": 0.074, "center_m": [0, 0, -0.026], "shape": "box", "dimensions_m": [0.090, 0.060, 0.032], "provenance": "Pixhawk 6X and standard baseboard specification"},
+    {"id": "gnss_compass", "link": "base_link", "mass_kg": 0.064, "center_m": [-0.077, 0, -0.001], "shape": "box", "dimensions_m": [0.028, 0.028, 0.008], "provenance": "selected GNSS class mass and modeled mount"},
+    {"id": "mid360_lidar", "link": "base_link", "mass_kg": 0.265, "center_m": [0, 0, 0.016], "shape": "box", "dimensions_m": [0.045, 0.045, 0.022], "provenance": "Livox MID-360 published mass; collision envelope represents mounted payload"},
+    {"id": "depth_camera", "link": "base_link", "mass_kg": 0.061, "center_m": [0.121, 0, -0.028], "shape": "box", "dimensions_m": [0.022, 0.070, 0.024], "provenance": "OAK-D-Lite-class published device mass"},
+    {"id": "downward_rangefinder", "link": "base_link", "mass_kg": 0.019, "center_m": [0.110, 0, -0.096], "shape": "box", "dimensions_m": [0.022, 0.024, 0.020], "provenance": "LW20/C published device mass"},
+    {"id": "regulators_and_data_harness", "link": "base_link", "mass_kg": 0.250, "center_m": [0, 0, -0.065], "shape": "box", "dimensions_m": [0.150, 0.080, 0.020], "provenance": "power and data harness design allocation"},
+    {"id": "mounts_and_landing_gear", "link": "base_link", "mass_kg": 0.250, "center_m": [0, 0, -0.120], "shape": "box", "dimensions_m": [0.180, 0.180, 0.140], "provenance": "custom mounts and landing structure design target"},
+    {"id": "fasteners_and_adhesive", "link": "base_link", "mass_kg": 0.030, "center_m": [0, 0, -0.045], "shape": "box", "dimensions_m": [0.200, 0.110, 0.040], "provenance": "assembly mass reconciliation target"},
+    {"id": "motor_1", "link": "base_link", "mass_kg": 0.125, "center_m": [0.1384983492, -0.1733868713, -0.023], "shape": "cylinder", "dimensions_m": [0.021, 0.036], "provenance": "selected motor published mass and extracted arm position"},
+    {"id": "motor_2", "link": "base_link", "mass_kg": 0.125, "center_m": [-0.1384933424, 0.1733872604, -0.023], "shape": "cylinder", "dimensions_m": [0.021, 0.036], "provenance": "selected motor published mass and extracted arm position"},
+    {"id": "motor_3", "link": "base_link", "mass_kg": 0.125, "center_m": [0.1385076265, 0.1733864822, -0.023], "shape": "cylinder", "dimensions_m": [0.021, 0.036], "provenance": "selected motor published mass and extracted arm position"},
+    {"id": "motor_4", "link": "base_link", "mass_kg": 0.125, "center_m": [-0.1385126333, -0.1733868713, -0.023], "shape": "cylinder", "dimensions_m": [0.021, 0.036], "provenance": "selected motor published mass and extracted arm position"},
+    {"id": "propeller_1", "link": "motor_01", "mass_kg": 0.020, "center_m": [0.1384983492, -0.1733868713, 0], "shape": "cylinder", "dimensions_m": [0.127, 0.004], "provenance": "selected 10-inch propeller mass"},
+    {"id": "propeller_2", "link": "motor_02", "mass_kg": 0.020, "center_m": [-0.1384933424, 0.1733872604, 0], "shape": "cylinder", "dimensions_m": [0.127, 0.004], "provenance": "selected 10-inch propeller mass"},
+    {"id": "propeller_3", "link": "motor_03", "mass_kg": 0.020, "center_m": [0.1385076265, 0.1733864822, 0], "shape": "cylinder", "dimensions_m": [0.127, 0.004], "provenance": "selected 10-inch propeller mass"},
+    {"id": "propeller_4", "link": "motor_04", "mass_kg": 0.020, "center_m": [-0.1385126333, -0.1733868713, 0], "shape": "cylinder", "dimensions_m": [0.127, 0.004], "provenance": "selected 10-inch propeller mass"}
+  ]
+}

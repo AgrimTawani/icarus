@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def configure(model, world, profile="nominal"):
+def configure(model, world, profile="physical"):
     config = json.loads((ROOT / "config/simulation/sensor_profiles.json").read_text())
     scale = config["profiles"][profile]
     base = model.find("link[@name='base_link']")
@@ -34,7 +34,11 @@ def configure(model, world, profile="nominal"):
             if found is None:
                 found = ET.SubElement(parent, segment)
             parent = found
-        node = ET.SubElement(parent, "noise")
+        node = parent.find("noise")
+        if node is None:
+            node = ET.SubElement(parent, "noise")
+        else:
+            node.clear()
         if path in ("camera", "lidar"):
             ET.SubElement(node, "type").text = "gaussian"
         else:

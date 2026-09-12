@@ -15,7 +15,7 @@ def main():
     results = []
     print("Acceptance evidence:", output, flush=True)
     for index in range(5):
-        profile = "noisy" if index == 4 else "nominal"
+        profile = "physical"
         before = set((ROOT / "logs/simulation").glob("compact_flight_*"))
         print(f"Flight {index + 1}/5: {profile}; no media", flush=True)
         with (output / f"flight_{index + 1}.log").open("w") as log:

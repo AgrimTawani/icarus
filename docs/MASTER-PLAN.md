@@ -112,8 +112,10 @@ train/evaluation separation before any fine-tuning experiment.
 
 ## Immediate Work Queue
 
-1. Verify the Phase 6 keyboard and physical Xbox manual-control paths.
-2. Add 20-cycle launcher reliability and failure-injection tests.
-3. Pin upstream checkouts in an executable lock/checkout mechanism.
-4. Decide the Phase 7 container split before adding heavy autonomy services.
-5. Generate and validate the v1 protobuf contracts before service code grows.
+1. Freeze the verified simulation boundary; change it only for a demonstrated
+   regression or later as-built calibration evidence.
+2. Define the DCM state/perception input and high-level action output contracts.
+3. Implement a deterministic mock model before connecting Qwen or Llama.
+4. Keep all DCM actions behind the future Drone API and guardrails—never MAVLink.
+5. Retain the pending 20-cycle lifecycle soak as infrastructure debt without
+   coupling it to DCM implementation.

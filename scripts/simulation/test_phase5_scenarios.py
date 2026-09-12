@@ -116,7 +116,9 @@ def main():
             assert "village_ground_details" in text and "window_front" in text
             assert "canopy_cluster" in text
         if scenario["wind"]["enabled"]:
-            assert "WindEffects" in world.read_text()
+            model_text = (ROOT / "simulation/models" / ("phase5_" + scenario["name"]) / "model.sdf").read_text()
+            assert "IcarusTurbulentAtmosphere" in model_text
+            assert "<turbulence_intensity>0</turbulence_intensity>" not in model_text
         if scenario["world_profile"] in ("obstacles", "adverse"):
             assert scenario["obstacles"] and json.loads(truth.read_text())["obstacles"] == scenario["obstacles"]
             for obstacle in scenario["obstacles"]:

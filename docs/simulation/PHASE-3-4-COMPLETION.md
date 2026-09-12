@@ -1,5 +1,9 @@
 # Phase 3–4 Simulation Acceptance — 2026-09-12
 
+> Historical acceptance record. The nominal/noisy profiles described below were
+> replaced later on 2026-09-12 by one physical-noise sensor model, and aggregate
+> mass allocations were replaced by the component-derived mass-property pipeline.
+
 Status: **passed**, using the user's explicit approval: “Use the automated
 simulation gate.” Five consecutive automated flights replace the original five
 manual flights. No screenshots, image pixels or videos were saved during this

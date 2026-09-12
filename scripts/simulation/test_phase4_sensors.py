@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Live nominal/noise tests with numeric-only output and per-channel failures."""
+"""Live physical-noise tests with numeric-only output and channel failures."""
 
 import argparse
 import json
@@ -20,7 +20,7 @@ from test_mark4_motors import stop
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", choices=("nominal", "noisy"), default="nominal")
+    parser.add_argument("--profile", choices=("physical",), default="physical")
     parser.add_argument("--only", help="Test one channel independently")
     parser.add_argument("--duration", type=float, default=10)
     parser.add_argument("--live-faults", action="store_true")
@@ -224,7 +224,7 @@ def main():
             )
         if name == "barometer":
             assert 90000 < data[:, 2].mean() < 102000
-        if args.profile == "noisy" and name in (
+        if name in (
             "imu",
             "gps",
             "compass",

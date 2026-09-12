@@ -19,6 +19,7 @@ def main():
     from gz.msgs10.laserscan_pb2 import LaserScan
     from gz.msgs10.magnetometer_pb2 import Magnetometer
     from gz.msgs10.navsat_pb2 import NavSat
+    from gz.msgs10.vector3d_pb2 import Vector3d
 
     types = {
         t.DESCRIPTOR.full_name: t
@@ -30,6 +31,7 @@ def main():
             Magnetometer,
             FluidPressure,
             BatteryState,
+            Vector3d,
         )
     }
     folder = args.directory / "sensors"

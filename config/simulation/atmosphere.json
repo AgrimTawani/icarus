@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "model": "seeded low-altitude stochastic turbulence with shear and obstacle wakes",
+  "air_density_kg_m3": 1.16,
+  "reference_height_m": 3.0,
+  "shear_exponent": 0.22,
+  "minimum_turbulence_intensity": 0.20,
+  "projected_area_m2": [0.12, 0.12, 0.20],
+  "drag_coefficient": [1.05, 1.05, 1.20],
+  "rotational_drag": [0.025, 0.025, 0.035],
+  "center_of_pressure_m": [0, 0, -0.025],
+  "buffeting_moment_coefficient": 0.055,
+  "stochastic_update_hz": 50,
+  "notes": "Coefficients describe the single canonical model and must be replaced by flight/bench identification when the aircraft exists. Random seeds change the weather realization, not the vehicle profile."
+}

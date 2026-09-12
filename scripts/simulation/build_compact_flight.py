@@ -8,14 +8,14 @@ import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import numpy as np
 from build_akshu_candidate import ROOT
+from vehicle_mass_properties import calculate, component_inertia, load_manifest
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--sensor-profile", choices=("nominal", "noisy"), default="nominal"
+        "--sensor-profile", choices=("physical",), default="physical"
     )
     parser.add_argument("--target-model-dir", type=Path, default=None)
     parser.add_argument(
@@ -45,45 +45,23 @@ def main():
     imu = copy.deepcopy(original.find("link/sensor"))
     imu.find("pose").text = "0 0 -0.026 3.141592653589793 0 0"
     base.append(imu)  # Dedicated FRD IMU for SITL; public recording IMU stays FLU.
-    layout = json.loads(
-        (ROOT / "simulation/models/akshu_reference/extraction.json").read_text()
-    )["motor_layout"]
-    # Allocation-based inertia, not mesh-density integration or measured hardware.
-    allocations = [
-        ("structure", 0.350, [0, 0, -0.045], [0.228, 0.110, 0.042]),
-        ("compute_allowance", 0.900, [0, 0, -0.026], [0.140, 0.100, 0.034]),
-        ("battery", 1.350, [0, 0, -0.110], [0.180, 0.075, 0.055]),
-        ("esc_wiring", 0.150, [0, 0, -0.055], [0.055, 0.055, 0.012]),
-        ("flight_controller", 0.074, [0, 0, -0.026], [0.09, 0.06, 0.032]),
-        ("gnss", 0.064, [-0.077, 0, -0.001], [0.028, 0.028, 0.008]),
-        ("lidar_allowance", 0.265, [0, 0, 0.016], [0.045, 0.045, 0.022]),
-        ("camera", 0.061, [0.121, 0, -0.028], [0.022, 0.070, 0.024]),
-        ("rangefinder", 0.019, [0.110, 0, -0.096], [0.022, 0.024, 0.020]),
-        ("power_harness", 0.250, [0, 0, -0.065], [0.150, 0.080, 0.020]),
-        ("mounts_landing_gear", 0.250, [0, 0, -0.12], [0.18, 0.18, 0.14]),
-        ("fasteners", 0.030, [0, 0, -0.045], [0.20, 0.11, 0.04]),
+    manifest_path = ROOT / "config/simulation/vehicle_components.json"
+    manifest, manifest_sha256 = load_manifest(manifest_path)
+    components = manifest["components"]
+    base_components = [item for item in components if item["link"] == "base_link"]
+    propellers = {
+        int(item["id"].split("_")[-1]): item
+        for item in components
+        if item["id"].startswith("propeller_")
+    }
+    if set(propellers) != {1, 2, 3, 4}:
+        raise ValueError("vehicle manifest must define propellers 1..4")
+    layout = [
+        {"motor": number, "position_m": propellers[number]["center_m"]}
+        for number in range(1, 5)
     ]
-    for m in layout:
-        x, y, _ = m["position_m"]
-        allocations.append(
-            (f"motor_{m['motor']}", 0.125, [x, y, -0.023], [0.042, 0.042, 0.036])
-        )
-    mass = sum(a[1] for a in allocations)
-    assert math.isclose(mass + 0.080, 4.343)
-    cg = sum(m * np.array(p) for _, m, p, _ in allocations) / mass
-    inertia = np.zeros((3, 3))
-    for _, m, p, size in allocations:
-        x, y, z = size
-        inertia += np.diag(
-            [
-                m * (y * y + z * z) / 12,
-                m * (x * x + z * z) / 12,
-                m * (x * x + y * y) / 12,
-            ]
-        )
-        d = np.array(p) - cg
-        inertia += m * (np.dot(d, d) * np.eye(3) - np.outer(d, d))
-    assert np.linalg.eigvalsh(inertia).min() > 0
+    mass, cg, inertia = calculate(base_components)
+    total_mass, total_cg, total_inertia = calculate(components)
     inertial = ET.SubElement(base, "inertial")
     ET.SubElement(inertial, "mass").text = str(mass)
     ET.SubElement(inertial, "pose").text = " ".join(map(str, cg)) + " 0 0 0"
@@ -129,6 +107,24 @@ def main():
         rotor = copy.deepcopy(original.find(f"link[@name='motor_{n:02d}']"))
         ET.SubElement(rotor, "enable_wind").text = "true"
         rotor.find("pose").text = " ".join(map(str, m["position_m"])) + " 0 0 0"
+        propeller = propellers[n]
+        rotor_inertial = rotor.find("inertial")
+        rotor_inertial.find("mass").text = str(propeller["mass_kg"])
+        rotor_pose = rotor_inertial.find("pose")
+        if rotor_pose is None:
+            rotor_pose = ET.SubElement(rotor_inertial, "pose")
+        rotor_pose.text = "0 0 0 0 0 0"
+        propeller_tensor = component_inertia(propeller)
+        rotor_tensor = rotor_inertial.find("inertia")
+        for name, i, j in [
+            ("ixx", 0, 0),
+            ("iyy", 1, 1),
+            ("izz", 2, 2),
+            ("ixy", 0, 1),
+            ("ixz", 0, 2),
+            ("iyz", 1, 2),
+        ]:
+            rotor_tensor.find(name).text = str(propeller_tensor[i, j])
         for visual in list(rotor.findall("visual")):
             rotor.remove(visual)
         visual = base.find(f"visual[@name='source_prop_{prop}']")
@@ -151,20 +147,50 @@ def main():
     )
     for plugin in bridge.findall("plugin"):
         model.append(copy.deepcopy(plugin))
+    atmosphere_config = json.loads(
+        (ROOT / "config/simulation/atmosphere.json").read_text()
+    )
+    atmosphere = ET.SubElement(
+        model,
+        "plugin",
+        filename="IcarusTurbulentAtmosphere",
+        name="icarus::TurbulentAtmosphere",
+    )
+    atmosphere_values = {
+        "seed": 42,
+        "mean_speed": 0,
+        "direction_deg": 0,
+        "turbulence_intensity": atmosphere_config["minimum_turbulence_intensity"],
+        "rise_time": 3,
+        "reference_height": atmosphere_config["reference_height_m"],
+        "shear_exponent": atmosphere_config["shear_exponent"],
+        "air_density": atmosphere_config["air_density_kg_m3"],
+        "projected_area": " ".join(map(str, atmosphere_config["projected_area_m2"])),
+        "drag_coefficient": " ".join(map(str, atmosphere_config["drag_coefficient"])),
+        "rotational_drag": " ".join(map(str, atmosphere_config["rotational_drag"])),
+        "center_of_pressure": " ".join(map(str, atmosphere_config["center_of_pressure_m"])),
+        "buffeting_moment": atmosphere_config["buffeting_moment_coefficient"],
+    }
+    for name, value in atmosphere_values.items():
+        ET.SubElement(atmosphere, name).text = str(value)
     ET.indent(tree)
     tree.write(target / "model.sdf", encoding="unicode")
     (target / "model.config").write_text(
-        '<model><name>Icarus compact SITL</name><version>0.3</version><sdf version="1.9">model.sdf</sdf><description>Compact simulation model with provisional mass allocations, rotors, sensors and ArduPilot.</description></model>\n'
+        '<model><name>Icarus compact SITL</name><version>0.4</version><sdf version="1.9">model.sdf</sdf><description>Component-derived rigid-body model with rotors, physical-noise sensors and ArduPilot.</description></model>\n'
     )
     (target / "mass_properties.json").write_text(
         json.dumps(
             {
-                "status": "provisional simulation allocations; not hardware-validated",
-                "total_mass_kg": mass + 0.08,
+                "status": manifest["status"],
+                "component_manifest": str(manifest_path.relative_to(ROOT)),
+                "component_manifest_sha256": manifest_sha256,
+                "total_mass_kg": total_mass,
+                "total_cg_m": total_cg.tolist(),
+                "total_inertia_kg_m2": total_inertia.tolist(),
                 "base_mass_kg": mass,
                 "base_cg_m": cg.tolist(),
                 "base_inertia_kg_m2": inertia.tolist(),
-                "allocations": allocations,
+                "components": components,
                 "motor_layout": layout,
             },
             indent=2,
@@ -184,7 +210,7 @@ def main():
     ET.indent(tree)
     tree.write(target / "model.sdf", encoding="unicode")
     if args.model_only:
-        print("Built compact model only; total mass", mass + 0.08, "kg; base CG", cg)
+        print("Built compact model only; total mass", total_mass, "kg; base CG", cg)
         return
     # No review camera: user explicitly disabled picture/video capture.
     ET.indent(world)
@@ -203,7 +229,7 @@ def main():
         "\n".join(ET.tostring(child, encoding="unicode") for child in gui).rstrip()
         + "\n"
     )
-    print("Built compact flight model; total mass", mass + 0.08, "kg; base CG", cg)
+    print("Built compact flight model; total mass", total_mass, "kg; base CG", cg)
 
 
 if __name__ == "__main__":

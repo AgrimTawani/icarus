@@ -692,7 +692,7 @@
           <noise>
             <type>gaussian</type>
             <mean>0.0</mean>
-            <stddev>0.0</stddev>
+            <stddev>0.005</stddev>
           </noise>
         </camera>
       </sensor>
@@ -723,8 +723,8 @@
           </range>
           <noise>
             <type>gaussian</type>
-            <mean>0.0</mean>
-            <stddev>0.0</stddev>
+            <mean>0.002</mean>
+            <stddev>0.02</stddev>
           </noise>
         </lidar>
       </sensor>
@@ -749,8 +749,8 @@
           </range>
           <noise>
             <type>gaussian</type>
-            <mean>0.0</mean>
-            <stddev>0.0</stddev>
+            <mean>0.001</mean>
+            <stddev>0.005</stddev>
           </noise>
         </lidar>
       </sensor>
@@ -763,40 +763,40 @@
           <linear_acceleration>
             <x>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
               </noise>
             </z>
           </linear_acceleration>
           <angular_velocity>
             <x>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
               </noise>
             </z>
           </angular_velocity>
@@ -811,14 +811,14 @@
           <position_sensing>
             <horizontal>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.02</mean>
+                <stddev>0.3</stddev>
               </noise>
             </horizontal>
             <vertical>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.02</mean>
+                <stddev>0.3</stddev>
               </noise>
             </vertical>
           </position_sensing>
@@ -826,13 +826,13 @@
             <horizontal>
               <noise type="gaussian">
                 <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <stddev>0.05</stddev>
               </noise>
             </horizontal>
             <vertical>
               <noise type="gaussian">
                 <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <stddev>0.05</stddev>
               </noise>
             </vertical>
           </velocity_sensing>
@@ -847,40 +847,40 @@
           <linear_acceleration>
             <x>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
               </noise>
             </z>
           </linear_acceleration>
           <angular_velocity>
             <x>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.0</mean>
-                <stddev>0.0</stddev>
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
               </noise>
             </z>
           </angular_velocity>
@@ -888,14 +888,14 @@
       </sensor>
       <inertial>
         <mass>4.263</mass>
-        <pose>0.0010656814449917895 0.0 -0.060117288294628216 0 0 0</pose>
+        <pose>0.0010656814449917903 0.0 -0.060117288294628216 0 0 0</pose>
         <inertia>
-          <ixx>0.026811281182061653</ixx>
-          <iyy>0.028174725900319345</iyy>
-          <izz>0.03699154270400896</izz>
-          <ixy>-6.056977179622752e-07</ixy>
-          <ixz>0.0001292671592775039</ixz>
-          <iyz>0.0</iyz>
+          <ixx>0.026792906175491914</ixx>
+          <iyy>0.02815635089870799</iyy>
+          <izz>0.036954792695827875</izz>
+          <ixy>-6.056962174594283e-07</ixy>
+          <ixz>0.0001292671592775037</ixz>
+          <iyz>1.0842021724855044e-19</iyz>
         </inertia>
       </inertial>
       <collision name="chassis_collision">
@@ -986,20 +986,20 @@
         <magnetometer>
           <x>
             <noise type="gaussian">
-              <mean>0.0</mean>
-              <stddev>0.0</stddev>
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
             </noise>
           </x>
           <y>
             <noise type="gaussian">
-              <mean>0.0</mean>
-              <stddev>0.0</stddev>
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
             </noise>
           </y>
           <z>
             <noise type="gaussian">
-              <mean>0.0</mean>
-              <stddev>0.0</stddev>
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
             </noise>
           </z>
         </magnetometer>
@@ -1013,8 +1013,8 @@
           <reference_altitude>584</reference_altitude>
           <pressure>
             <noise type="gaussian">
-              <mean>0.0</mean>
-              <stddev>0.0</stddev>
+              <mean>0.5</mean>
+              <stddev>2.0</stddev>
             </noise>
           </pressure>
         </air_pressure>
@@ -1022,17 +1022,18 @@
     </link>
     <self_collide>false</self_collide>
     <link name="motor_01">
-      <pose>0.1384983491897583 -0.17338687133789063 0.0 0 0 0</pose>
+      <pose>0.1384983492 -0.1733868713 0 0 0 0</pose>
       <inertial>
-        <mass>0.020</mass>
+        <mass>0.02</mass>
         <inertia>
-          <ixx>0.00008064500000000001</ixx>
-          <iyy>0.00008064500000000001</iyy>
+          <ixx>8.067166666666667e-05</ixx>
+          <iyy>8.067166666666667e-05</iyy>
           <izz>0.00016129000000000002</izz>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyz>0</iyz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
         </inertia>
+        <pose>0 0 0 0 0 0</pose>
       </inertial>
       <enable_wind>true</enable_wind>
       <visual name="source_prop_28">
@@ -1045,7 +1046,7 @@
           <diffuse>0.95 0.40 0.09 1</diffuse>
           <ambient>0.95 0.40 0.09 1</ambient>
         </material>
-        <pose>-0.1384983491897583 0.17338687133789063 -0.0 0 0 0</pose>
+        <pose>-0.1384983492 0.1733868713 0 0 0 0</pose>
       </visual>
     </link>
     <joint name="rotor_01_joint" type="revolute">
@@ -1063,17 +1064,18 @@
       </axis>
     </joint>
     <link name="motor_02">
-      <pose>-0.13849334239959718 0.17338726043701172 0.0 0 0 0</pose>
+      <pose>-0.1384933424 0.1733872604 0 0 0 0</pose>
       <inertial>
-        <mass>0.020</mass>
+        <mass>0.02</mass>
         <inertia>
-          <ixx>0.00008064500000000001</ixx>
-          <iyy>0.00008064500000000001</iyy>
+          <ixx>8.067166666666667e-05</ixx>
+          <iyy>8.067166666666667e-05</iyy>
           <izz>0.00016129000000000002</izz>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyz>0</iyz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
         </inertia>
+        <pose>0 0 0 0 0 0</pose>
       </inertial>
       <enable_wind>true</enable_wind>
       <visual name="source_prop_26">
@@ -1086,7 +1088,7 @@
           <diffuse>0.12 0.48 0.65 1</diffuse>
           <ambient>0.12 0.48 0.65 1</ambient>
         </material>
-        <pose>0.13849334239959718 -0.17338726043701172 -0.0 0 0 0</pose>
+        <pose>0.1384933424 -0.1733872604 0 0 0 0</pose>
       </visual>
     </link>
     <joint name="rotor_02_joint" type="revolute">
@@ -1104,17 +1106,18 @@
       </axis>
     </joint>
     <link name="motor_03">
-      <pose>0.13850762653350832 0.17338648223876954 0.0 0 0 0</pose>
+      <pose>0.1385076265 0.1733864822 0 0 0 0</pose>
       <inertial>
-        <mass>0.020</mass>
+        <mass>0.02</mass>
         <inertia>
-          <ixx>0.00008064500000000001</ixx>
-          <iyy>0.00008064500000000001</iyy>
+          <ixx>8.067166666666667e-05</ixx>
+          <iyy>8.067166666666667e-05</iyy>
           <izz>0.00016129000000000002</izz>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyz>0</iyz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
         </inertia>
+        <pose>0 0 0 0 0 0</pose>
       </inertial>
       <enable_wind>true</enable_wind>
       <visual name="source_prop_25">
@@ -1127,7 +1130,7 @@
           <diffuse>0.12 0.48 0.65 1</diffuse>
           <ambient>0.12 0.48 0.65 1</ambient>
         </material>
-        <pose>-0.13850762653350832 -0.17338648223876954 -0.0 0 0 0</pose>
+        <pose>-0.1385076265 -0.1733864822 0 0 0 0</pose>
       </visual>
     </link>
     <joint name="rotor_03_joint" type="revolute">
@@ -1145,17 +1148,18 @@
       </axis>
     </joint>
     <link name="motor_04">
-      <pose>-0.13851263332366945 -0.17338687133789063 0.0 0 0 0</pose>
+      <pose>-0.1385126333 -0.1733868713 0 0 0 0</pose>
       <inertial>
-        <mass>0.020</mass>
+        <mass>0.02</mass>
         <inertia>
-          <ixx>0.00008064500000000001</ixx>
-          <iyy>0.00008064500000000001</iyy>
+          <ixx>8.067166666666667e-05</ixx>
+          <iyy>8.067166666666667e-05</iyy>
           <izz>0.00016129000000000002</izz>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyz>0</iyz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
         </inertia>
+        <pose>0 0 0 0 0 0</pose>
       </inertial>
       <enable_wind>true</enable_wind>
       <visual name="source_prop_27">
@@ -1168,7 +1172,7 @@
           <diffuse>0.95 0.40 0.09 1</diffuse>
           <ambient>0.95 0.40 0.09 1</ambient>
         </material>
-        <pose>0.13851263332366945 0.17338687133789063 -0.0 0 0 0</pose>
+        <pose>0.1385126333 0.1733868713 0 0 0 0</pose>
       </visual>
     </link>
     <joint name="rotor_04_joint" type="revolute">
@@ -1302,6 +1306,21 @@
         <servo_min>1000</servo_min>
         <servo_max>2000</servo_max>
       </control>
+    </plugin>
+    <plugin filename="IcarusTurbulentAtmosphere" name="icarus::TurbulentAtmosphere">
+      <seed>42</seed>
+      <mean_speed>0</mean_speed>
+      <direction_deg>0</direction_deg>
+      <turbulence_intensity>0.2</turbulence_intensity>
+      <rise_time>3</rise_time>
+      <reference_height>3.0</reference_height>
+      <shear_exponent>0.22</shear_exponent>
+      <air_density>1.16</air_density>
+      <projected_area>0.12 0.12 0.2</projected_area>
+      <drag_coefficient>1.05 1.05 1.2</drag_coefficient>
+      <rotational_drag>0.025 0.025 0.035</rotational_drag>
+      <center_of_pressure>0 0 -0.025</center_of_pressure>
+      <buffeting_moment>0.055</buffeting_moment>
     </plugin>
     <plugin filename="gz-sim-linearbatteryplugin-system" name="gz::sim::systems::LinearBatteryPlugin">
       <battery_name>flight_battery</battery_name>

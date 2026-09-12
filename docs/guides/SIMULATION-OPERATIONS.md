@@ -206,7 +206,42 @@ To send the simulated onboard stream to another machine, launch with
 `--video-destination GROUND_STATION_IPV4 --video-port PORT` and open the same
 UDP port in the ground-station firewall.
 
-## ArduPilot Stability and Current Fidelity Limits
+## Canonical Vehicle Physics and Natural Atmosphere
+
+Icarus uses one vehicle physics definition and one physical-noise sensor model.
+`config/simulation/vehicle_components.json` contains the mass, geometry, body
+frame position and provenance of every modeled component. At build time,
+`vehicle_mass_properties.py` calculates:
+
+- base-link and complete-aircraft mass;
+- three-dimensional centre of gravity;
+- each component's local inertia;
+- the full inertia tensor using the parallel-axis theorem;
+- separate physical inertia for all four rotating propeller links.
+
+The generated `mass_properties.json` contains the component-manifest hash and
+all calculated results. Aggregate mass, CG and inertia numbers are never treated
+as independent hand-tuned parameters. Until an aircraft exists, several source
+inputs remain selected-component specifications or mechanical design targets;
+those exact fields must be replaced by as-built measurements later.
+
+The model uses one seeded `IcarusTurbulentAtmosphere` implementation instead of
+Gazebo's former smooth uniform-wind effect. Every wind-enabled flight includes:
+
+- correlated stochastic longitudinal, lateral and vertical turbulence;
+- slow, irregular gust energy rather than repeating sine-wave gusts;
+- altitude-dependent low-level wind shear;
+- aerodynamic drag from relative airspeed, projected areas and drag coefficients;
+- centre-of-pressure torque, rotational damping and turbulence-induced moments;
+- spatial wake deficits and increased turbulence downwind of every modeled
+  building, wall and tree;
+- a recorded `/icarus/environment/wind` stream and the scenario seed for replay.
+
+The random seed identifies a weather realization for reproducibility; it does
+not select another vehicle or sensor profile. `config/simulation/atmosphere.json`
+is the single atmosphere coefficient source.
+
+## ArduPilot Stability
 
 The vehicle is not flying with an untuned, neutral ArduPilot configuration.
 Every run wipes SITL state and loads the upstream Copter SITL defaults followed
@@ -229,47 +264,31 @@ a closed-loop position and altitude controller, so it is expected to oppose
 wind and pilot disturbances. STABILIZE still self-levels, while ACRO removes
 self-leveling but retains the inner rate controller.
 
-The current simulation nevertheless makes control substantially easier than a
-physical prototype:
+The simulator now exercises physical sensor noise and non-repeating aerodynamic
+disturbances. A correctly functioning LOITER controller may still appear very
+stable: rejecting moderate turbulence is precisely what its estimator, attitude
+loops and position loops are designed to do. Switching to STABILIZE removes
+position and altitude hold; ACRO removes self-leveling but retains rate control.
 
-- the ArduPilot-facing IMU model has zero configured measurement noise;
-- the upstream SITL baseline sets `SIM_BARO_RND=0`;
-- `wind_light` is a spatially simple, constant 1.5 m/s flow with a smooth
-  three-second rise and no gusts or direction changes;
-- all motors and propellers have identical thrust response and fixed time
-  constants, with no imbalance, damage, ESC variance or battery-dependent
-  thrust loss;
-- rotor drag and rolling-moment coefficients are currently zero;
-- the airframe is perfectly rigid and omits structural flex, vibration,
-  propwash, detailed ground effect and many aerodynamic cross-couplings;
-- mass, inertia and centre of gravity are provisional calculated values rather
-  than measurements from a built aircraft.
-
-Therefore the current stability demonstrates that the control/simulation
-connection works; it does **not** validate real-world handling fidelity or prove
-that these gains are correct for the eventual aircraft. Realism should be
-improved by measuring and calibrating propulsion, inertia, centre of gravity,
-sensor noise/latency, motor mismatch, drag, gust spectra and battery sag, then
-tuning ArduPilot against those data. Arbitrarily reducing gains just to make the
-vehicle look less stable would produce a less defensible simulation.
+Remaining physical calibration cannot be manufactured in software. Component
+design targets, motor/propeller response, projected aerodynamic areas, drag,
+structural vibration, battery-dependent thrust and atmospheric coefficients
+must eventually be replaced or confirmed using the assembled vehicle, thrust
+stand and flight logs. The implementation now provides explicit versioned
+inputs for that substitution instead of hiding values in generated SDF.
 
 ## Scenario Catalog
 
 | Name | Environment and purpose | Current expectation |
 | --- | --- | --- |
 | `empty_validation` | Empty, still-air baseline | Pass |
-| `wind_light` | Mixed village, constant 1.5 m/s wind | Pass |
-| `wind_strong` | Mixed village, constant 5 m/s wind | Known failing stress case |
-| `wind_gusting` | Mixed village, 3 m/s with 60% gust amplitude | Pass target |
-| `wind_direction_change` | Mixed village, 2.5 m/s and ±90° swing | Pass target |
+| `wind_light` | Mixed village, 1.5 m/s mean with turbulence, shear and wakes | Pass |
+| `wind_strong` | Mixed village, 5 m/s mean with turbulence, shear and wakes | Stress case |
+| `wind_gusting` | Mixed village, 3 m/s mean with high turbulence intensity | Pass target |
+| `wind_direction_change` | Mixed village, 2.5 m/s mean with strong lateral turbulence | Pass target |
 | `wind_limit_reject` | 8 m/s exceeds 6 m/s declared limit | Reject before launch |
 | `obstacle_course` | Buildings, trees, walls and scored routes | Hover pass; route autonomy not built |
 | `adverse_combined` | Wind, obstacles, noise, link faults and low battery | Integrated Phase 5 pass |
-
-The strong-wind vehicle held altitude in the latest run but reached 1.40 m
-drift and 20.41° tilt, beyond its 0.75 m/18° scenario envelope. The supervisor
-correctly stopped the flight. Do not loosen the gate to hide this result; tune
-wind-force/aerodynamic representation and controller parameters with evidence.
 
 ## What the Launcher Does
 
@@ -277,9 +296,11 @@ wind-force/aerodynamic representation and controller parameters with evidence.
 2. Rejects contradictory overrides and out-of-policy wind before arming.
 3. Checks required ports.
 4. Builds deterministic generated world/model artifacts.
-5. Starts Gazebo, ArduPilot SITL and sensor/fault recorders.
+5. Starts Gazebo, ArduPilot SITL, physical-noise sensors, the turbulent
+   atmosphere, camera encoder and recorders.
 6. Publishes the active local session for an independent control client.
-7. Monitors child processes and sensor health until `Ctrl+C`.
+7. Monitors child processes, sensor health, camera health and atmosphere
+   publication until `Ctrl+C`.
 8. Writes a structured run directory and shuts everything down.
 
 ## Manual Testing Status

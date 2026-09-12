@@ -147,9 +147,6 @@ def build(scenario_value):
         10.0 * scenario["battery"]["initial_soc"]
     )
     battery.find("power_load").text = str(scenario["battery"]["load_w"])
-    ET.indent(model_tree)
-    model_xml = ET.tostring(model_tree.getroot(), encoding="unicode") + "\n"
-    (model_dir / "model.sdf").write_text(model_xml)
     (model_dir / "model.config").write_text(
         '<model><name>Phase 5 ' + scenario["name"]
         + '</name><version>1.0</version><sdf version="1.9">model.sdf</sdf>'
@@ -181,29 +178,41 @@ def build(scenario_value):
     if obstacles:
         decorate_site(world)
 
-    wind = scenario["wind"]
-    if wind["enabled"]:
-        angle = math.radians(wind["direction_deg"])
-        wind_node = element(world, "wind")
-        element(wind_node, "linear_velocity", f"{wind['speed_m_s'] * math.cos(angle):.9f} {wind['speed_m_s'] * math.sin(angle):.9f} 0")
-        plugin = element(world, "plugin", filename="gz-sim-wind-effects-system", name="gz::sim::systems::WindEffects")
-        element(plugin, "force_approximation_scaling_factor", "1")
-        horizontal = element(plugin, "horizontal")
-        magnitude = element(horizontal, "magnitude")
-        element(magnitude, "time_for_rise", wind["rise_time_s"])
-        if wind["gust_amplitude_fraction"]:
-            sine = element(magnitude, "sin")
-            element(sine, "amplitude_percent", wind["gust_amplitude_fraction"])
-            element(sine, "period", wind["gust_period_s"])
-        direction = element(horizontal, "direction")
-        element(direction, "time_for_rise", wind["rise_time_s"])
-        if wind["direction_swing_deg"]:
-            sine = element(direction, "sin")
-            element(sine, "amplitude", wind["direction_swing_deg"])
-            element(sine, "period", wind["direction_period_s"])
-
     for item in obstacles:
         (tree_model if item["type"] == "tree" else box_model)(world, item)
+
+    wind = scenario["wind"]
+    atmosphere = model.find("plugin[@name='icarus::TurbulentAtmosphere']")
+    if atmosphere is None:
+        raise RuntimeError("canonical vehicle is missing its atmosphere plugin")
+    atmosphere.find("seed").text = str(scenario["seed"])
+    atmosphere.find("mean_speed").text = str(wind["speed_m_s"])
+    atmosphere.find("direction_deg").text = str(wind["direction_deg"])
+    atmosphere.find("rise_time").text = str(max(wind["rise_time_s"], 0.1))
+    baseline_intensity = float(atmosphere.find("turbulence_intensity").text)
+    atmosphere.find("turbulence_intensity").text = str(
+        max(baseline_intensity, wind["gust_amplitude_fraction"])
+        if wind["enabled"]
+        else 0
+    )
+    for item in obstacles:
+        if item["type"] == "tree":
+            diameter = 2 * item["canopy_radius_m"]
+            center = [
+                item["center_m"][0],
+                item["center_m"][1],
+                item["height_m"] + 0.65 * item["canopy_radius_m"],
+            ]
+            size = [diameter, diameter, item["height_m"] + diameter]
+        else:
+            center, size = item["center_m"], item["size_m"]
+        wake = element(atmosphere, "wake")
+        element(wake, "center", " ".join(map(str, center)))
+        element(wake, "size", " ".join(map(str, size)))
+
+    ET.indent(model_tree)
+    model_xml = ET.tostring(model_tree.getroot(), encoding="unicode") + "\n"
+    (model_dir / "model.sdf").write_text(model_xml)
 
     output_dir = ROOT / "simulation/worlds/generated"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -218,6 +227,12 @@ def build(scenario_value):
         "home": scenario["home"],
         "initial_pose": scenario["initial_pose"],
         "wind": scenario["wind"],
+        "atmosphere": {
+            "plugin": "icarus::TurbulentAtmosphere",
+            "seed": scenario["seed"],
+            "turbulence_intensity": float(atmosphere.find("turbulence_intensity").text),
+            "wake_count": len(obstacles),
+        },
         "environment_preset": preset,
         "environment_preset_sha256": hashlib.sha256(preset_path.read_bytes()).hexdigest(),
         "obstacles": obstacles,

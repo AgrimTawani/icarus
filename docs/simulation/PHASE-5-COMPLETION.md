@@ -1,5 +1,9 @@
 # Phase 5 Simulation Acceptance — 2026-09-12
 
+> Historical acceptance record. The smooth native Gazebo wind implementation
+> described below was replaced later on 2026-09-12 by the canonical seeded
+> Icarus turbulent atmosphere documented in `guides/SIMULATION-OPERATIONS.md`.
+
 Status: **passed**. Phase 5 now provides strict, deterministic environment and
 scenario layers. This is not obstacle-avoidance autonomy; route execution and
 planning remain later phases. No screenshots, image pixels or videos were saved,

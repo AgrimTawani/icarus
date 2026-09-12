@@ -35,7 +35,7 @@ def main():
         help="Check live sensors and navigation without running flight commands",
     )
     parser.add_argument(
-        "--sensor-profile", choices=("nominal", "noisy"), default=None
+        "--sensor-profile", choices=("physical",), default=None
     )
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
@@ -63,7 +63,7 @@ def main():
             raise ValueError("--sensor-profile conflicts with reproducible scenario")
         if args.seed is not None and args.seed != scenario["seed"]:
             raise ValueError("--seed conflicts with reproducible scenario")
-    sensor_profile = scenario["sensor_profile"] if scenario else (args.sensor_profile or "nominal")
+    sensor_profile = scenario["sensor_profile"] if scenario else (args.sensor_profile or "physical")
     seed = scenario["seed"] if scenario else (42 if args.seed is None else args.seed)
     for tool in ("gz", "cmake", "ninja"):
         if not shutil.which(tool):
@@ -229,11 +229,15 @@ def main():
                 "simulation/models/akshu_compact/model.sdf",
                 "simulation/parameters/mark4_v2_base.parm",
                 "simulation/plugins/build/libIcarusMotorBridge.so",
+                "simulation/plugins/build/libIcarusTurbulentAtmosphere.so",
                 "third_party/ardupilot/build/sitl/bin/arducopter",
                 "scripts/simulation/mark4_flight_check.py",
                 "scripts/simulation/launch_compact.py",
                 "scripts/simulation/record_compact_sensors.py",
                 "scripts/simulation/camera_stream.py",
+                "config/simulation/vehicle_components.json",
+                "config/simulation/atmosphere.json",
+                "config/simulation/sensor_profiles.json",
             )
         ]
         inputs.extend((model_path, world_path))
@@ -310,6 +314,7 @@ def main():
                 str(ROOT / "scripts/simulation/record_compact_sensors.py"),
                 "--directory",
                 str(directory),
+                "--include-wind",
             ],
         )
         deadline = time.monotonic() + 60

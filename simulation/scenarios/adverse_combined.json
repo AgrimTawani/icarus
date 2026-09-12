@@ -13,7 +13,7 @@
     {"name": "adverse_building", "type": "building", "center_m": [15, 6, 3], "size_m": [7, 7, 6]},
     {"name": "adverse_tree", "type": "tree", "center_m": [15, -6, 0], "radius_m": 0.4, "height_m": 5, "canopy_radius_m": 2.4, "canopy_collision": "enabled"}
   ],
-  "sensor_profile": "noisy",
+  "sensor_profile": "physical",
   "sensor_fault_schedule": [
     {"channel": "gps", "mode": "delay", "start_s": 20, "duration_s": 1.0},
     {"channel": "lidar", "mode": "drop", "start_s": 35, "duration_s": 0.8}

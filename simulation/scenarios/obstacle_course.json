@@ -16,7 +16,7 @@
     {"name": "tree_north", "type": "tree", "center_m": [24, 5, 0], "radius_m": 0.35, "height_m": 5, "canopy_radius_m": 2.2, "canopy_collision": "enabled"},
     {"name": "tree_south", "type": "tree", "center_m": [24, -5, 0], "radius_m": 0.35, "height_m": 5, "canopy_radius_m": 2.2, "canopy_collision": "enabled"}
   ],
-  "sensor_profile": "nominal",
+  "sensor_profile": "physical",
   "sensor_fault_schedule": [],
   "gps_degradation": {"position_stddev_m": 0, "velocity_stddev_m_s": 0},
   "communication": {"delay_s": 0, "dropout_s": 0},

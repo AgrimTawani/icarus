@@ -42,7 +42,7 @@ def resolve_scenario(value):
 
 def _number(value, label, minimum=None):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"{label} must be numeric")
+        raise TypeError(f"{label} must be numeric")
     if not math.isfinite(value) or (minimum is not None and value < minimum):
         raise ValueError(f"invalid {label}: {value}")
 
@@ -63,20 +63,20 @@ def load_scenario(value):
         raise ValueError("invalid environment_preset")
     if data["vehicle_profile"] != "akshu_compact_sitl":
         raise ValueError("unsupported vehicle_profile")
-    if data["sensor_profile"] not in ("nominal", "noisy"):
+    if data["sensor_profile"] != "physical":
         raise ValueError("invalid sensor_profile")
     pose = data["initial_pose"]
     if set(pose) != {"x_m", "y_m", "z_m", "yaw_deg"}:
         raise ValueError("initial_pose must define x_m, y_m, z_m, yaw_deg")
-    for key, value in pose.items():
-        _number(value, "initial_pose." + key)
+    for key, item_value in pose.items():
+        _number(item_value, "initial_pose." + key)
     home = data["home"]
     if set(home) != {"latitude_deg", "longitude_deg", "elevation_m", "heading_deg"}:
         raise ValueError("invalid home keys")
-    for key, value in home.items():
-        _number(value, "home." + key)
+    for key, item_value in home.items():
+        _number(item_value, "home." + key)
     if not isinstance(data["seed"], int) or isinstance(data["seed"], bool):
-        raise ValueError("seed must be an integer")
+        raise TypeError("seed must be an integer")
     _number(data["maximum_duration_s"], "maximum_duration_s", 1)
     wind = data["wind"]
     expected_wind = {
@@ -87,13 +87,13 @@ def load_scenario(value):
     if set(wind) != expected_wind:
         raise ValueError("invalid wind keys")
     if not isinstance(wind["enabled"], bool):
-        raise ValueError("wind.enabled must be boolean")
+        raise TypeError("wind.enabled must be boolean")
     for key in expected_wind - {"enabled"}:
         _number(wind[key], "wind." + key, 0)
     if wind["enabled"] != (wind["speed_m_s"] > 0):
         raise ValueError("wind.enabled must agree with speed_m_s")
     if not isinstance(data["obstacles"], list):
-        raise ValueError("obstacles must be a list")
+        raise TypeError("obstacles must be a list")
     names = set()
     for item in data["obstacles"]:
         if item.get("name") in names or item.get("type") not in ("box", "wall", "building", "tree"):
@@ -109,8 +109,8 @@ def load_scenario(value):
         else:
             if len(item.get("center_m", [])) != 3 or len(item.get("size_m", [])) != 3:
                 raise ValueError("box-like obstacles require three-dimensional center and size")
-            for value in item["size_m"]:
-                _number(value, item["name"] + ".size", 0.001)
+            for dimension in item["size_m"]:
+                _number(dimension, item["name"] + ".size", 0.001)
             if item["type"] == "building" and item["size_m"][2] > 6:
                 raise ValueError("buildings are limited to two storeys / 6 m")
     for event in data["sensor_fault_schedule"]:
@@ -124,7 +124,7 @@ def load_scenario(value):
         _number(event["duration_s"], "fault duration", 0.001)
     for section in ("gps_degradation", "communication", "battery", "mission", "success", "ground_truth"):
         if not isinstance(data[section], dict):
-            raise ValueError(section + " must be an object")
+            raise TypeError(section + " must be an object")
     communication = data["communication"]
     for key in ("delay_s", "dropout_s"):
         _number(communication.get(key), "communication." + key, 0)
