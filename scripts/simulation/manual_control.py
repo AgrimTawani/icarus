@@ -15,6 +15,12 @@ ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_SESSION = ROOT / "logs/simulation/active_session.json"
 RELEASE = 0
 IGNORE = 65535
+XBOX_MODE_HAT = {
+    (-1, 0): "STABILIZE",
+    (0, -1): "ALT_HOLD",
+    (0, 1): "LOITER",
+    (1, 0): "ACRO",
+}
 
 
 def clamp(value, minimum=-1.0, maximum=1.0):
@@ -120,7 +126,7 @@ def main():
         print("Manual-control connection check passed")
         return
 
-    screen = pygame.display.set_mode((820, 500))
+    screen = pygame.display.set_mode((820, 570))
     pygame.display.set_caption("Icarus Manual Pilot — simulation only")
     font = pygame.font.Font(None, 28)
     small = pygame.font.Font(None, 22)
@@ -152,12 +158,22 @@ def main():
         log.flush()
 
     def set_mode(name):
+        if name not in mode_numbers:
+            state["status"] = f"Mode unavailable in this ArduPilot build: {name}"
+            record("mode_unavailable", mode=name)
+            return
         master.mav.set_mode_send(
             master.target_system,
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
             mode_numbers[name],
         )
-        state["status"] = f"Requested {name}"
+        warning = {
+            "ACRO": " — rate control; no self-level or altitude hold",
+            "STABILIZE": " — self-level; manual throttle",
+            "ALT_HOLD": " — altitude hold; no position hold",
+            "LOITER": " — position and altitude hold",
+        }.get(name, "")
+        state["status"] = f"Requested {name}{warning}"
         record("mode_request", mode=name)
 
     def command(command_id, first=0.0, seventh=0.0):
@@ -205,16 +221,19 @@ def main():
         state["status"] = f"Preparing takeoff to {args.takeoff_altitude:.1f} m"
 
     def action(name):
-        nonlocal arm_pending
+        nonlocal arm_pending, pending_takeoff, takeoff_sent
         if name != "arm":
             arm_pending = False
+        if name != "takeoff":
+            pending_takeoff = False
+            takeoff_sent = False
         if name == "arm":
             arm()
         elif name == "disarm":
             disarm()
         elif name == "takeoff":
             takeoff()
-        elif name in ("LAND", "RTL", "LOITER"):
+        elif name in ("LAND", "RTL", "LOITER", "ALT_HOLD", "STABILIZE", "ACRO"):
             set_mode(name)
 
     set_mode("LOITER")
@@ -227,6 +246,7 @@ def main():
     )
     record("connected", controller=joystick.get_name() if joystick else None)
     previous_buttons = []
+    previous_mode_chord = (False, (0, 0))
     try:
         while running:
             for event in pygame.event.get():
@@ -240,6 +260,10 @@ def main():
                         pygame.K_l: "LAND",
                         pygame.K_r: "RTL",
                         pygame.K_h: "LOITER",
+                        pygame.K_1: "STABILIZE",
+                        pygame.K_2: "ALT_HOLD",
+                        pygame.K_3: "LOITER",
+                        pygame.K_4: "ACRO",
                     }
                     if event.key == pygame.K_ESCAPE:
                         running = False
@@ -326,6 +350,16 @@ def main():
                         if index < len(buttons) and buttons[index] and not previous_buttons[index]:
                             action(name)
                 previous_buttons = buttons
+                hat = joystick.get_hat(0) if joystick.get_numhats() else (0, 0)
+                left_bumper = len(buttons) > 4 and bool(buttons[4])
+                mode_chord = (left_bumper, hat)
+                if (
+                    left_bumper
+                    and hat in XBOX_MODE_HAT
+                    and mode_chord != previous_mode_chord
+                ):
+                    action(XBOX_MODE_HAT[hat])
+                previous_mode_chord = mode_chord
 
             roll, pitch, yaw, climb = map(clamp, (roll, pitch, yaw, climb))
             throttle_pwm = 1000 if not state["armed"] else pwm(climb)
@@ -364,13 +398,15 @@ def main():
                 "Enter arm | T takeoff | H hold | L land | R RTL | Backspace disarm",
                 "Xbox: left stick yaw/climb | right stick roll/pitch",
                 "A arm | Y takeoff | Start hold | B land | X RTL | Back disarm",
+                "Modes: hold LB + D-pad  left STABILIZE | down ALT_HOLD",
+                "                         up LOITER | right ACRO",
                 "Esc/window close: LAND if armed, then exit",
                 f"Status: {state['status']}",
                 f"Log: {log_path}",
             ]
             for index, line in enumerate(lines):
                 color = (230, 235, 240) if index < 8 else (255, 205, 110)
-                screen.blit(small.render(line, True, color), (24, 70 + index * 35))
+                screen.blit(small.render(line, True, color), (24, 70 + index * 33))
             pygame.display.flip()
             clock.tick(20)
     finally:

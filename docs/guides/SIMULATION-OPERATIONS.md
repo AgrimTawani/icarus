@@ -51,6 +51,10 @@ pilot window must have focus for keyboard input.
 | Land | `L` | B |
 | Return to launch | `R` | X |
 | Ground-only disarm | `Backspace` | Back |
+| Stabilize mode | `1` | Hold LB + D-pad left |
+| Alt Hold mode | `2` | Hold LB + D-pad down |
+| Loiter mode | `3` or `H` | Hold LB + D-pad up |
+| Acro mode | `4` | Hold LB + D-pad right |
 | Exit | `Esc` or close window | — |
 
 Stick input is spring-centered in `LOITER`: neutral climb requests altitude
@@ -62,6 +66,12 @@ An arm request may arrive while the simulated GPS/EKF is still establishing its
 position. One arm press remains pending for up to 45 seconds and retries every
 three seconds; the pilot window shows GPS fix and local-position readiness plus
 the latest ArduPilot pre-arm reason. Disarm, LAND or RTL cancels a pending arm.
+
+Mode switching is guarded by the Xbox left bumper to prevent an accidental
+D-pad press from selecting ACRO. `LOITER` holds position and altitude;
+`ALT_HOLD` holds altitude but not position; `STABILIZE` self-levels but uses
+manual throttle; and `ACRO` provides rate control with neither self-level nor
+altitude hold. Use ACRO only with enough clearance to recover.
 
 List SDL-detected controllers with:
 
