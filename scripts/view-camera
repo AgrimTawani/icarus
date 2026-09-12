@@ -1,0 +1,9 @@
+#!/usr/bin/python3
+"""Open the ground-station viewer for the Icarus forward camera."""
+
+import os
+import sys
+from pathlib import Path
+
+viewer = Path(__file__).resolve().parent / "simulation/view_camera.py"
+os.execv("/usr/bin/python3", ["/usr/bin/python3", str(viewer), *sys.argv[1:]])

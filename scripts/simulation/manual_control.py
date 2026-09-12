@@ -82,6 +82,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--controller", type=int, default=0)
     parser.add_argument("--keyboard-only", action="store_true")
+    parser.add_argument(
+        "--hud",
+        action="store_true",
+        help="Open the keyboard/HUD window; Xbox control is background by default",
+    )
     parser.add_argument("--takeoff-altitude", type=float, default=3.0)
     parser.add_argument("--list-controllers", action="store_true")
     parser.add_argument(
@@ -138,10 +143,12 @@ def main():
         print("Manual-control connection check passed")
         return
 
-    screen = pygame.display.set_mode((820, 570))
-    pygame.display.set_caption("Icarus Manual Pilot — simulation only")
-    font = pygame.font.Font(None, 28)
-    small = pygame.font.Font(None, 22)
+    show_hud = args.hud or args.keyboard_only or joystick is None
+    screen = pygame.display.set_mode((820, 570)) if show_hud else None
+    if screen:
+        pygame.display.set_caption("Icarus Manual Pilot — simulation only")
+    font = pygame.font.Font(None, 28) if screen else None
+    small = pygame.font.Font(None, 22) if screen else None
     clock = pygame.time.Clock()
     state = {
         "armed": bool(heartbeat.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED),
@@ -159,6 +166,7 @@ def main():
     takeoff_sent = False
     running = True
     next_gcs_heartbeat = 0.0
+    next_terminal_status = 0.0
 
     client_dir = Path(session["run_directory"]) / "clients"
     client_dir.mkdir(exist_ok=True)
@@ -264,6 +272,14 @@ def main():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.JOYDEVICEREMOVED and joystick:
+                    if event.instance_id == joystick.get_instance_id():
+                        joystick.quit()
+                        joystick = None
+                        state["status"] = (
+                            "CONTROLLER DISCONNECTED — controls neutral, throttle 0%"
+                        )
+                        record("controller_disconnected")
                 elif event.type == pygame.KEYDOWN:
                     key_actions = {
                         pygame.K_RETURN: "arm",
@@ -344,12 +360,12 @@ def main():
                     "to avoid a descent command"
                 )
 
-            keys = pygame.key.get_pressed()
-            roll = float(keys[pygame.K_d]) - float(keys[pygame.K_a])
-            pitch = float(keys[pygame.K_w]) - float(keys[pygame.K_s])
-            yaw = float(keys[pygame.K_e]) - float(keys[pygame.K_q])
-            throttle = float(keys[pygame.K_UP])
-            if keys[pygame.K_DOWN]:
+            keys = pygame.key.get_pressed() if show_hud else None
+            roll = float(keys[pygame.K_d]) - float(keys[pygame.K_a]) if keys else 0.0
+            pitch = float(keys[pygame.K_w]) - float(keys[pygame.K_s]) if keys else 0.0
+            yaw = float(keys[pygame.K_e]) - float(keys[pygame.K_q]) if keys else 0.0
+            throttle = float(keys[pygame.K_UP]) if keys else 0.0
+            if keys and keys[pygame.K_DOWN]:
                 throttle = 0.0
 
             if joystick:
@@ -403,31 +419,46 @@ def main():
                 )
                 next_gcs_heartbeat = now + 0.5
 
-            screen.fill((18, 22, 28))
-            title = font.render("ICARUS MANUAL PILOT — LOCAL SIMULATION ONLY", True, (112, 210, 255))
-            screen.blit(title, (24, 20))
             controller_name = joystick.get_name() if joystick else "keyboard only"
-            lines = [
-                f"Mode: {state['mode']}    Armed: {state['armed']}    Altitude: {state['altitude_m']:.2f} m",
-                f"Controller: {controller_name}",
-                f"Navigation: GPS fix {state['gps_fix']}    Local position: {state['local_position']}",
-                f"Axes  roll {roll:+.2f}  pitch {pitch:+.2f}  yaw {yaw:+.2f}  throttle {throttle * 100:5.1f}%",
-                "Keyboard: W/S pitch | A/D roll | Q/E yaw | Up throttle | Down zero",
-                "Enter arm | T takeoff | H hold | L land | R RTL | Backspace disarm",
-                "Xbox: left stick yaw/throttle | right stick roll/pitch",
-                "A arm | Y takeoff | Start hold | B land | X RTL | Back disarm",
-                "Modes: hold LB + D-pad  left STABILIZE | down ALT_HOLD",
-                "                         up LOITER | right ACRO",
-                "WARNING: releasing the spring-centered throttle commands 0%",
-                "Esc/window close: LAND if armed, then exit",
-                f"Status: {state['status']}",
-                f"Log: {log_path}",
-            ]
-            for index, line in enumerate(lines):
-                color = (230, 235, 240) if index < 8 else (255, 205, 110)
-                screen.blit(small.render(line, True, color), (24, 70 + index * 33))
-            pygame.display.flip()
+            if screen:
+                screen.fill((18, 22, 28))
+                title = font.render(
+                    "ICARUS MANUAL PILOT — LOCAL SIMULATION ONLY",
+                    True,
+                    (112, 210, 255),
+                )
+                screen.blit(title, (24, 20))
+                lines = [
+                    f"Mode: {state['mode']}    Armed: {state['armed']}    Altitude: {state['altitude_m']:.2f} m",
+                    f"Controller: {controller_name}",
+                    f"Navigation: GPS fix {state['gps_fix']}    Local position: {state['local_position']}",
+                    f"Axes  roll {roll:+.2f}  pitch {pitch:+.2f}  yaw {yaw:+.2f}  throttle {throttle * 100:5.1f}%",
+                    "Keyboard: W/S pitch | A/D roll | Q/E yaw | Up throttle | Down zero",
+                    "Enter arm | T takeoff | H hold | L land | R RTL | Backspace disarm",
+                    "Xbox: left stick yaw/throttle | right stick roll/pitch",
+                    "A arm | Y takeoff | Start hold | B land | X RTL | Back disarm",
+                    "Modes: hold LB + D-pad  left STABILIZE | down ALT_HOLD",
+                    "                         up LOITER | right ACRO",
+                    "WARNING: releasing the spring-centered throttle commands 0%",
+                    "Esc/window close: LAND if armed, then exit",
+                    f"Status: {state['status']}",
+                    f"Log: {log_path}",
+                ]
+                for index, line in enumerate(lines):
+                    color = (230, 235, 240) if index < 8 else (255, 205, 110)
+                    screen.blit(small.render(line, True, color), (24, 70 + index * 33))
+                pygame.display.flip()
+            elif now >= next_terminal_status:
+                print(
+                    f"Mode {state['mode']} | armed {state['armed']} | "
+                    f"alt {state['altitude_m']:.1f} m | throttle {throttle * 100:.0f}% "
+                    f"| {state['status']}",
+                    flush=True,
+                )
+                next_terminal_status = now + 2
             clock.tick(20)
+    except KeyboardInterrupt:
+        state["status"] = "Manual control stopped by operator"
     finally:
         if state["armed"]:
             set_mode("LAND")

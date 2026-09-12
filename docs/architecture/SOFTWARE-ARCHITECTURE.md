@@ -102,6 +102,13 @@ Mission logic consumes normalized state and perception contracts, never Gazebo
 topics or vendor SDK objects. Simulation truth is reserved for scoring and
 debugging; it must not leak into the autonomy input path.
 
+The operator-facing forward-video contract is H.264 over RTP/UDP. In simulation,
+a vehicle-side adapter converts the Gazebo RGB topic into that contract; on the
+physical companion computer, the camera SDK and hardware encoder replace only
+that adapter. The ground-station viewer is identical in both cases. Raw RGB and
+depth frames remain separate internal perception inputs and are not transported
+through MAVLink or the command API.
+
 ## Runtime Topology
 
 The expected process topology after Phase 8 is:

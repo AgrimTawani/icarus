@@ -12,6 +12,9 @@ Run from the repository root:
 ./scripts/manual-control
 ./scripts/run-mission --mission takeoff_hover_land
 
+# Optional independent ground-station camera viewer
+./scripts/view-camera
+
 # Existing one-shot automated acceptance mode remains available
 ./scripts/sim --scenario empty_validation
 ./scripts/sim --scenario wind_strong --gui
@@ -38,8 +41,11 @@ Do not run two control clients simultaneously.
 
 ## Keyboard and Xbox Manual Flight
 
-Start the simulator with `--gui`, then run `./scripts/manual-control`. A small
-pilot window must have focus for keyboard input.
+Start the simulator with `--gui`, then run `./scripts/manual-control`. With an
+Xbox controller attached, the client runs without a window and remains active
+while Gazebo or the camera viewer has focus. Use `./scripts/manual-control --hud`
+to open the keyboard/HUD window; keyboard input requires that window to have
+focus, but Xbox input does not.
 
 | Function | Keyboard | Standard Xbox mapping |
 | --- | --- | --- |
@@ -83,6 +89,26 @@ List SDL-detected controllers with:
 ./scripts/manual-control --list-controllers
 ```
 
+## Forward Camera Feed
+
+`start-sim` owns the drone-side camera adapter and publishes the forward RGB
+camera as low-latency H.264 over RTP/UDP port 5600. The ground-station viewer is
+an independent process:
+
+```bash
+./scripts/view-camera
+```
+
+The viewer may start before or after the simulator and reports live FPS and
+frame freshness in its terminal. Closing it does not stop or otherwise control
+the aircraft. The stream is not recorded. A physical camera adapter will retain
+the same H.264/RTP boundary, with its destination configured to the ground
+station address; the viewer therefore remains source-agnostic. Override the
+local receive port with `./scripts/view-camera --port PORT` when required.
+To send the simulated onboard stream to another machine, launch with
+`--video-destination GROUND_STATION_IPV4 --video-port PORT` and open the same
+UDP port in the ground-station firewall.
+
 ## Scenario Catalog
 
 | Name | Environment and purpose | Current expectation |
@@ -114,10 +140,10 @@ wind-force/aerodynamic representation and controller parameters with evidence.
 
 ## Manual Testing Status
 
-The keyboard client and SDL Xbox mapping are implemented. Keyboard/controller
-coexistence and automatic land-on-exit are part of the client design. The
-current machine had no Xbox controller attached during implementation, so the
-exact physical controller mapping still requires one operator verification.
+The keyboard client and SDL Xbox mapping are implemented. Background polling
+was verified with the attached Xbox 360 Controller while no pilot window
+existed. Keyboard/controller coexistence, controller-disconnection neutral
+inputs and automatic land-on-exit are part of the client design.
 
 ## Build and Score Without Flying
 

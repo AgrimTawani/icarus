@@ -4,6 +4,7 @@
 import argparse
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 import shutil
@@ -40,9 +41,21 @@ def main():
     parser.add_argument(
         "--scenario", help="Phase 5 scenario name from simulation/scenarios"
     )
+    parser.add_argument(
+        "--video-destination",
+        default="127.0.0.1",
+        help="Ground-station IPv4 address receiving the H.264/RTP stream",
+    )
+    parser.add_argument("--video-port", type=int, default=5600)
     args = parser.parse_args()
     if args.server_only and args.preflight_only:
         parser.error("--preflight-only belongs to the coupled acceptance runner, not --server-only")
+    try:
+        video_destination = str(ipaddress.IPv4Address(args.video_destination))
+    except ipaddress.AddressValueError:
+        parser.error("--video-destination must be an IPv4 address")
+    if not 1 <= args.video_port <= 65535:
+        parser.error("--video-port must be in 1..65535")
     scenario_path, scenario = (None, None)
     if args.scenario:
         scenario_path, scenario = load_scenario(args.scenario)
@@ -151,6 +164,10 @@ def main():
         path = directory / "sensors/health.json"
         return json.loads(path.read_text()) if path.exists() else {}
 
+    def camera_health():
+        path = directory / "camera_stream.json"
+        return json.loads(path.read_text()) if path.exists() else {}
+
     def check_children():
         for name, p in processes:
             if p.poll() is not None:
@@ -216,6 +233,7 @@ def main():
                 "scripts/simulation/mark4_flight_check.py",
                 "scripts/simulation/launch_compact.py",
                 "scripts/simulation/record_compact_sensors.py",
+                "scripts/simulation/camera_stream.py",
             )
         ]
         inputs.extend((model_path, world_path))
@@ -304,6 +322,33 @@ def main():
             "READY: all numeric sensor streams publishing; image pixels disabled",
             flush=True,
         )
+        start(
+            "camera_stream",
+            [
+                "/usr/bin/python3",
+                str(ROOT / "scripts/simulation/camera_stream.py"),
+                "--directory",
+                str(directory),
+                "--destination",
+                video_destination,
+                "--port",
+                str(args.video_port),
+            ],
+        )
+        camera_deadline = time.monotonic() + 20
+        while True:
+            check_children()
+            video_health = camera_health()
+            if video_health.get("status") == "ready":
+                break
+            if time.monotonic() > camera_deadline:
+                raise TimeoutError("Camera stream readiness timed out: " + str(video_health))
+            time.sleep(0.1)
+        print(
+            "READY: forward camera streaming H.264/RTP to "
+            f"{video_destination}:{args.video_port}",
+            flush=True,
+        )
         if scenario and scenario["sensor_fault_schedule"]:
             start(
                 "scenario_faults",
@@ -333,6 +378,15 @@ def main():
                 "launcher_pid": os.getpid(),
                 "mavlink_endpoint": "tcp:127.0.0.1:5760",
                 "json_physics_endpoint": "udp:127.0.0.1:9002",
+                "video": {
+                    "transport": "rtp-h264",
+                    "codec": "h264",
+                    "destination": video_destination,
+                    "port": args.video_port,
+                    "width": 640,
+                    "height": 480,
+                    "fps": 15,
+                },
                 "partition": env["GZ_PARTITION"],
                 "run_directory": str(directory),
                 "scenario": scenario["name"] if scenario else None,
@@ -354,6 +408,7 @@ def main():
             summary["session"] = session
             print("SIMULATOR READY", flush=True)
             print("MAVLink: tcp:127.0.0.1:5760", flush=True)
+            print("Camera: ./scripts/view-camera", flush=True)
             print("Manual: ./scripts/manual-control", flush=True)
             print("Mission: ./scripts/run-mission --mission takeoff_hover_land", flush=True)
             print("Stop: Ctrl+C in this terminal", flush=True)
@@ -365,6 +420,9 @@ def main():
                     or time.monotonic() - h.get("updated_monotonic_s", 0) > 5
                 ):
                     raise RuntimeError("Sensor recorder unhealthy: " + str(h))
+                video_health = camera_health()
+                if video_health.get("status") != "ready":
+                    raise RuntimeError("Camera stream unhealthy: " + str(video_health))
                 time.sleep(0.25)
         command = [
             str(ROOT / "third_party/ardupilot/.venv/bin/python"),
@@ -403,6 +461,9 @@ def main():
                 or time.monotonic() - h.get("updated_monotonic_s", 0) > 5
             ):
                 raise RuntimeError("Sensor recorder unhealthy: " + str(h))
+            video_health = camera_health()
+            if video_health.get("status") != "ready":
+                raise RuntimeError("Camera stream unhealthy: " + str(video_health))
             if time.monotonic() > deadline:
                 raise TimeoutError("Flight controller exceeded 360 seconds")
             time.sleep(0.25)
