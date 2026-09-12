@@ -1,21 +1,119 @@
 # Icarus Simulation Operator Guide
 
-## Standard Commands
+## The Three Normal Operator Commands
 
-Run from the repository root:
+Run each command from the repository root. They deliberately have separate
+lifetimes: the aircraft runtime can remain active while a pilot or camera viewer
+connects, disconnects, or restarts.
+
+### 1. Start the aircraft runtime: `start-sim`
 
 ```bash
-# Terminal 1: world, vehicle, ArduPilot and sensors only
 ./scripts/start-sim --scenario wind_light --gui
+```
 
-# Terminal 2: select exactly one control client
+Treat `start-sim` as the simulated onboard aircraft. It starts and supervises
+Gazebo dynamics and the selected world, the vehicle, ArduPilot SITL, simulated
+sensors, sensor health/fault services, and the onboard H.264 camera encoder. It
+publishes connection details for ground-station clients. It does **not** arm,
+take off, or fly the aircraft.
+
+Important options:
+
+| Option | Meaning |
+| --- | --- |
+| `--scenario NAME` | Selects the versioned world, wind, obstacles, sensor profile and limits. Example: `wind_light`. |
+| `--gui` | Opens the Gazebo visual client. Without it, the same simulation runs headlessly. |
+| `--video-destination IPV4` | Address of the ground-station computer that should receive video. This is the receiver's address, not the drone's address. Default: `127.0.0.1`. |
+| `--video-port PORT` | UDP destination port for H.264/RTP video. Default: `5600`. The viewer must listen on the same port. |
+
+For one laptop, omit the video options because their defaults are already
+correct:
+
+```bash
+./scripts/start-sim --scenario wind_light --gui
+```
+
+The equivalent explicit form is:
+
+```bash
+./scripts/start-sim \
+  --scenario wind_light \
+  --video-destination 127.0.0.1 \
+  --video-port 5600 \
+  --gui
+```
+
+For a separate ground-station laptop at `192.168.1.50`, run on the simulated
+aircraft computer:
+
+```bash
+./scripts/start-sim \
+  --scenario wind_light \
+  --video-destination 192.168.1.50 \
+  --video-port 5600 \
+  --gui
+```
+
+`GROUND_STATION_IPV4` in examples is a placeholder and must be replaced with
+the receiving computer's actual IPv4 address. UDP 5600 must be permitted by its
+firewall. Do not start control clients until `SIMULATOR READY` appears. Stop the
+aircraft runtime with `Ctrl+C` in this terminal; it then stops only the processes
+it owns and removes the active-session record.
+
+### 2. Connect the manual transmitter: `manual-control`
+
+```bash
 ./scripts/manual-control
+```
+
+This is a ground-station control client. It connects to the active ArduPilot
+endpoint and converts Xbox inputs into bounded MAVLink RC overrides and flight
+commands. With an Xbox controller attached it has no window, so Gazebo or the
+camera viewer may remain focused. Its terminal displays aircraft state every two
+seconds. It does not start or stop Gazebo, ArduPilot, or the camera stream.
+
+Only one control client may be active: use `manual-control` **or** `run-mission`,
+never both. Stop manual control with `Ctrl+C`; if the aircraft is armed, the
+client requests LAND before releasing control. Use `--hud` for the keyboard/HUD
+window and `--list-controllers` to enumerate detected controllers.
+
+The current manual-control connector is intentionally restricted to the local
+SITL session. Its input and command boundary is structured like a ground-station
+transmitter, but a physical MAVLink network/serial profile has not yet passed a
+real-hardware safety test.
+
+### 3. Connect the camera viewer: `view-camera`
+
+```bash
+./scripts/view-camera
+```
+
+This is a passive ground-station client. It listens for the forward H.264/RTP
+video on UDP 5600, opens the video window, and prints LIVE/STALE status, decoded
+FPS and last-frame age. It sends no vehicle commands. It may start before or
+after `start-sim`, and closing it never stops the aircraft or encoder. Nothing is
+recorded unless a separate recording feature is explicitly added and enabled.
+
+For a non-default receive port:
+
+```bash
+./scripts/view-camera --port 5601
+```
+
+The port must match `start-sim --video-port 5601`. The viewer does not need a
+vehicle IP because RTP/UDP is pushed by the vehicle-side streamer to the ground
+station's address.
+
+### Automated alternatives
+
+These are testing commands, not part of the normal three-process manual launch:
+
+```bash
+# Deterministic mission client connected to an already-running aircraft
 ./scripts/run-mission --mission takeoff_hover_land
 
-# Optional independent ground-station camera viewer
-./scripts/view-camera
-
-# Existing one-shot automated acceptance mode remains available
+# Coupled, one-shot acceptance launch
 ./scripts/sim --scenario empty_validation
 ./scripts/sim --scenario wind_strong --gui
 
@@ -23,9 +121,8 @@ Run from the repository root:
 ./scripts/sim --scenario wind_limit_reject
 ```
 
-Stop the simulator with `Ctrl+C` in its terminal. The launcher handles the signal,
-stops owned children and releases TCP 5760 and UDP 9002. Do not kill individual
-children first unless diagnosing a cleanup failure.
+The launcher handles termination, stops owned children and releases TCP 5760
+and UDP 9002. Do not kill individual children first unless diagnosing cleanup.
 
 ## Separated Runtime Model
 
@@ -108,6 +205,53 @@ local receive port with `./scripts/view-camera --port PORT` when required.
 To send the simulated onboard stream to another machine, launch with
 `--video-destination GROUND_STATION_IPV4 --video-port PORT` and open the same
 UDP port in the ground-station firewall.
+
+## ArduPilot Stability and Current Fidelity Limits
+
+The vehicle is not flying with an untuned, neutral ArduPilot configuration.
+Every run wipes SITL state and loads the upstream Copter SITL defaults followed
+by `simulation/parameters/mark4_v2_base.parm`. The project overlay explicitly
+sets:
+
+| Parameter group | Current values and effect |
+| --- | --- |
+| Roll/pitch rate PID | `ATC_RAT_RLL/PIT_P=0.10`, `I=0.10`, `D=0.003`; active body-rate stabilization. |
+| Roll/pitch angle P | `ATC_ANG_RLL/PIT_P=3.5`; active self-level response in assisted modes. |
+| Yaw rate PI | `ATC_RAT_YAW_P=0.15`, `I=0.015`. |
+| Angle limit | `ATC_ANGLE_MAX=30` degrees. |
+| Thrust model | `MOT_THST_EXPO=0.65`, `MOT_THST_HOVER=0.40`, hover learning enabled. |
+| Output range | 1000–2000 microseconds, with the modeled operational motor ceiling at 70%. |
+
+Position and velocity controller parameters not listed in the overlay retain
+ArduPilot firmware defaults. `manual-control` requests LOITER when connecting
+and before arming; assisted takeoff uses GUIDED and returns to LOITER. LOITER is
+a closed-loop position and altitude controller, so it is expected to oppose
+wind and pilot disturbances. STABILIZE still self-levels, while ACRO removes
+self-leveling but retains the inner rate controller.
+
+The current simulation nevertheless makes control substantially easier than a
+physical prototype:
+
+- the ArduPilot-facing IMU model has zero configured measurement noise;
+- the upstream SITL baseline sets `SIM_BARO_RND=0`;
+- `wind_light` is a spatially simple, constant 1.5 m/s flow with a smooth
+  three-second rise and no gusts or direction changes;
+- all motors and propellers have identical thrust response and fixed time
+  constants, with no imbalance, damage, ESC variance or battery-dependent
+  thrust loss;
+- rotor drag and rolling-moment coefficients are currently zero;
+- the airframe is perfectly rigid and omits structural flex, vibration,
+  propwash, detailed ground effect and many aerodynamic cross-couplings;
+- mass, inertia and centre of gravity are provisional calculated values rather
+  than measurements from a built aircraft.
+
+Therefore the current stability demonstrates that the control/simulation
+connection works; it does **not** validate real-world handling fidelity or prove
+that these gains are correct for the eventual aircraft. Realism should be
+improved by measuring and calibrating propulsion, inertia, centre of gravity,
+sensor noise/latency, motor mismatch, drag, gust spectra and battery sag, then
+tuning ArduPilot against those data. Arbitrarily reducing gains just to make the
+vehicle look less stable would produce a less defensible simulation.
 
 ## Scenario Catalog
 
