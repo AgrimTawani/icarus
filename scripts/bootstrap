@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+LOCK_FILE="${PROJECT_ROOT}/config/dependencies/third_party.lock.json"
+PROFILE="simulation"
+SKIP_SYSTEM=false
+
+usage() {
+    echo "Usage: ./scripts/bootstrap [--profile dev|simulation|ml|all] [--skip-system] [--check]"
+}
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --profile) PROFILE="${2:?missing profile}"; shift 2 ;;
+        --skip-system) SKIP_SYSTEM=true; shift ;;
+        --check) exec "${PROJECT_ROOT}/scripts/check-workspace" ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; exit 2 ;;
+    esac
+done
+case "${PROFILE}" in dev|simulation|ml|all) ;; *) usage >&2; exit 2 ;; esac
+
+if [[ ! -r /etc/os-release ]]; then
+    echo "Cannot identify operating system" >&2
+    exit 1
+fi
+# shellcheck disable=SC1091
+source /etc/os-release
+if [[ "${ID:-}" != "ubuntu" || "${VERSION_CODENAME:-}" != "noble" ]]; then
+    echo "Icarus bootstrap supports Ubuntu 24.04 (Noble) only" >&2
+    exit 1
+fi
+
+run_root() {
+    if [[ "${EUID}" -eq 0 ]]; then "$@"; else sudo "$@"; fi
+}
+
+install_system() {
+    local base=(build-essential ccache cmake curl git jq ninja-build pkg-config
+        protobuf-compiler protobuf-compiler-grpc python3-dev python3-pip python3-venv)
+    local simulation=(astyle autoconf automake g++ gawk libcurl4-openssl-dev
+        libeigen3-dev libfmt-dev libfreetype6-dev libgrpc++-dev
+        libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev
+        libopencv-dev libprotobuf-dev libspdlog-dev libssl-dev libtool
+        libtool-bin libwxgtk3.2-dev libyaml-cpp-dev make python3-pexpect
+        python3-wxgtk4.0 rapidjson-dev screen xterm
+        gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-plugins-good
+        gstreamer1.0-plugins-ugly gstreamer1.0-tools)
+    run_root apt-get update
+    run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${base[@]}"
+    if [[ "${PROFILE}" == "simulation" || "${PROFILE}" == "all" ]]; then
+        local keyring=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+        local source_file=/etc/apt/sources.list.d/gazebo-stable.list
+        curl -fsSL https://packages.osrfoundation.org/gazebo.gpg -o /tmp/icarus-gazebo.gpg
+        run_root install -m 0644 /tmp/icarus-gazebo.gpg "${keyring}"
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=${keyring}] https://packages.osrfoundation.org/gazebo/ubuntu-stable noble main" \
+            | run_root tee "${source_file}" >/dev/null
+        run_root apt-get update
+        run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            "${simulation[@]}" gz-harmonic libgz-sim8-dev
+    fi
+}
+
+lock_value() {
+    python3 - "${LOCK_FILE}" "$1" "$2" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["repositories"][sys.argv[2]][sys.argv[3]])
+PY
+}
+
+checkout_locked() {
+    local name="$1" destination="${PROJECT_ROOT}/third_party/$1" url revision
+    url="$(lock_value "${name}" url)"
+    revision="$(lock_value "${name}" revision)"
+    mkdir -p "${PROJECT_ROOT}/third_party"
+    if [[ -d "${destination}/.git" ]]; then
+        git -C "${destination}" diff --quiet
+        git -C "${destination}" diff --cached --quiet
+        [[ "$(git -C "${destination}" remote get-url origin)" == "${url}" ]] || {
+            echo "Unexpected origin for ${name}" >&2; exit 1;
+        }
+    else
+        git init "${destination}"
+        git -C "${destination}" remote add origin "${url}"
+    fi
+    git -C "${destination}" fetch --depth 1 origin "${revision}"
+    git -C "${destination}" checkout --detach "${revision}"
+    if [[ "$(lock_value "${name}" submodules)" == "True" ]]; then
+        git -C "${destination}" submodule update --init --recursive --depth 1
+    fi
+}
+
+create_project_environment() {
+    python3 -m venv "${PROJECT_ROOT}/.venv"
+    "${PROJECT_ROOT}/.venv/bin/python" -m pip install --upgrade pip setuptools wheel
+    "${PROJECT_ROOT}/.venv/bin/python" -m pip install \
+        -r "${PROJECT_ROOT}/requirements/dev.txt"
+    if [[ "${PROFILE}" == "ml" || "${PROFILE}" == "all" ]]; then
+        "${PROJECT_ROOT}/.venv/bin/python" -m pip install \
+            -r "${PROJECT_ROOT}/requirements/ml.txt"
+    fi
+    "${PROJECT_ROOT}/.venv/bin/python" -m pip check
+}
+
+build_simulation() {
+    checkout_locked ardupilot
+    checkout_locked ardupilot_gazebo
+    python3 -m venv --system-site-packages "${PROJECT_ROOT}/third_party/ardupilot/.venv"
+    "${PROJECT_ROOT}/third_party/ardupilot/.venv/bin/python" -m pip install \
+        --upgrade pip setuptools wheel
+    "${PROJECT_ROOT}/third_party/ardupilot/.venv/bin/python" -m pip install \
+        -r "${PROJECT_ROOT}/requirements/ardupilot.txt"
+    (
+        cd "${PROJECT_ROOT}/third_party/ardupilot"
+        PATH="${PWD}/Tools/autotest:${PWD}/.venv/bin:${PATH}" ./waf configure --board sitl
+        PATH="${PWD}/Tools/autotest:${PWD}/.venv/bin:${PATH}" ./waf copter
+    )
+    cmake -S "${PROJECT_ROOT}/third_party/ardupilot_gazebo" \
+        -B "${PROJECT_ROOT}/third_party/ardupilot_gazebo/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    cmake --build "${PROJECT_ROOT}/third_party/ardupilot_gazebo/build"
+    cmake -S "${PROJECT_ROOT}/simulation/plugins" \
+        -B "${PROJECT_ROOT}/simulation/plugins/build" -G Ninja
+    cmake --build "${PROJECT_ROOT}/simulation/plugins/build" -j 2
+}
+
+cd "${PROJECT_ROOT}"
+if [[ "${SKIP_SYSTEM}" != true ]]; then install_system; fi
+create_project_environment
+if [[ "${PROFILE}" == "simulation" || "${PROFILE}" == "all" ]]; then
+    build_simulation
+fi
+"${PROJECT_ROOT}/scripts/generate-proto"
+if [[ "${PROFILE}" == "simulation" || "${PROFILE}" == "all" ]]; then
+    "${PROJECT_ROOT}/scripts/check-workspace"
+else
+    "${PROJECT_ROOT}/scripts/check-workspace" --scope dev
+fi
+echo "Icarus ${PROFILE} bootstrap completed"

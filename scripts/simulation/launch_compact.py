@@ -15,6 +15,7 @@ import time
 import uuid
 
 from build_akshu_candidate import ROOT
+from launch_profiles import load_profiles, resolve_profile
 from scenario_config import load_scenario
 from test_mark4_motors import stop
 
@@ -42,12 +43,32 @@ def main():
         "--scenario", help="Phase 5 scenario name from simulation/scenarios"
     )
     parser.add_argument(
+        "--profile", help="Named operator profile from config/simulation/launch_profiles.json"
+    )
+    parser.add_argument(
+        "--list-profiles", action="store_true", help="List launch profiles and exit"
+    )
+    parser.add_argument(
         "--video-destination",
         default="127.0.0.1",
         help="Ground-station IPv4 address receiving the H.264/RTP stream",
     )
     parser.add_argument("--video-port", type=int, default=5600)
     args = parser.parse_args()
+    if args.list_profiles:
+        for name, profile in load_profiles().items():
+            state = "ready" if profile.get("available", True) else "reserved"
+            print(f"{name:24} {state:8} {profile['description']}")
+        return
+    profile_name = args.profile
+    if profile_name:
+        if args.scenario:
+            parser.error("--profile and --scenario are mutually exclusive")
+        try:
+            profile = resolve_profile(profile_name)
+        except (RuntimeError, ValueError) as error:
+            parser.error(str(error))
+        args.scenario = profile["scenario"]
     if args.server_only and args.preflight_only:
         parser.error("--preflight-only belongs to the coupled acceptance runner, not --server-only")
     try:
@@ -175,6 +196,39 @@ def main():
                     f"{name} exited ({p.returncode}); inspect {directory}"
                 )
 
+    def run_readiness(name, command, timeout):
+        handle = (directory / (name + ".log")).open("w")
+        handles.append(handle)
+        process = subprocess.Popen(
+            command,
+            cwd=state_dir,
+            env=env,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        deadline = time.monotonic() + timeout
+        try:
+            while process.poll() is None:
+                check_children()
+                sensor_state = health()
+                if (
+                    sensor_state.get("status") != "ready"
+                    or time.monotonic() - sensor_state.get("updated_monotonic_s", 0) > 5
+                ):
+                    raise RuntimeError(
+                        "Sensor recorder unhealthy during readiness: "
+                        + str(sensor_state)
+                    )
+                if time.monotonic() > deadline:
+                    raise TimeoutError(f"{name} timed out")
+                time.sleep(0.1)
+            if process.returncode:
+                raise RuntimeError(f"{name} failed; inspect {directory / (name + '.log')}")
+        finally:
+            if process.poll() is None:
+                stop(process)
+
     print("Artifacts:", directory, flush=True)
     try:
         with (directory / "build.log").open("w") as log:
@@ -238,6 +292,7 @@ def main():
                 "config/simulation/vehicle_components.json",
                 "config/simulation/atmosphere.json",
                 "config/simulation/sensor_profiles.json",
+                "config/simulation/launch_profiles.json",
             )
         ]
         inputs.extend((model_path, world_path))
@@ -259,6 +314,7 @@ def main():
         summary["sensor_profile"] = sensor_profile
         summary["seed"] = seed
         summary["scenario"] = scenario["name"] if scenario else None
+        summary["profile"] = profile_name
         summary["media_capture"] = False
         summary["revisions"] = {
             name: subprocess.check_output(
@@ -327,6 +383,18 @@ def main():
             "READY: all numeric sensor streams publishing; image pixels disabled",
             flush=True,
         )
+        run_readiness(
+            "mavlink_readiness",
+            [
+                str(ROOT / "third_party/ardupilot/.venv/bin/python"),
+                str(ROOT / "scripts/simulation/check_mavlink_ready.py"),
+                "--timeout",
+                "45",
+            ],
+            50,
+        )
+        check_children()
+        print("READY: ArduPilot heartbeat, GPS and navigation position", flush=True)
         start(
             "camera_stream",
             [
@@ -395,6 +463,7 @@ def main():
                 "partition": env["GZ_PARTITION"],
                 "run_directory": str(directory),
                 "scenario": scenario["name"] if scenario else None,
+                "profile": profile_name,
                 "world": world_name,
                 "model": "icarus_compact",
                 "ground_height_m": 0.1901,

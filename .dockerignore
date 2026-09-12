@@ -1,0 +1,10 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+build
+logs
+simulation/plugins/build
+simulation/models/phase5_*
+simulation/worlds/generated
+third_party

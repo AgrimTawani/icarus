@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Write reproducibility metadata for the current repository state."""
+
+import hashlib
+import json
+import os
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def git(*args):
+    return subprocess.check_output(["git", "-C", ROOT, *args], text=True).strip()
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    dependencies = ROOT / "config/dependencies"
+    if (ROOT / ".git").exists():
+        tracked_change = subprocess.run(
+            ["git", "-C", ROOT, "diff", "--quiet", "HEAD", "--"], check=False
+        ).returncode != 0
+        revision = git("rev-parse", "HEAD")
+        dirty = tracked_change or bool(
+            git("ls-files", "--others", "--exclude-standard")
+        )
+    else:
+        revision = os.environ.get("ICARUS_GIT_REVISION", "unknown")
+        dirty = None
+    metadata = {
+        "version": 1,
+        "git_revision": revision,
+        "git_dirty": dirty,
+        "inputs": {
+            str(path.relative_to(ROOT)): digest(path)
+            for path in sorted(dependencies.glob("*.json"))
+        },
+    }
+    output = ROOT / "build/metadata.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

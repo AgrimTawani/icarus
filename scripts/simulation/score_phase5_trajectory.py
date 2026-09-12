@@ -4,6 +4,7 @@
 import argparse
 import json
 import math
+from itertools import pairwise
 from pathlib import Path
 
 from scenario_config import load_scenario
@@ -65,11 +66,11 @@ def score(scenario, points, route_name=None, vehicle_radius_m=0.35):
     if len(points) < 2:
         raise ValueError("trajectory needs at least two points")
     times = [point["t_s"] for point in points]
-    if any(b <= a for a, b in zip(times, times[1:])):
+    if any(b <= a for a, b in pairwise(times)):
         raise ValueError("trajectory times must strictly increase")
     xyz = [[point[key] for key in ("x_m", "y_m", "z_m")] for point in points]
     hits = []
-    for a, b in zip(xyz, xyz[1:]):
+    for a, b in pairwise(xyz):
         hits.extend(collisions(scenario, a, b, vehicle_radius_m))
     route, goal_error = None, None
     if route_name:

@@ -1,28 +1,3 @@
-# DCM interface, schemas, and networking
-grpcio
-grpcio-tools
-protobuf
-pydantic
-jsonschema
-httpx
-
-# Testing and code quality
-pytest
-pytest-asyncio
-ruff
-mypy
-
-# Dataset creation and analysis
-datasets
-pandas
-pyarrow
-jupyterlab
-tensorboard
-
-# Model inference and parameter-efficient fine-tuning
-torch
-transformers
-accelerate
-peft
-trl
-bitsandbytes
+# Compatibility aggregate. New setups should select dev.txt or ml.txt directly.
+-r requirements/dev.txt
+-r requirements/ml.txt

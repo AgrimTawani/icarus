@@ -1,0 +1,15 @@
+name: Full Simulation Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  simulation-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned SITL and Gazebo image
+        run: docker build --build-arg ICARUS_GIT_REVISION="$GITHUB_SHA" -f containers/Dockerfile.simulation -t icarus-simulation:ci .
+      - name: Validate repository state in image
+        run: docker run --rm --entrypoint ./scripts/check-workspace icarus-simulation:ci

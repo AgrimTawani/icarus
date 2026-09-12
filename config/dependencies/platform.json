@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "operating_system": {
+    "distribution": "ubuntu",
+    "release": "24.04",
+    "codename": "noble",
+    "architecture": "x86_64"
+  },
+  "toolchain": {
+    "python": "3.12",
+    "cmake_minimum": "3.16",
+    "cpp_standard": "17",
+    "protobuf_package": "7.36.1",
+    "grpcio_package": "1.83.1"
+  },
+  "simulation": {
+    "gazebo_distribution": "harmonic",
+    "gz_sim_major": 8,
+    "verified_gz_sim_package": "8.15.0-1~noble"
+  }
+}

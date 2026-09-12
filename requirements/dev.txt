@@ -1,0 +1,7 @@
+-r core.txt
+
+mypy==2.3.1
+numpy==2.5.3
+pytest==9.1.1
+pytest-asyncio==1.4.0
+ruff==0.16.7

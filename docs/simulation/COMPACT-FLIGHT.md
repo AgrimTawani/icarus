@@ -150,9 +150,8 @@ with `scripts/simulation/test_compact_model.py`.
 
 ## Next boundary
 
-Phase 5 world/scenario layers are now complete; see
-[Phase 5 acceptance](PHASE-5-COMPLETION.md). Phase 6 is launcher hardening and
-the operator command surface. The typed drone API/MAVLink gateway, safety
-supervisor, LLM control, obstacle avoidance,
-real hardware validation and portable/containerized provisioning remain later
-work. Existing launcher safeguards do not automatically close every Phase 6 gate.
+Phase 5 world/scenario layers are complete; see
+[Phase 5 acceptance](PHASE-5-COMPLETION.md). Phases 6 and 7 subsequently closed
+the operator-lifecycle and portable-runtime gates. The typed Drone API/MAVLink
+gateway, safety supervisor, DCM control, obstacle avoidance and real-hardware
+validation remain later work.

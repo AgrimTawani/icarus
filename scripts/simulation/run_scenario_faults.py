@@ -10,7 +10,6 @@ from pathlib import Path
 from gz.msgs10.clock_pb2 import Clock
 from gz.msgs10.stringmsg_pb2 import StringMsg
 from gz.transport13 import Node
-
 from scenario_config import load_scenario
 
 

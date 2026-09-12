@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+OUTPUT_DIR="${PROJECT_ROOT}/build/generated"
+PYTHON_BIN="${PROJECT_ROOT}/.venv/bin/python"
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+    echo "Missing project environment; run ./scripts/bootstrap --profile dev" >&2
+    exit 1
+fi
+
+mkdir -p "${OUTPUT_DIR}/python" "${OUTPUT_DIR}/cpp"
+mapfile -t PROTOS < <(find "${PROJECT_ROOT}/proto" -name '*.proto' -type f | sort)
+if [[ "${#PROTOS[@]}" -eq 0 ]]; then
+    echo "No protobuf definitions found" >&2
+    exit 1
+fi
+
+"${PYTHON_BIN}" -m grpc_tools.protoc \
+    -I "${PROJECT_ROOT}/proto" \
+    --python_out="${OUTPUT_DIR}/python" \
+    --grpc_python_out="${OUTPUT_DIR}/python" \
+    "${PROTOS[@]}"
+
+protoc -I "${PROJECT_ROOT}/proto" --cpp_out="${OUTPUT_DIR}/cpp" "${PROTOS[@]}"
+echo "Generated protobuf outputs in ${OUTPUT_DIR}"

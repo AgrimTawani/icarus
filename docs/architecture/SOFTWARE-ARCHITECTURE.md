@@ -121,9 +121,8 @@ The expected process topology after Phase 8 is:
 - a Python DCM/model worker with strict deadlines and resource limits;
 - an episode recorder subscribing to events without blocking control.
 
-Phase 6 first standardizes launch and shutdown of the currently implemented
-Gazebo/SITL/controller processes. The same supervisor contract will later own
-the service graph.
+Phase 6 standardized launch and shutdown of the Gazebo/SITL/controller
+processes. The same supervisor contract will later own the service graph.
 
 ## API Contract Rules
 

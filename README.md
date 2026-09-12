@@ -28,20 +28,22 @@ The complete documentation index is [docs/README.md](docs/README.md).
 
 ```bash
 # Start the world, vehicle and ArduPilot without taking control
-./scripts/start-sim --scenario wind_light --gui
+./scripts/start-sim --profile simulation-wind --gui
 
 # In a second terminal, choose one control client
 ./scripts/manual-control
 ./scripts/run-mission --mission takeoff_hover_land
 
 # Legacy one-shot acceptance run
-./scripts/sim --scenario wind_light --gui
+./scripts/sim --profile simulation-wind --gui
 ```
 
-The simulator and control clients are separate processes. This allows keyboard,
-Xbox, deterministic mission and future autonomy clients to use the same local
-MAVLink endpoint without rebuilding the world. Generated worlds, logs, external
-source checkouts and local environments are intentionally not versioned.
+List every supported or reserved profile with
+`./scripts/start-sim --list-profiles`. The simulator and control clients are
+separate processes. This allows keyboard, Xbox, deterministic mission and future
+autonomy clients to use the same local MAVLink endpoint without rebuilding the
+world. Generated worlds, logs, external source checkouts and local environments
+are intentionally not versioned.
 
 ## Safety Boundary
 
@@ -53,8 +55,8 @@ gets direct motor, MAVLink, shell or unrestricted operating-system access.
 
 ## Project State
 
-Phases 0–5 are complete. Phase 6—the unified, operator-friendly launch and
-manual-test surface—is in progress. The strong-wind scenario is deliberately retained
-as a failing stress case until wind-force and control calibration are completed.
-See [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
+Phases 0–7 are complete. The next implementation phase is the typed Drone API,
+state engine, MAVLink gateway, missions and deterministic guardrails. Simulation
+realism will be audited later against as-built measurements. See
+[PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

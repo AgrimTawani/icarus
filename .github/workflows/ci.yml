@@ -1,0 +1,26 @@
+name: Icarus CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  portable-development-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap clean development host
+        run: ./scripts/bootstrap --profile dev
+      - name: Verify clean development host
+        run: ./scripts/check-workspace --scope dev
+
+  development-container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build reproducible development image
+        run: docker build --build-arg ICARUS_GIT_REVISION="$GITHUB_SHA" -f containers/Dockerfile.dev -t icarus-dev:ci .
+      - name: Validate development image
+        run: docker run --rm icarus-dev:ci

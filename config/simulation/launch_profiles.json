@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "profiles": {
+    "simulation-empty": {
+      "adapter": "sitl",
+      "scenario": "empty_validation",
+      "description": "Still-air baseline for connection and operator checks"
+    },
+    "simulation-wind": {
+      "adapter": "sitl",
+      "scenario": "wind_light",
+      "description": "Populated world with the canonical turbulent atmosphere"
+    },
+    "simulation-obstacles": {
+      "adapter": "sitl",
+      "scenario": "obstacle_course",
+      "description": "Populated obstacle world for perception and route work"
+    },
+    "simulation-adverse": {
+      "adapter": "sitl",
+      "scenario": "adverse_combined",
+      "description": "Integrated wind, sensor, link and battery fault scenario"
+    },
+    "hardware-bench": {
+      "adapter": "hardware",
+      "available": false,
+      "description": "Reserved for props-off Pixhawk bench integration"
+    },
+    "hardware-flight": {
+      "adapter": "hardware",
+      "available": false,
+      "description": "Reserved for approved physical-flight integration"
+    }
+  }
+}

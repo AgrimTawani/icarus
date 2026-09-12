@@ -13,6 +13,7 @@ logs/
 *.log
 core
 core.*
+!requirements/core.txt
 
 # External source trees are recreated by scripts/install_dependencies.sh.
 # Their exact known-good revisions are documented in docs/reference/THIRD-PARTY.md.

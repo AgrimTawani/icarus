@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+PYTHON_BIN="${PROJECT_ROOT}/.venv/bin/python"
+LOCK_FILE="${PROJECT_ROOT}/config/dependencies/third_party.lock.json"
+SCOPE="simulation"
+
+if [[ "${1:-}" == "--scope" && -n "${2:-}" ]]; then
+    SCOPE="$2"
+elif [[ "$#" -ne 0 ]]; then
+    echo "Usage: ./scripts/check-workspace [--scope dev|simulation]" >&2
+    exit 2
+fi
+case "${SCOPE}" in dev|simulation) ;; *) echo "Invalid scope: ${SCOPE}" >&2; exit 2 ;; esac
+
+cd "${PROJECT_ROOT}"
+TOOLS=(git protoc)
+if [[ "${SCOPE}" == "simulation" ]]; then TOOLS+=(cmake ninja gz); fi
+for tool in "${TOOLS[@]}"; do
+    command -v "${tool}" >/dev/null || { echo "Missing command: ${tool}" >&2; exit 1; }
+done
+[[ -x "${PYTHON_BIN}" ]] || { echo "Missing .venv" >&2; exit 1; }
+
+"${PYTHON_BIN}" -m pip check
+"${PYTHON_BIN}" -m ruff check scripts tests
+"${PYTHON_BIN}" -m pytest -q tests/unit
+"${PYTHON_BIN}" -m json.tool "${LOCK_FILE}" >/dev/null
+"${PYTHON_BIN}" -m json.tool config/dependencies/platform.json >/dev/null
+"${PYTHON_BIN}" -m json.tool config/simulation/launch_profiles.json >/dev/null
+"${PROJECT_ROOT}/scripts/generate-proto" >/dev/null
+"${PROJECT_ROOT}/scripts/build-metadata" >/dev/null
+
+if [[ "${SCOPE}" == "simulation" ]]; then
+    "${PYTHON_BIN}" scripts/simulation/build_compact_flight.py >/dev/null
+    SDF_PATH="${PROJECT_ROOT}/simulation/models" gz sdf -k \
+        simulation/models/akshu_compact_sitl/model.sdf >/dev/null
+    cmake -S simulation/plugins -B simulation/plugins/build -G Ninja >/dev/null
+    cmake --build simulation/plugins/build -j 2 >/dev/null
+    "${PYTHON_BIN}" - "${LOCK_FILE}" "${PROJECT_ROOT}/third_party" <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+lock = json.loads(Path(sys.argv[1]).read_text())
+root = Path(sys.argv[2])
+for name, item in lock["repositories"].items():
+    checkout = root / name
+    if not (checkout / ".git").is_dir():
+        raise SystemExit(f"Missing checkout: {checkout}")
+    revision = subprocess.check_output(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True
+    ).strip()
+    if revision != item["revision"]:
+        raise SystemExit(f"Revision mismatch for {name}: {revision}")
+print("Third-party revisions: OK")
+PY
+fi
+
+echo "Icarus ${SCOPE} workspace validation passed"

@@ -40,8 +40,9 @@ drone autonomy stack on Ubuntu 24.04.
 - An isolated ArduPilot virtual environment at
   `third_party/ardupilot/.venv`
 
-Python DCM, testing, evaluation, and fine-tuning dependencies are declared in
-[`requirements.txt`](../../requirements.txt).
+Direct Python packages are version-pinned and split by purpose under
+`requirements/`: `core.txt`, `dev.txt`, `ml.txt` and `ardupilot.txt`.
+`requirements.txt` remains a compatibility aggregate.
 
 ## C++ Autonomy Core
 
@@ -97,10 +98,10 @@ Pixhawk firmware work begins.
 ROS 2 is intentionally excluded. The initial ArduPilot Gazebo integration does
 not require it.
 
-## Local LLM Inference
+## Optional Local LLM Inference
 
-- Ollama
-- Quantized `qwen3:4b` model
+- A model runtime such as Ollama (not installed by the Phase 7 bootstrap)
+- A configured quantized model selected during the later DCM phase
 
 The RTX 4050 has 6 GiB VRAM. The 4B quantized model is the initial inference
 target. Qwen 30B is not suitable for this laptop.
@@ -127,7 +128,6 @@ with more VRAM.
 ## Deliberately Deferred
 
 - ROS 2
-- Docker
 - Standalone CUDA toolkit
 - TensorRT / TensorRT-LLM
 - Mission Planner
@@ -140,12 +140,16 @@ installed on the Jetson Thor through its matching JetPack release.
 
 ## Installation
 
-Run the complete installer from the project root:
+Select the smallest environment needed:
 
 ```bash
-./scripts/install_dependencies.sh
+./scripts/bootstrap --profile dev
+./scripts/bootstrap --profile simulation
+./scripts/bootstrap --profile ml
+./scripts/bootstrap --profile all
 ```
 
 The script is designed to be safely rerun. It does not remove ModemManager or
-BRLTTY, and it does not make the ArduPilot virtual environment the default for
-every shell.
+BRLTTY, download a model, or make the ArduPilot virtual environment the default
+for every shell. `./scripts/install_dependencies.sh` remains as an alias for the
+`all` profile.

@@ -9,7 +9,7 @@ connects, disconnects, or restarts.
 ### 1. Start the aircraft runtime: `start-sim`
 
 ```bash
-./scripts/start-sim --scenario wind_light --gui
+./scripts/start-sim --profile simulation-wind --gui
 ```
 
 Treat `start-sim` as the simulated onboard aircraft. It starts and supervises
@@ -22,7 +22,9 @@ Important options:
 
 | Option | Meaning |
 | --- | --- |
+| `--profile NAME` | Selects a stable operator profile. Use this for normal operation. |
 | `--scenario NAME` | Selects the versioned world, wind, obstacles, sensor profile and limits. Example: `wind_light`. |
+| `--list-profiles` | Lists simulation profiles and reserved hardware profiles, then exits. |
 | `--gui` | Opens the Gazebo visual client. Without it, the same simulation runs headlessly. |
 | `--video-destination IPV4` | Address of the ground-station computer that should receive video. This is the receiver's address, not the drone's address. Default: `127.0.0.1`. |
 | `--video-port PORT` | UDP destination port for H.264/RTP video. Default: `5600`. The viewer must listen on the same port. |
@@ -31,14 +33,14 @@ For one laptop, omit the video options because their defaults are already
 correct:
 
 ```bash
-./scripts/start-sim --scenario wind_light --gui
+./scripts/start-sim --profile simulation-wind --gui
 ```
 
 The equivalent explicit form is:
 
 ```bash
 ./scripts/start-sim \
-  --scenario wind_light \
+  --profile simulation-wind \
   --video-destination 127.0.0.1 \
   --video-port 5600 \
   --gui
@@ -49,7 +51,7 @@ aircraft computer:
 
 ```bash
 ./scripts/start-sim \
-  --scenario wind_light \
+  --profile simulation-wind \
   --video-destination 192.168.1.50 \
   --video-port 5600 \
   --gui
@@ -57,7 +59,9 @@ aircraft computer:
 
 `GROUND_STATION_IPV4` in examples is a placeholder and must be replaced with
 the receiving computer's actual IPv4 address. UDP 5600 must be permitted by its
-firewall. Do not start control clients until `SIMULATOR READY` appears. Stop the
+firewall. The active session is not published until sensors, camera, ArduPilot
+heartbeat, GPS and navigation position are ready. Do not start control clients
+until `SIMULATOR READY` appears. Stop the
 aircraft runtime with `Ctrl+C` in this terminal; it then stops only the processes
 it owns and removes the active-session record.
 
@@ -114,8 +118,8 @@ These are testing commands, not part of the normal three-process manual launch:
 ./scripts/run-mission --mission takeoff_hover_land
 
 # Coupled, one-shot acceptance launch
-./scripts/sim --scenario empty_validation
-./scripts/sim --scenario wind_strong --gui
+./scripts/sim --profile simulation-empty
+./scripts/sim --profile simulation-wind --gui
 
 # Validate the declared operating-limit rejection without starting Gazebo
 ./scripts/sim --scenario wind_limit_reject

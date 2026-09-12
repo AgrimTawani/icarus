@@ -30,7 +30,31 @@ def main():
         assert result.returncode and "Address already in use" in result.stderr
         assert occupied.getsockname()[1] == 5760
         results.append({"case": "occupied_port", "status": "passed"})
-    for case in ("interrupt", "stale_sensors", "recorder_exit"):
+    invalid = subprocess.run(
+        [*command, "--scenario", "../not-a-scenario.json"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert invalid.returncode and "simulation/scenarios" in invalid.stderr
+    results.append({"case": "invalid_scenario", "status": "passed"})
+    unavailable = subprocess.run(
+        [*command, "--profile", "hardware-bench"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert unavailable.returncode and "reserved but unavailable" in unavailable.stderr
+    results.append({"case": "unavailable_hardware_profile", "status": "passed"})
+    for case in (
+        "interrupt",
+        "stale_sensors",
+        "recorder_exit",
+        "gazebo_exit",
+        "sitl_exit",
+    ):
         before = set((ROOT / "logs/simulation").glob("compact_flight_*"))
         with (folder / (case + ".log")).open("w") as log:
             parent = subprocess.Popen(
@@ -69,8 +93,9 @@ def main():
                     )
                     results.append({"case": "duplicate_launcher", "status": "passed"})
                     parent.send_signal(signal.SIGINT)
-                elif case == "recorder_exit":
-                    os.kill(runtime["children"]["recorder"], signal.SIGTERM)
+                elif case in ("recorder_exit", "gazebo_exit", "sitl_exit"):
+                    child = case.removesuffix("_exit")
+                    os.kill(runtime["children"][child], signal.SIGTERM)
                 else:
                     env = os.environ.copy()
                     env["GZ_PARTITION"] = runtime["partition"]
@@ -99,11 +124,17 @@ def main():
                 parent.wait(timeout=30)
                 assert parent.returncode != 0
                 result = json.loads((directory / "launch.json").read_text())
-                assert result["status"] == "failed"
+                assert result["status"] == (
+                    "stopped" if case == "interrupt" else "failed"
+                )
                 if case == "stale_sensors":
                     assert "unhealthy" in result["error"]
                 if case == "recorder_exit":
                     assert "recorder" in result["error"]
+                if case == "gazebo_exit":
+                    assert "gazebo" in result["error"]
+                if case == "sitl_exit":
+                    assert "sitl" in result["error"]
                 # Every process group belongs to this test's launcher only.
                 runtime = json.loads((directory / "runtime.json").read_text())
                 for pid in runtime["children"].values():

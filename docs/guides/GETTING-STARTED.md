@@ -15,24 +15,44 @@ cd icarus
 ```
 
 Read [`../reference/DEPENDENCIES.md`](../reference/DEPENDENCIES.md) before
-running the installer. The script uses `sudo`, configures the OSRF package
-repository, installs system packages, clones official ArduPilot projects,
-builds SITL and the Gazebo plugin, creates two Python environments, installs
-Ollama and downloads `qwen3:4b`. It is therefore a deliberate machine setup
-operation, not a lightweight project install.
+running the bootstrap. System installation uses `sudo`, so it is a deliberate
+machine setup operation. Model and fine-tuning packages are separated from the
+normal development and simulation paths.
 
-## Full Bootstrap
+## Select a Bootstrap Profile
 
 ```bash
-./scripts/install_dependencies.sh
+# Lint, unit tests and protobuf tools only
+./scripts/bootstrap --profile dev
+
+# Development tools plus pinned ArduPilot SITL and Gazebo
+./scripts/bootstrap --profile simulation
+
+# Optional model/evaluation Python environment, without simulation
+./scripts/bootstrap --profile ml
+
+# Everything (the legacy installer delegates here)
+./scripts/bootstrap --profile all
 ```
 
 External repositories are created under `third_party/`, project Python packages
 under `.venv/`, and ArduPilot Python packages under
-`third_party/ardupilot/.venv/`. All are local and ignored by Git. The installer
-currently follows upstream branches when rerun; the known-good revisions are
-recorded in [`../reference/THIRD-PARTY.md`](../reference/THIRD-PARTY.md), and an
-executable pinning mechanism is a Phase 7 task.
+`third_party/ardupilot/.venv/`. All are local and ignored by Git. Exact upstream
+commits are enforced by `config/dependencies/third_party.lock.json`; direct
+Python dependencies are divided and version-pinned under `requirements/`.
+
+Validate an existing installation without changing it:
+
+```bash
+./scripts/check-workspace --scope dev
+./scripts/check-workspace --scope simulation
+```
+
+Docker definitions are available at `containers/Dockerfile.dev` and
+`containers/Dockerfile.simulation`. The development image is suitable for CI.
+The simulation image needs the usual host display/GPU forwarding for a GUI;
+headless operation needs neither. Xbox/USB devices are host resources and must
+be passed explicitly by the container operator.
 
 ## Validate the Simulation Assets
 
@@ -44,12 +64,13 @@ executable pinning mechanism is a Phase 7 task.
 Then run the lightweight integrated scenario:
 
 ```bash
-./scripts/sim --scenario wind_light
+./scripts/sim --profile simulation-wind
 ```
 
-Use `--gui` only when a desktop display is available. The current launcher runs
-an automated takeoff-hover-land mission; interactive/manual flight is a Phase 6
-deliverable and is not yet a supported switch.
+Use `--gui` only when a desktop display is available. For manual operation,
+replace `scripts/sim` with `scripts/start-sim`, then connect
+`scripts/manual-control` and optionally `scripts/view-camera` from independent
+terminals. Run `./scripts/start-sim --list-profiles` to inspect named profiles.
 
 ## Expected Local Artifacts
 

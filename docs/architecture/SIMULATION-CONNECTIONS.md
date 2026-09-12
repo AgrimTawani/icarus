@@ -6,12 +6,13 @@ bring-up evidence is retained in the `SIM-*` documents.
 ## Implemented Flight Path
 
 ```text
-./scripts/start-sim
+./scripts/start-sim --profile <name>
     -> scripts/simulation/launch_compact.py --server-only
        -> validates scenario and generates world/model
        -> starts Gazebo server (+ GUI when requested)
        -> starts ArduCopter SITL
-       -> starts sensor/health/fault recorders
+       -> verifies sensors, MAVLink navigation and forward video
+       -> publishes the active session only after global readiness
 
 Exactly one independent control client:
     ./scripts/manual-control -> keyboard/Xbox RC override client
@@ -70,10 +71,11 @@ footpath. Primitive collision geometry is used for scoring and reliable physics.
 
 The launcher owns every simulator child process and records a run directory
 beneath `logs/simulation/`. It publishes a local active-session manifest only
-after sensor readiness. Startup failures occur before a client can arm. Control
+after sensor, camera, heartbeat, GPS and global-position readiness. Startup failures occur before a client can arm. Control
 clients own no simulator processes and can disconnect independently. Normal
-interruption terminates children and releases ports. The remaining Phase 6 gate
-is repeated lifecycle, failure-injection and physical Xbox verification.
+interruption terminates children and releases ports. The Phase 6 gate passed 20
+consecutive lifecycle cycles plus occupied-port, duplicate-launch, malformed
+scenario, unavailable-hardware-profile, stale-sensor and child-crash injection.
 
 ## Simulation-to-Real Replacement
 

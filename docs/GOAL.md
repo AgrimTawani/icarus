@@ -73,6 +73,6 @@ simulation and on the aircraft, failures are contained by deterministic layers,
 results are reproducible from repository state, and model quality can be
 compared using frozen scenarios and transparent metrics rather than anecdotes.
 
-The immediate objective is Phase 6: make the existing simulator a reliable,
-operator-friendly system that supports named GUI/headless profiles and manual
-testing before autonomy service implementation begins.
+Phases 6 and 7 have completed the reliable operator surface and reproducible
+development foundation. The immediate objective is Phase 8: implement the typed
+flight-service boundary that the later DCM must use.

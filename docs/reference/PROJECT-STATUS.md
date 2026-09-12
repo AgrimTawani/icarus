@@ -21,16 +21,16 @@ LLM-controlled drone stack.
 | Native simulated sensors | One physical-noise model, connected and health-tested | Phase 4 physical test |
 | Turbulent atmosphere | Seeded turbulence, shear, drag, moments and obstacle wakes | `config/simulation/atmosphere.json` |
 | Deterministic Phase 5 scenarios | Complete with stochastic-weather replay seeds | Phase 5 acceptance |
-| Separated simulator/control launch | Implemented; long lifecycle soak remains | Phase 6 |
+| Separated simulator/control launch | Complete; named profiles and global readiness | Phase 6 |
 | Keyboard manual control | Implemented; simulation-only | `scripts/manual-control` |
 | Xbox manual control | Background polling hardware-verified | SDL Xbox 360 mapping |
 | Forward video | H.264/RTP onboard stream and ground viewer verified | `scripts/view-camera` |
 | C++ autonomy services | Scaffold only | empty component directories |
-| Drone API protobuf | Initial draft | `proto/icarus/v1/` |
+| Drone API protobuf | Valid proto3 package placeholders | definitions belong to Phase 8 |
 | Perception/obstacle avoidance | Not implemented | directories are scaffolds |
 | DCM/model integration | Not implemented | runtime directories are scaffolds |
 | Dataset/evaluation system | Architecture only | planned Phases 10–12 |
-| Container/CI reproducibility | Not implemented | Phase 7 |
+| Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
 
 ## Latest Verified Simulation Results
@@ -50,6 +50,12 @@ LLM-controlled drone stack.
   recorded all ten telemetry channels; streamed 3,977/3,977 video frames with
   zero push failures; and shut down without a stale active session. An altitude
   fence event was recovered during the flight and remains in the local log.
+- Phase 6 passed 20 consecutive `simulation-empty` start/ready/stop cycles with
+  session and port cleanup after every run. Failure injection passed for
+  occupied ports, duplicate launchers, invalid scenarios, unavailable hardware
+  profiles, interruption, stale sensors, recorder exit, Gazebo exit and SITL
+  exit. The `simulation-wind` profile then passed a full takeoff-hover-land run
+  at 0.034 m maximum drift and 0.56° maximum tilt.
 - The 8 m/s limit scenario was rejected before processes started or motors armed.
 
 Raw evidence remains local under ignored `logs/simulation/`; concise acceptance
@@ -57,24 +63,18 @@ reports are versioned as `SIM-*` documents.
 
 ## Known Technical Gaps
 
-- The 20-cycle lifecycle soak remains pending; shorter launch/failure and five-
-  flight teardown regressions pass.
 - Component design-target inputs and aerodynamic coefficients require as-built
   measurements before the simulator can be called a validated digital twin.
 - Public Gazebo camera/lidar/range streams are health-tested but not yet fused
   into Icarus perception or the ArduPilot EKF.
 - Obstacle routes have ground truth and scoring, but no route executor or local
   avoidance planner exists.
-- External repositories are documented at known-good commits but the installer
-  still follows upstream branches.
-- Heavy Python ML dependencies share one environment; no runtime/container
-  profile split exists.
 - No real Pixhawk, Jetson or physical sensor adapter has passed a test.
 
 ## Next Gate
 
-Treat the current simulator interfaces and physics sources as frozen while DCM
-work begins. Define the DCM's versioned state/perception input, schema-valid
-high-level action output, model-provider boundary and deterministic mock-model
-tests. The DCM must never connect directly to MAVLink; later integration passes
-its proposed actions through the Drone API and guardrails.
+Begin Phase 8 by defining the versioned state, action, mission and Drone API
+contracts, then generate their C++/Python bindings. Implement a deterministic
+mock client through guardrails before any DCM integration. The DCM must never
+connect directly to MAVLink; later integration passes proposed actions through
+the Drone API and guardrails.

@@ -13,16 +13,14 @@ Recorded on 2026-09-12:
 | ArduPilot | `https://github.com/ArduPilot/ardupilot.git` | `14c871f2732ccc5f5f558d003eb46fb2fe29d832` |
 | ArduPilot Gazebo | `https://github.com/ArduPilot/ardupilot_gazebo.git` | `082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5` |
 
-These are the commits used by the verified simulation environment, but the
-current installer clones or fast-forwards the upstream default branches. Until
-Phase 7 implements an executable lock, reproduce the known state manually after
-bootstrap when exact results matter:
+These commits are enforced by
+`config/dependencies/third_party.lock.json`. The bootstrap fetches and checks
+out those immutable revisions instead of following upstream branches. Existing
+dirty third-party checkouts are rejected rather than overwritten. To inspect
+the active revisions:
 
 ```bash
-git -C third_party/ardupilot checkout 14c871f2732ccc5f5f558d003eb46fb2fe29d832
-git -C third_party/ardupilot submodule update --init --recursive
-
-git -C third_party/ardupilot_gazebo checkout 082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5
+./scripts/check-workspace --scope simulation
 ```
 
 Review and comply with each upstream project's license. The supplied/custom

@@ -1,0 +1,6 @@
+grpcio==1.83.1
+grpcio-tools==1.83.1
+httpx==0.28.1
+jsonschema==4.26.0
+protobuf==7.36.1
+pydantic==2.13.5

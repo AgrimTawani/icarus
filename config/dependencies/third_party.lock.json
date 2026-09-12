@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "repositories": {
+    "ardupilot": {
+      "url": "https://github.com/ArduPilot/ardupilot.git",
+      "revision": "14c871f2732ccc5f5f558d003eb46fb2fe29d832",
+      "submodules": true
+    },
+    "ardupilot_gazebo": {
+      "url": "https://github.com/ArduPilot/ardupilot_gazebo.git",
+      "revision": "082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5",
+      "submodules": false
+    }
+  }
+}

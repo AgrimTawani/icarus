@@ -1,0 +1,9 @@
+FROM ubuntu:24.04
+
+ARG ICARUS_GIT_REVISION=unknown
+ENV ICARUS_GIT_REVISION=${ICARUS_GIT_REVISION}
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /workspace/Icarus
+COPY . .
+RUN ./scripts/bootstrap --profile dev
+CMD ["./scripts/check-workspace", "--scope", "dev"]

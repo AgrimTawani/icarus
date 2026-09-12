@@ -18,8 +18,8 @@ the corresponding simulation gates are measurable and stable.
 | 3 | Engineer and validate the custom vehicle model | Complete |
 | 4 | Connect propulsion, SITL and native simulated sensors | Complete |
 | 5 | Build deterministic worlds, wind, obstacles and faults | Complete |
-| 6 | Unified launch profiles, operator controls and manual test workflow | In progress |
-| 7 | Reproducible build/runtime packaging and CI foundation | Planned |
+| 6 | Unified launch profiles, operator controls and manual test workflow | Complete |
+| 7 | Reproducible build/runtime packaging and CI foundation | Complete |
 | 8 | Drone API, state engine, MAVLink gateway, missions and guardrails | Planned |
 | 9 | Perception, obstacle map and local planner | Planned |
 | 10 | Synchronized logging, replay and dataset pipeline | Planned |
@@ -112,10 +112,9 @@ train/evaluation separation before any fine-tuning experiment.
 
 ## Immediate Work Queue
 
-1. Freeze the verified simulation boundary; change it only for a demonstrated
-   regression or later as-built calibration evidence.
-2. Define the DCM state/perception input and high-level action output contracts.
-3. Implement a deterministic mock model before connecting Qwen or Llama.
-4. Keep all DCM actions behind the future Drone API and guardrails—never MAVLink.
-5. Retain the pending 20-cycle lifecycle soak as infrastructure debt without
-   coupling it to DCM implementation.
+1. Freeze the verified simulation and portable-runtime boundary; change it only
+   for a demonstrated regression or later as-built calibration evidence.
+2. Define and implement the Phase 8 Drone API, state and action contracts.
+3. Put a deterministic mock client through guardrails before connecting a model.
+4. Implement the state engine, MAVLink gateway and safety-supervisor boundaries.
+5. Keep all later DCM actions behind the Drone API and guardrails—never MAVLink.

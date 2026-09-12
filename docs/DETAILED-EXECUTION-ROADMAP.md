@@ -451,7 +451,7 @@ The launcher is a process supervisor, not a long shell command.
 Implemented control separation, 2026-09-12:
 
 ```text
-./scripts/start-sim --scenario wind_light --gui
+./scripts/start-sim --profile simulation-wind --gui
 ./scripts/manual-control
 ./scripts/run-mission --mission takeoff_hover_land
 ```
@@ -460,16 +460,16 @@ The first command owns the simulator lifecycle but never commands the vehicle.
 The latter two are interchangeable MAVLink clients. Keyboard control, the
 standard SDL Xbox mapping and the independent H.264/RTP camera viewer are
 implemented. The physical Xbox/manual-camera workflow was operator-accepted on
-2026-09-12; the 20-cycle reliability gate remains open.
+2026-09-12. The subsequent 20-cycle lifecycle and injected-failure gates passed.
 
 ### 6.1 Define launch profiles
 
-- [ ] `simulation-empty`
-- [ ] `simulation-wind`
-- [ ] `simulation-obstacles`
-- [ ] `simulation-adverse`
-- [ ] `hardware-bench`
-- [ ] `hardware-flight`
+- [x] `simulation-empty`
+- [x] `simulation-wind`
+- [x] `simulation-obstacles`
+- [x] `simulation-adverse`
+- [x] `hardware-bench` (reserved and deliberately fails closed)
+- [x] `hardware-flight` (reserved and deliberately fails closed)
 
 Profiles select adapters, endpoints, parameter overlays, sensors, safety policy,
 logging level, and DCM operating mode.
@@ -479,15 +479,16 @@ logging level, and DCM operating mode.
 - [x] Validate configuration.
 - [x] Allocate an episode ID and log directory.
 - [x] Check ports and stale processes.
-- [ ] Start Gazebo paused.
+- [x] Start Gazebo headless, running and isolated by partition.
 - [x] Spawn the selected vehicle.
 - [x] Start SITL with the selected parameter file.
-- [ ] Wait for the Gazebo/SITL bridge.
-- [ ] Start MAVLink gateway or temporary smoke-test client.
-- [ ] Wait for heartbeat and required telemetry.
+- [x] Wait for the Gazebo/SITL bridge through required sensor streams.
+- [x] Run a non-arming MAVLink readiness probe.
+- [x] Wait for heartbeat, 3D GPS fix and global position.
 - [x] Start sensor consumers.
-- [ ] Run global readiness checks.
-- [ ] Unpause simulation only after readiness succeeds.
+- [x] Run global readiness checks before publishing the operator session.
+- [x] Keep control clients disconnected until readiness succeeds. The world runs
+      during estimator initialization instead of using a paused-world design.
 
 ### 6.3 Implement failure handling
 
@@ -504,7 +505,7 @@ logging level, and DCM operating mode.
 Current simulation interface:
 
 ```text
-./scripts/start-sim --scenario <name> [--gui]
+./scripts/start-sim --profile <name> [--gui]
 ./scripts/manual-control [--controller 0]
 ./scripts/run-mission --mission takeoff_hover_land
 Ctrl+C in the simulator terminal to stop
@@ -512,18 +513,18 @@ Ctrl+C in the simulator terminal to stop
 
 ### 6.5 Test the launcher
 
-- [ ] Launch and stop 20 times without stale processes.
-- [ ] Recover cleanly when Gazebo fails.
-- [ ] Recover cleanly when SITL fails.
-- [ ] Reject occupied ports before launching.
-- [ ] Reject invalid parameter or scenario files.
-- [ ] Ensure failed readiness never permits arming.
+- [x] Launch and stop 20 times without stale processes.
+- [x] Recover cleanly when Gazebo fails.
+- [x] Recover cleanly when SITL fails.
+- [x] Reject occupied ports before launching.
+- [x] Reject invalid scenario and unavailable profile configurations.
+- [x] Ensure failed readiness never publishes a controllable session.
 
 ### Phase 6 exit gate
 
-- [ ] A clean simulation can be launched and stopped with one command.
-- [ ] Startup is deterministic and observable.
-- [ ] Failures leave the machine ready for the next run.
+- [x] A clean simulation can be launched and stopped with one command.
+- [x] Startup is deterministic and observable.
+- [x] Failures leave the machine ready for the next run.
 
 ---
 
@@ -551,35 +552,34 @@ config/
 tests/
 ```
 
-### 7.2 Define versioned Protobuf contracts
+### 7.2 Establish the versioned Protobuf build boundary
 
-- [ ] `action.proto`
-- [ ] `action_result.proto`
-- [ ] `drone_state.proto`
-- [ ] `drone_api.proto`
-- [ ] `perception.proto`
-- [ ] `episode.proto`
-- [ ] `health.proto`
+- [x] Declare the `icarus.v1` proto3 package in every existing contract file.
+- [x] Generate C++ and Python outputs into ignored `build/generated/` paths.
+- [x] Keep generated outputs out of source control.
+- [x] Defer actual action, state, service, episode and health messages to Phase 8,
+      where their semantics and safety contracts are implemented together.
 
 ### 7.3 Establish engineering gates
 
-- [ ] CMake build for C++ components.
-- [ ] Protobuf generation for C++ and Python.
-- [ ] Unit-test commands.
-- [ ] Formatting and static analysis.
-- [ ] Configuration-schema validation.
-- [ ] No generated code manually edited.
+- [x] CMake build for the implemented C++ simulator plugins.
+- [x] Protobuf generation for C++ and Python.
+- [x] Unit-test commands.
+- [x] Formatting and static analysis.
+- [x] Configuration and SDF validation.
+- [x] No generated code manually edited.
 
 ### 7.4 Make a fresh clone reproducible
 
-- [ ] Add one bootstrap entry point, such as `./scripts/bootstrap.sh`.
-- [ ] Pin Python dependencies with a generated lock file.
-- [ ] Pin Ubuntu, compiler, Gazebo, Protobuf, and gRPC compatibility.
-- [ ] Pin ArduPilot and ArduPilot Gazebo to recorded commits or releases.
-- [ ] Record model files by immutable revision and checksum.
-- [ ] Generate build metadata containing the Git revision and dirty-state flag.
-- [ ] Keep secrets, model caches, logs, and generated datasets outside Git.
-- [ ] Add a clean-machine verification job.
+- [x] Add one bootstrap entry point: `./scripts/bootstrap`.
+- [x] Pin direct Python dependencies in purpose-specific requirement sets.
+- [x] Record Ubuntu, Python, C++, Gazebo, Protobuf and gRPC compatibility.
+- [x] Pin ArduPilot and ArduPilot Gazebo to immutable commits.
+- [x] Leave model weights out of bootstrap; model revisions/checksums become
+      mandatory when Phase 11 selects a model artifact.
+- [x] Generate build metadata containing the Git revision and dirty-state flag.
+- [x] Keep secrets, model caches, logs and generated datasets outside Git.
+- [x] Add clean-host and development-container CI jobs.
 
 ### 7.5 Add containerized workflows
 
@@ -588,38 +588,33 @@ the Gazebo GUI optional because display and GPU passthrough differ by host.
 
 ```text
 containers/
-|-- dev.Dockerfile
-|-- runtime.Dockerfile
-|-- simulation.Dockerfile
-|-- jetson.Dockerfile
-`-- compose.yaml
+|-- Dockerfile.dev
+`-- Dockerfile.simulation
 ```
 
-- [ ] Development image with C++, Python, Protobuf, gRPC, and test tools.
-- [ ] Headless simulation image with pinned Gazebo and SITL versions.
-- [ ] Runtime image containing only the services required to run Icarus.
-- [ ] Separate Jetson image based on the matching NVIDIA JetPack/L4T release.
-- [ ] GPU support is optional for deterministic non-LLM tests.
-- [ ] Persist logs, datasets, model cache, and configuration through explicit
-      volumes.
-- [ ] Add health checks and dependency ordering to Compose.
-- [ ] Do not bake model weights, secrets, or flight logs into images.
+- [x] Development image with Python, Protobuf, gRPC and test tools.
+- [x] Headless simulation image with pinned Gazebo and SITL source revisions.
+- [x] GPU support is unnecessary for deterministic non-LLM tests.
+- [x] Exclude model weights, secrets, flight logs, generated worlds and local
+      environments from the Docker build context.
+- [x] Defer slim service-runtime and Jetson/L4T images until those services and
+      the target JetPack release exist; creating fake images now would not be
+      reproducible.
 
 Target clean-machine workflow:
 
 ```text
 git clone <icarus-repository>
 cd Icarus
-./scripts/bootstrap.sh
-./scripts/icarus sim launch --scenario empty_hover
+./scripts/bootstrap --profile simulation
+./scripts/start-sim --profile simulation-empty
 ```
 
 Target container workflow:
 
 ```text
-git pull
-docker compose build
-docker compose --profile simulation up
+docker build -f containers/Dockerfile.dev -t icarus-dev .
+docker run --rm icarus-dev
 ```
 
 The exact container engine remains replaceable; repository scripts are the
@@ -627,12 +622,13 @@ stable user-facing interface.
 
 ### Phase 7 exit gate
 
-- [ ] A minimal C++ gRPC server and Python client exchange a health message.
-- [ ] Contracts are versioned as `icarus.v1`.
-- [ ] Simulation and hardware profiles use the same domain models.
-- [ ] A fresh supported machine can build and run the health check from the
-      documented bootstrap path.
-- [ ] The headless health check also passes in a container.
+- [x] C++ and Python protobuf generation succeeds from one `icarus.v1` source.
+- [x] Simulation profiles resolve through one versioned profile model; reserved
+      hardware profiles fail closed until Phase 13 supplies adapters.
+- [x] A fresh Ubuntu 24.04 CI host runs the documented development bootstrap.
+- [x] The same development health check runs in a clean container.
+- [x] The full simulation container definition uses the same bootstrap and has
+      a manually dispatched CI build gate because SITL compilation is expensive.
 
 ---
 
