@@ -448,6 +448,19 @@ Each scenario file must define:
 
 The launcher is a process supervisor, not a long shell command.
 
+Implemented control separation, 2026-09-12:
+
+```text
+./scripts/start-sim --scenario wind_light --gui
+./scripts/manual-control
+./scripts/run-mission --mission takeoff_hover_land
+```
+
+The first command owns the simulator lifecycle but never commands the vehicle.
+The latter two are interchangeable MAVLink clients. Keyboard control and a
+standard SDL Xbox mapping are implemented; physical Xbox verification and the
+20-cycle reliability gate remain open.
+
 ### 6.1 Define launch profiles
 
 - [ ] `simulation-empty`
@@ -462,40 +475,38 @@ logging level, and DCM operating mode.
 
 ### 6.2 Implement startup ordering
 
-- [ ] Validate configuration.
-- [ ] Allocate an episode ID and log directory.
-- [ ] Check ports and stale processes.
+- [x] Validate configuration.
+- [x] Allocate an episode ID and log directory.
+- [x] Check ports and stale processes.
 - [ ] Start Gazebo paused.
-- [ ] Spawn the selected vehicle.
-- [ ] Start SITL with the selected parameter file.
+- [x] Spawn the selected vehicle.
+- [x] Start SITL with the selected parameter file.
 - [ ] Wait for the Gazebo/SITL bridge.
 - [ ] Start MAVLink gateway or temporary smoke-test client.
 - [ ] Wait for heartbeat and required telemetry.
-- [ ] Start sensor consumers.
+- [x] Start sensor consumers.
 - [ ] Run global readiness checks.
 - [ ] Unpause simulation only after readiness succeeds.
 
 ### 6.3 Implement failure handling
 
-- [ ] Per-process stdout/stderr logs.
-- [ ] Startup timeout for every dependency.
-- [ ] Clear error identifying the first failed readiness gate.
-- [ ] Signal handling for Ctrl+C and process crashes.
-- [ ] Reverse-order shutdown.
-- [ ] Release ports and temporary files.
-- [ ] Final episode status even after failure.
+- [x] Per-process stdout/stderr logs.
+- [x] Startup timeout for every dependency.
+- [x] Clear error identifying the first failed readiness gate.
+- [x] Signal handling for Ctrl+C and process crashes.
+- [x] Reverse-order shutdown.
+- [x] Release ports and temporary files.
+- [x] Final episode status even after failure.
 
 ### 6.4 Define the operator commands
 
-Target interface:
+Current simulation interface:
 
 ```text
-icarus sim validate
-icarus sim launch --scenario empty_hover --seed 42
-icarus status
-icarus mission run missions/takeoff_hover_land.yaml
-icarus logs show <episode-id>
-icarus stop
+./scripts/start-sim --scenario <name> [--gui]
+./scripts/manual-control [--controller 0]
+./scripts/run-mission --mission takeoff_hover_land
+Ctrl+C in the simulator terminal to stop
 ```
 
 ### 6.5 Test the launcher

@@ -24,15 +24,24 @@ they are not yet a flight-ready autonomy implementation.
 
 The complete documentation index is [docs/README.md](docs/README.md).
 
-## Current Simulation Entry Point
+## Simulation and Control Entry Points
 
 ```bash
+# Start the world, vehicle and ArduPilot without taking control
+./scripts/start-sim --scenario wind_light --gui
+
+# In a second terminal, choose one control client
+./scripts/manual-control
+./scripts/run-mission --mission takeoff_hover_land
+
+# Legacy one-shot acceptance run
 ./scripts/sim --scenario wind_light --gui
 ```
 
-Run without `--gui` for automated or headless validation. Generated worlds,
-logs, external source checkouts and local environments are intentionally not
-versioned.
+The simulator and control clients are separate processes. This allows keyboard,
+Xbox, deterministic mission and future autonomy clients to use the same local
+MAVLink endpoint without rebuilding the world. Generated worlds, logs, external
+source checkouts and local environments are intentionally not versioned.
 
 ## Safety Boundary
 
@@ -45,7 +54,7 @@ gets direct motor, MAVLink, shell or unrestricted operating-system access.
 ## Project State
 
 Phases 0–5 are complete. Phase 6—the unified, operator-friendly launch and
-manual-test surface—is next. The strong-wind scenario is deliberately retained
+manual-test surface—is in progress. The strong-wind scenario is deliberately retained
 as a failing stress case until wind-force and control calibration are completed.
 See [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

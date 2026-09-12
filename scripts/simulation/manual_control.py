@@ -1,0 +1,375 @@
+#!/usr/bin/env python3
+"""Simulation-only keyboard and Xbox RC client for an active Icarus session."""
+
+import argparse
+import json
+import math
+import os
+import time
+from pathlib import Path
+
+import pygame
+from pymavlink import mavutil
+
+ROOT = Path(__file__).resolve().parents[2]
+ACTIVE_SESSION = ROOT / "logs/simulation/active_session.json"
+RELEASE = 0
+IGNORE = 65535
+
+
+def clamp(value, minimum=-1.0, maximum=1.0):
+    return max(minimum, min(maximum, value))
+
+
+def shape_axis(value, deadzone=0.08):
+    """Apply a dead zone and gentle exponential response to a normalized axis."""
+    value = clamp(float(value))
+    if abs(value) <= deadzone:
+        return 0.0
+    scaled = (abs(value) - deadzone) / (1.0 - deadzone)
+    return math.copysign(scaled**1.5, value)
+
+
+def pwm(value, reverse=False):
+    value = -value if reverse else value
+    return round(1500 + 400 * clamp(value))
+
+
+def load_session():
+    if not ACTIVE_SESSION.is_file():
+        raise RuntimeError("No active simulator; run ./scripts/start-sim first")
+    session = json.loads(ACTIVE_SESSION.read_text())
+    if session.get("status") != "ready":
+        raise RuntimeError("Simulator session is not ready")
+    try:
+        os.kill(int(session["launcher_pid"]), 0)
+    except (KeyError, ProcessLookupError, ValueError) as error:
+        raise RuntimeError("Simulator session is stale; restart ./scripts/start-sim") from error
+    if session.get("mavlink_endpoint") != "tcp:127.0.0.1:5760":
+        raise RuntimeError("Manual control is restricted to the local SITL endpoint")
+    return session
+
+
+def open_joystick(index):
+    if index is None or pygame.joystick.get_count() == 0:
+        return None
+    if not 0 <= index < pygame.joystick.get_count():
+        raise ValueError(f"controller {index} not found")
+    joystick = pygame.joystick.Joystick(index)
+    joystick.init()
+    return joystick
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--controller", type=int, default=0)
+    parser.add_argument("--keyboard-only", action="store_true")
+    parser.add_argument("--takeoff-altitude", type=float, default=3.0)
+    parser.add_argument("--list-controllers", action="store_true")
+    parser.add_argument(
+        "--connection-test",
+        action="store_true",
+        help="Verify the active local MAVLink session without opening pilot controls",
+    )
+    args = parser.parse_args()
+    if not 1.0 <= args.takeoff_altitude <= 10.0:
+        raise ValueError("takeoff altitude must be between 1 and 10 metres")
+
+    pygame.init()
+    pygame.joystick.init()
+    if args.list_controllers:
+        if pygame.joystick.get_count() == 0:
+            print("No SDL controllers detected")
+        for index in range(pygame.joystick.get_count()):
+            item = pygame.joystick.Joystick(index)
+            print(f"{index}: {item.get_name()}")
+        return
+
+    session = load_session()
+    joystick = None if args.keyboard_only else open_joystick(args.controller)
+    master = mavutil.mavlink_connection(session["mavlink_endpoint"], source_system=255)
+    print("Waiting for ArduPilot heartbeat...", flush=True)
+    heartbeat = master.wait_heartbeat(timeout=30)
+    if heartbeat is None:
+        raise RuntimeError("ArduPilot heartbeat timed out")
+    master.target_system = heartbeat.get_srcSystem()
+    master.target_component = heartbeat.get_srcComponent()
+    mode_numbers = master.mode_mapping()
+    if args.connection_test:
+        master.mav.heartbeat_send(
+            mavutil.mavlink.MAV_TYPE_GCS,
+            mavutil.mavlink.MAV_AUTOPILOT_INVALID,
+            0,
+            0,
+            0,
+        )
+        master.mav.rc_channels_override_send(
+            master.target_system,
+            master.target_component,
+            RELEASE,
+            RELEASE,
+            RELEASE,
+            RELEASE,
+            IGNORE,
+            IGNORE,
+            IGNORE,
+            IGNORE,
+        )
+        master.close()
+        pygame.quit()
+        print("Manual-control connection check passed")
+        return
+
+    screen = pygame.display.set_mode((820, 500))
+    pygame.display.set_caption("Icarus Manual Pilot — simulation only")
+    font = pygame.font.Font(None, 28)
+    small = pygame.font.Font(None, 22)
+    clock = pygame.time.Clock()
+    state = {
+        "armed": bool(heartbeat.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED),
+        "mode": "UNKNOWN",
+        "altitude_m": 0.0,
+        "battery_v": None,
+        "status": "Connected; LOITER requested",
+    }
+    pending_takeoff = False
+    takeoff_sent = False
+    running = True
+    next_gcs_heartbeat = 0.0
+
+    client_dir = Path(session["run_directory"]) / "clients"
+    client_dir.mkdir(exist_ok=True)
+    log_path = client_dir / ("manual_" + time.strftime("%Y%m%dT%H%M%S") + ".jsonl")
+    log = log_path.open("w")
+
+    def record(event, **fields):
+        log.write(json.dumps({"time": time.time(), "event": event, **fields}) + "\n")
+        log.flush()
+
+    def set_mode(name):
+        master.mav.set_mode_send(
+            master.target_system,
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            mode_numbers[name],
+        )
+        state["status"] = f"Requested {name}"
+        record("mode_request", mode=name)
+
+    def command(command_id, first=0.0, seventh=0.0):
+        master.mav.command_long_send(
+            master.target_system,
+            master.target_component,
+            command_id,
+            0,
+            first,
+            0,
+            0,
+            0,
+            0,
+            0,
+            seventh,
+        )
+
+    def arm():
+        set_mode("LOITER")
+        command(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 1)
+        state["status"] = "Arm requested"
+        record("arm_request")
+
+    def disarm():
+        if state["altitude_m"] > 0.3:
+            state["status"] = "Disarm blocked above 0.3 m; LAND instead"
+            return
+        command(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0)
+        state["status"] = "Disarm requested"
+        record("disarm_request")
+
+    def takeoff():
+        nonlocal pending_takeoff, takeoff_sent
+        if not state["armed"]:
+            state["status"] = "Arm first, then request takeoff"
+            return
+        set_mode("GUIDED")
+        pending_takeoff = True
+        takeoff_sent = False
+        state["status"] = f"Preparing takeoff to {args.takeoff_altitude:.1f} m"
+
+    def action(name):
+        if name == "arm":
+            arm()
+        elif name == "disarm":
+            disarm()
+        elif name == "takeoff":
+            takeoff()
+        elif name in ("LAND", "RTL", "LOITER"):
+            set_mode(name)
+
+    set_mode("LOITER")
+    record("connected", controller=joystick.get_name() if joystick else None)
+    previous_buttons = []
+    try:
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    key_actions = {
+                        pygame.K_RETURN: "arm",
+                        pygame.K_BACKSPACE: "disarm",
+                        pygame.K_t: "takeoff",
+                        pygame.K_l: "LAND",
+                        pygame.K_r: "RTL",
+                        pygame.K_h: "LOITER",
+                    }
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key in key_actions:
+                        action(key_actions[event.key])
+
+            while True:
+                message = master.recv_match(blocking=False)
+                if message is None:
+                    break
+                kind = message.get_type()
+                if kind == "HEARTBEAT":
+                    state["armed"] = bool(
+                        message.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
+                    )
+                    state["mode"] = mavutil.mode_string_v10(message)
+                elif kind == "GLOBAL_POSITION_INT":
+                    state["altitude_m"] = message.relative_alt / 1000.0
+                elif kind == "SYS_STATUS" and message.voltage_battery != 65535:
+                    state["battery_v"] = message.voltage_battery / 1000.0
+                elif kind == "STATUSTEXT":
+                    state["status"] = str(message.text)
+                    record("status_text", text=str(message.text))
+
+            if pending_takeoff and state["mode"] == "GUIDED" and not takeoff_sent:
+                command(
+                    mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+                    seventh=args.takeoff_altitude,
+                )
+                takeoff_sent = True
+                state["status"] = "Takeoff command sent"
+                record("takeoff_request", altitude_m=args.takeoff_altitude)
+            if (
+                pending_takeoff
+                and takeoff_sent
+                and state["altitude_m"] >= 0.95 * args.takeoff_altitude
+            ):
+                pending_takeoff = False
+                set_mode("LOITER")
+                state["status"] = "Takeoff complete; manual LOITER control active"
+
+            keys = pygame.key.get_pressed()
+            roll = float(keys[pygame.K_d]) - float(keys[pygame.K_a])
+            pitch = float(keys[pygame.K_w]) - float(keys[pygame.K_s])
+            yaw = float(keys[pygame.K_e]) - float(keys[pygame.K_q])
+            climb = float(keys[pygame.K_UP]) - float(keys[pygame.K_DOWN])
+
+            if joystick:
+                axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
+                # SDL Xbox layout: left stick yaw/climb, right stick roll/pitch.
+                if len(axes) >= 5:
+                    yaw += shape_axis(axes[0])
+                    climb += shape_axis(-axes[1])
+                    roll += shape_axis(axes[3])
+                    pitch += shape_axis(-axes[4])
+                buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
+                if len(previous_buttons) == len(buttons):
+                    button_actions = {0: "arm", 1: "LAND", 2: "RTL", 3: "takeoff", 6: "disarm", 7: "LOITER"}
+                    for index, name in button_actions.items():
+                        if index < len(buttons) and buttons[index] and not previous_buttons[index]:
+                            action(name)
+                previous_buttons = buttons
+
+            roll, pitch, yaw, climb = map(clamp, (roll, pitch, yaw, climb))
+            throttle_pwm = 1000 if not state["armed"] else pwm(climb)
+            master.mav.rc_channels_override_send(
+                master.target_system,
+                master.target_component,
+                pwm(roll),
+                pwm(pitch, reverse=True),
+                throttle_pwm,
+                pwm(yaw),
+                IGNORE,
+                IGNORE,
+                IGNORE,
+                IGNORE,
+            )
+            now = time.monotonic()
+            if now >= next_gcs_heartbeat:
+                master.mav.heartbeat_send(
+                    mavutil.mavlink.MAV_TYPE_GCS,
+                    mavutil.mavlink.MAV_AUTOPILOT_INVALID,
+                    0,
+                    0,
+                    0,
+                )
+                next_gcs_heartbeat = now + 0.5
+
+            screen.fill((18, 22, 28))
+            title = font.render("ICARUS MANUAL PILOT — LOCAL SIMULATION ONLY", True, (112, 210, 255))
+            screen.blit(title, (24, 20))
+            controller_name = joystick.get_name() if joystick else "keyboard only"
+            lines = [
+                f"Mode: {state['mode']}    Armed: {state['armed']}    Altitude: {state['altitude_m']:.2f} m",
+                f"Controller: {controller_name}",
+                f"Axes  roll {roll:+.2f}  pitch {pitch:+.2f}  yaw {yaw:+.2f}  climb {climb:+.2f}",
+                "Keyboard: W/S pitch | A/D roll | Q/E yaw | Up/Down climb",
+                "Enter arm | T takeoff | H hold | L land | R RTL | Backspace disarm",
+                "Xbox: left stick yaw/climb | right stick roll/pitch",
+                "A arm | Y takeoff | Start hold | B land | X RTL | Back disarm",
+                "Esc/window close: LAND if armed, then exit",
+                f"Status: {state['status']}",
+                f"Log: {log_path}",
+            ]
+            for index, line in enumerate(lines):
+                color = (230, 235, 240) if index < 8 else (255, 205, 110)
+                screen.blit(small.render(line, True, color), (24, 75 + index * 38))
+            pygame.display.flip()
+            clock.tick(20)
+    finally:
+        if state["armed"]:
+            set_mode("LAND")
+            state["status"] = "LAND requested on manual-client exit"
+            record("automatic_land_on_exit")
+            deadline = time.monotonic() + 70
+            while state["armed"] and time.monotonic() < deadline:
+                master.mav.rc_channels_override_send(
+                    master.target_system,
+                    master.target_component,
+                    1500,
+                    1500,
+                    1500,
+                    1500,
+                    IGNORE,
+                    IGNORE,
+                    IGNORE,
+                    IGNORE,
+                )
+                message = master.recv_match(type="HEARTBEAT", blocking=True, timeout=0.2)
+                if message:
+                    state["armed"] = bool(
+                        message.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
+                    )
+        master.mav.rc_channels_override_send(
+            master.target_system,
+            master.target_component,
+            RELEASE,
+            RELEASE,
+            RELEASE,
+            RELEASE,
+            IGNORE,
+            IGNORE,
+            IGNORE,
+            IGNORE,
+        )
+        record("disconnected", armed=state["armed"])
+        log.close()
+        master.close()
+        pygame.quit()
+
+
+if __name__ == "__main__":
+    main()

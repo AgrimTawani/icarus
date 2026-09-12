@@ -113,20 +113,25 @@ def decorate_site(world):
 
 
 def build(scenario_value):
-    path, scenario = load_scenario(scenario_value)
+    _path, scenario = load_scenario(scenario_value)
+    model_dir = ROOT / "simulation/models" / ("phase5_" + scenario["name"])
+    model_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             "/usr/bin/python3",
             str(ROOT / "scripts/simulation/build_compact_flight.py"),
             "--sensor-profile",
             scenario["sensor_profile"],
+            "--target-model-dir",
+            str(model_dir),
+            "--model-only",
         ],
         check=True,
         capture_output=True,
         text=True,
         timeout=30,
     )
-    model_tree = ET.parse(ROOT / "simulation/models/akshu_compact_sitl/model.sdf")
+    model_tree = ET.parse(model_dir / "model.sdf")
     model = model_tree.getroot().find("model")
     navsat = model.find("link/sensor[@name='navsat']/navsat")
     degraded = scenario["gps_degradation"]
@@ -142,8 +147,6 @@ def build(scenario_value):
         10.0 * scenario["battery"]["initial_soc"]
     )
     battery.find("power_load").text = str(scenario["battery"]["load_w"])
-    model_dir = ROOT / "simulation/models" / ("phase5_" + scenario["name"])
-    model_dir.mkdir(parents=True, exist_ok=True)
     ET.indent(model_tree)
     model_xml = ET.tostring(model_tree.getroot(), encoding="unicode") + "\n"
     (model_dir / "model.sdf").write_text(model_xml)

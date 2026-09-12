@@ -6,13 +6,17 @@ bring-up evidence is retained in the `SIM-*` documents.
 ## Implemented Flight Path
 
 ```text
-./scripts/sim
-    -> scripts/simulation/launch_compact.py
+./scripts/start-sim
+    -> scripts/simulation/launch_compact.py --server-only
        -> validates scenario and generates world/model
        -> starts Gazebo server (+ GUI when requested)
        -> starts ArduCopter SITL
-       -> starts deterministic pymavlink mission controller
        -> starts sensor/health/fault recorders
+
+Exactly one independent control client:
+    ./scripts/manual-control -> keyboard/Xbox RC override client
+    ./scripts/run-mission    -> deterministic pymavlink mission client
+    future Drone API         -> safety-bounded autonomy path
 
 Gazebo physics --JSON/UDP :9002--> ArduPilot SITL
 Gazebo motors <--normalized servo outputs-- ArduPilot SITL
@@ -22,8 +26,9 @@ Public sensor streams --> recorder/fault boundary (future perception consumers)
 
 Gazebo owns rigid-body dynamics, collisions, wind and native sensor simulation.
 ArduPilot owns estimation, stabilization, flight modes and motor mixing. The
-pymavlink controller performs the present automated takeoff-hover-land test; it
-is test infrastructure, not the future Drone API.
+mission client performs the present automated takeoff-hover-land test; it is
+test infrastructure, not the future Drone API. The manual client supplies
+simulated RC input while ArduPilot still owns stabilization and motor mixing.
 
 ## Sensor Paths
 
@@ -63,11 +68,12 @@ footpath. Primitive collision geometry is used for scoring and reliable physics.
 
 ## Launch and Shutdown
 
-The launcher owns every child process and records a run directory beneath
-`logs/simulation/`. Startup stops before arming when validation or connection
-checks fail. Normal completion and interruption terminate children and release
-ports. Phase 6 will expose formal GUI, headless, manual and automated profiles
-and prove 20-cycle cleanup reliability.
+The launcher owns every simulator child process and records a run directory
+beneath `logs/simulation/`. It publishes a local active-session manifest only
+after sensor readiness. Startup failures occur before a client can arm. Control
+clients own no simulator processes and can disconnect independently. Normal
+interruption terminates children and releases ports. The remaining Phase 6 gate
+is repeated lifecycle, failure-injection and physical Xbox verification.
 
 ## Simulation-to-Real Replacement
 

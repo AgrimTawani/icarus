@@ -19,7 +19,9 @@ the result. It is not yet an autonomous LLM-controlled drone stack.
 | ArduPilot propulsion bridge | Complete | automated Phase 3–4 acceptance |
 | Native simulated sensors | Connected and health-tested | Phase 4 acceptance |
 | Deterministic Phase 5 scenarios | Complete | `SIM-PHASE-5-COMPLETION.md` |
-| Unified/manual launcher | Partial; automated path only | Phase 6 next |
+| Separated simulator/control launch | Implemented; reliability gate pending | Phase 6 |
+| Keyboard manual control | Implemented; simulation-only | `scripts/manual-control` |
+| Xbox manual control | Implemented; hardware verification pending | SDL mapping |
 | C++ autonomy services | Scaffold only | empty component directories |
 | Drone API protobuf | Initial draft | `proto/icarus/v1/` |
 | Perception/obstacle avoidance | Not implemented | directories are scaffolds |
@@ -36,6 +38,9 @@ the result. It is not yet an autonomous LLM-controlled drone stack.
   maximum tilt, 2.979–3.008 m hover altitude and 0.978 real-time factor.
 - The populated light-wind flight passed at approximately 0.148 m maximum
   drift, 9° maximum tilt and 0.975 real-time factor.
+- The separated Phase 6 server/client path passed a light-wind flight on
+  2026-09-12: the server remained active across client connection, with 0.150 m
+  maximum drift, 9.01° maximum tilt, successful landing and clean port release.
 - The 8 m/s limit scenario was rejected before processes started or motors armed.
 - The 5 m/s strong-wind stress run held altitude but failed its drift/tilt
   envelope (1.40 m and 20.41°). This remains an open calibration item.
@@ -45,7 +50,7 @@ reports are versioned as `SIM-*` documents.
 
 ## Known Technical Gaps
 
-- Phase 6 manual/GCS launch profile and 20-cycle lifecycle gate are absent.
+- Phase 6 still needs Xbox hardware verification and the 20-cycle lifecycle gate.
 - Strong-wind force/aerodynamic calibration does not meet the declared envelope.
 - Public Gazebo camera/lidar/range streams are health-tested but not yet fused
   into Icarus perception or the ArduPilot EKF.
@@ -59,7 +64,6 @@ reports are versioned as `SIM-*` documents.
 
 ## Next Gate
 
-Phase 6 must deliver named GUI/headless/manual/automated launch profiles,
-preflight validation, clear endpoints, ownership-safe shutdown and 20
-consecutive clean lifecycle cycles. Only then should implementation of the
-autonomy services begin.
+Phase 6 must now verify keyboard/Xbox flight, complete failure injection and pass
+20 consecutive clean simulator lifecycle cycles. Only then should implementation
+of the autonomy services begin.

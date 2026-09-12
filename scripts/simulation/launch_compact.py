@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""One command for a recorded compact-drone takeoff/move/land acceptance run."""
+"""Launch the Icarus simulator, optionally with the legacy automated controller."""
 
 import argparse
 import fcntl
@@ -21,7 +21,12 @@ from test_mark4_motors import stop
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--gui", action="store_true", help="Open Gazebo during the automated flight"
+        "--gui", action="store_true", help="Open the Gazebo graphical client"
+    )
+    parser.add_argument(
+        "--server-only",
+        action="store_true",
+        help="Start Gazebo, SITL and sensors without taking control of the vehicle",
     )
     parser.add_argument(
         "--preflight-only",
@@ -36,6 +41,8 @@ def main():
         "--scenario", help="Phase 5 scenario name from simulation/scenarios"
     )
     args = parser.parse_args()
+    if args.server_only and args.preflight_only:
+        parser.error("--preflight-only belongs to the coupled acceptance runner, not --server-only")
     scenario_path, scenario = (None, None)
     if args.scenario:
         scenario_path, scenario = load_scenario(args.scenario)
@@ -61,6 +68,7 @@ def main():
         raise RuntimeError("No desktop display; omit --gui")
     logs_root = ROOT / "logs/simulation"
     logs_root.mkdir(parents=True, exist_ok=True)
+    active_session_path = logs_root / "active_session.json"
     if scenario and scenario["success"]["expected_outcome"] == "reject":
         run_id = time.strftime("%Y%m%dT%H%M%S") + "_" + uuid.uuid4().hex[:6]
         result = {
@@ -111,6 +119,7 @@ def main():
     if os.path.exists(vendor):
         env["__EGL_VENDOR_LIBRARY_FILENAMES"] = vendor
     processes, handles = [], []
+    session_published = False
     summary = {
         "status": "failed",
         "partition": env["GZ_PARTITION"],
@@ -317,6 +326,46 @@ def main():
                     str(ROOT / "simulation/launch/compact_gui.config"),
                 ],
             )
+        if args.server_only:
+            session = {
+                "version": 1,
+                "status": "ready",
+                "launcher_pid": os.getpid(),
+                "mavlink_endpoint": "tcp:127.0.0.1:5760",
+                "json_physics_endpoint": "udp:127.0.0.1:9002",
+                "partition": env["GZ_PARTITION"],
+                "run_directory": str(directory),
+                "scenario": scenario["name"] if scenario else None,
+                "world": world_name,
+                "model": "icarus_compact",
+                "ground_height_m": 0.1901,
+                "mission": scenario["mission"] if scenario else {
+                    "type": "takeoff_hover_land",
+                    "altitude_m": 3.0,
+                    "hover_s": 10.0,
+                },
+                "success_limits": scenario["success"] if scenario else {},
+            }
+            temporary = logs_root / "active_session.tmp"
+            temporary.write_text(json.dumps(session, indent=2) + "\n")
+            temporary.replace(active_session_path)
+            session_published = True
+            summary["status"] = "ready"
+            summary["session"] = session
+            print("SIMULATOR READY", flush=True)
+            print("MAVLink: tcp:127.0.0.1:5760", flush=True)
+            print("Manual: ./scripts/manual-control", flush=True)
+            print("Mission: ./scripts/run-mission --mission takeoff_hover_land", flush=True)
+            print("Stop: Ctrl+C in this terminal", flush=True)
+            while True:
+                check_children()
+                h = health()
+                if (
+                    h.get("status") != "ready"
+                    or time.monotonic() - h.get("updated_monotonic_s", 0) > 5
+                ):
+                    raise RuntimeError("Sensor recorder unhealthy: " + str(h))
+                time.sleep(0.25)
         command = [
             str(ROOT / "third_party/ardupilot/.venv/bin/python"),
             str(ROOT / "scripts/simulation/mark4_flight_check.py"),
@@ -404,6 +453,9 @@ def main():
             summary["scenario_score"] = score
         summary["status"] = "passed"
         print(json.dumps(summary["flight"], indent=2), flush=True)
+    except SystemExit:
+        summary["status"] = "stopped"
+        raise
     except BaseException as error:
         summary["error"] = str(error)
         raise
@@ -414,6 +466,13 @@ def main():
             stop(process)
         for handle in handles:
             handle.close()
+        if session_published and active_session_path.exists():
+            try:
+                active = json.loads(active_session_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                active = {}
+            if active.get("run_directory") == str(directory):
+                active_session_path.unlink()
         summary["children_exit_codes"] = {name: p.poll() for name, p in processes}
         (directory / "launch.json").write_text(json.dumps(summary, indent=2) + "\n")
         lock.close()

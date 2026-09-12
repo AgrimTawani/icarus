@@ -6,6 +6,7 @@ import copy
 import json
 import math
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import numpy as np
 from build_akshu_candidate import ROOT
@@ -16,8 +17,16 @@ def main():
     parser.add_argument(
         "--sensor-profile", choices=("nominal", "noisy"), default="nominal"
     )
+    parser.add_argument("--target-model-dir", type=Path, default=None)
+    parser.add_argument(
+        "--model-only",
+        action="store_true",
+        help="Build only the selected model output; leave shared world/GUI sources unchanged",
+    )
     args = parser.parse_args()
-    target = ROOT / "simulation/models/akshu_compact_sitl"
+    target = args.target_model_dir or ROOT / "simulation/models/akshu_compact_sitl"
+    if not target.is_absolute():
+        target = ROOT / target
     target.mkdir(parents=True, exist_ok=True)
     tree = ET.parse(ROOT / "simulation/models/akshu_compact/model.sdf")
     model = tree.getroot().find("model")
@@ -174,6 +183,9 @@ def main():
     configure(model, w, args.sensor_profile)
     ET.indent(tree)
     tree.write(target / "model.sdf", encoding="unicode")
+    if args.model_only:
+        print("Built compact model only; total mass", mass + 0.08, "kg; base CG", cg)
+        return
     # No review camera: user explicitly disabled picture/video capture.
     ET.indent(world)
     world.write(ROOT / "simulation/worlds/compact_flight.sdf", encoding="unicode")
@@ -188,7 +200,8 @@ def main():
         "plugin[@filename='MinimalScene']/gz-gui/title"
     ).text = "Icarus compact — live SITL flight"
     (ROOT / "simulation/launch/compact_gui.config").write_text(
-        "\n".join(ET.tostring(child, encoding="unicode") for child in gui) + "\n"
+        "\n".join(ET.tostring(child, encoding="unicode") for child in gui).rstrip()
+        + "\n"
     )
     print("Built compact flight model; total mass", mass + 0.08, "kg; base CG", cg)
 

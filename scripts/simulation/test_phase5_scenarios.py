@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 """Phase 5 deterministic-generation, ground-truth and performance gates."""
 
-import hashlib
 import argparse
+import hashlib
 import json
 import os
 import signal
@@ -11,11 +11,10 @@ import time
 import uuid
 from pathlib import Path
 
-from gz.msgs10.world_stats_pb2 import WorldStatistics
-from gz.transport13 import Node
-
 from build_akshu_candidate import ROOT
 from build_phase5_world import build
+from gz.msgs10.world_stats_pb2 import WorldStatistics
+from gz.transport13 import Node
 from scenario_config import SCENARIO_DIR, load_scenario
 from score_phase5_trajectory import score
 
@@ -91,6 +90,12 @@ def main():
     args = parser.parse_args()
     scenario_paths = sorted(SCENARIO_DIR.glob("*.json"))
     assert len(scenario_paths) == 8
+    canonical_sources = [
+        ROOT / "simulation/models/akshu_compact_sitl/model.sdf",
+        ROOT / "simulation/worlds/compact_flight.sdf",
+        ROOT / "simulation/launch/compact_gui.config",
+    ]
+    canonical_hashes = {path: digest(path) for path in canonical_sources}
     results = []
     for path in scenario_paths:
         _, scenario = load_scenario(path)
@@ -101,6 +106,7 @@ def main():
         check = subprocess.run(
             ["gz", "sdf", "-k", str(world)], capture_output=True, text=True,
             env={**os.environ, "SDF_PATH": str(ROOT / "simulation/models")}, timeout=15,
+            check=False,
         )
         assert check.returncode == 0 and "Valid" in check.stdout, check.stderr
         truth_data = json.loads(truth.read_text())
@@ -125,6 +131,10 @@ def main():
             assert model_text.count("<stddev>0.8</stddev>") >= 2
         results.append({"scenario": scenario["name"], "world_sha256": hashes[0], "ground_truth_sha256": hashes[1], "status": "passed"})
 
+    assert canonical_hashes == {path: digest(path) for path in canonical_sources}, (
+        "scenario generation modified a canonical simulator source"
+    )
+
     _, obstacle = load_scenario("obstacle_course")
     safe_route = next(route for route in obstacle["ground_truth"]["routes"] if route["name"] == "open")
     safe_points = [{"t_s": i * 5, "x_m": p[0], "y_m": p[1], "z_m": p[2]} for i, p in enumerate(safe_route["waypoints_enu_m"])]
@@ -146,7 +156,7 @@ def main():
     else:
         completed = subprocess.run(
             [str(ROOT / "scripts/sim"), "--scenario", "adverse_combined"],
-            cwd=ROOT, capture_output=True, text=True, timeout=240,
+            cwd=ROOT, capture_output=True, text=True, timeout=240, check=False,
         )
         assert completed.returncode == 0, completed.stdout + completed.stderr
         line = next(line for line in completed.stdout.splitlines() if line.startswith("Artifacts:"))

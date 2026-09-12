@@ -18,7 +18,7 @@ the corresponding simulation gates are measurable and stable.
 | 3 | Engineer and validate the custom vehicle model | Complete |
 | 4 | Connect propulsion, SITL and native simulated sensors | Complete |
 | 5 | Build deterministic worlds, wind, obstacles and faults | Complete |
-| 6 | Unified launch profiles, operator controls and manual test workflow | Next |
+| 6 | Unified launch profiles, operator controls and manual test workflow | In progress |
 | 7 | Reproducible build/runtime packaging and CI foundation | Planned |
 | 8 | Drone API, state engine, MAVLink gateway, missions and guardrails | Planned |
 | 9 | Perception, obstacle map and local planner | Planned |
@@ -112,7 +112,7 @@ train/evaluation separation before any fine-tuning experiment.
 
 ## Immediate Work Queue
 
-1. Implement Phase 6 launch profiles and manual control instructions.
+1. Verify the Phase 6 keyboard and physical Xbox manual-control paths.
 2. Add 20-cycle launcher reliability and failure-injection tests.
 3. Pin upstream checkouts in an executable lock/checkout mechanism.
 4. Decide the Phase 7 container split before adding heavy autonomy services.

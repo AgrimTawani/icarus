@@ -5,22 +5,64 @@
 Run from the repository root:
 
 ```bash
-# Automated, headless takeoff-hover-land
+# Terminal 1: world, vehicle, ArduPilot and sensors only
+./scripts/start-sim --scenario wind_light --gui
+
+# Terminal 2: select exactly one control client
+./scripts/manual-control
+./scripts/run-mission --mission takeoff_hover_land
+
+# Existing one-shot automated acceptance mode remains available
 ./scripts/sim --scenario empty_validation
-
-# Same mission with Gazebo GUI
-./scripts/sim --scenario wind_light --gui
-
-# Stress test; currently expected to report an envelope failure
 ./scripts/sim --scenario wind_strong --gui
 
 # Validate the declared operating-limit rejection without starting Gazebo
 ./scripts/sim --scenario wind_limit_reject
 ```
 
-Stop an active foreground launch with `Ctrl+C`. The launcher handles the signal,
+Stop the simulator with `Ctrl+C` in its terminal. The launcher handles the signal,
 stops owned children and releases TCP 5760 and UDP 9002. Do not kill individual
 children first unless diagnosing a cleanup failure.
+
+## Separated Runtime Model
+
+`start-sim` owns only the shared simulation foundation: scenario generation,
+Gazebo, the vehicle, ArduPilot SITL, simulated sensors, faults, logs and cleanup.
+It publishes the local endpoint `tcp:127.0.0.1:5760` in an ignored active-session
+file. It does not arm or command the drone.
+
+Control runs independently in another terminal. `manual-control` sends bounded
+RC overrides; `run-mission` runs the deterministic acceptance mission; future
+Drone API and DCM processes will connect through the same session contract.
+Do not run two control clients simultaneously.
+
+## Keyboard and Xbox Manual Flight
+
+Start the simulator with `--gui`, then run `./scripts/manual-control`. A small
+pilot window must have focus for keyboard input.
+
+| Function | Keyboard | Standard Xbox mapping |
+| --- | --- | --- |
+| Roll / pitch | `A/D` and `W/S` | Right stick |
+| Yaw / climb | `Q/E` and `Up/Down` | Left stick |
+| Arm | `Enter` | A |
+| Take off to 3 m | `T` | Y |
+| Hold in LOITER | `H` | Start |
+| Land | `L` | B |
+| Return to launch | `R` | X |
+| Ground-only disarm | `Backspace` | Back |
+| Exit | `Esc` or close window | — |
+
+Stick input is spring-centered in `LOITER`: neutral climb requests altitude
+hold, rather than zero motor throttle. Exiting while armed requests `LAND` and
+waits for disarm before releasing RC overrides. The client is hard-restricted to
+the localhost SITL endpoint and cannot connect to a physical aircraft.
+
+List SDL-detected controllers with:
+
+```bash
+./scripts/manual-control --list-controllers
+```
 
 ## Scenario Catalog
 
@@ -46,18 +88,17 @@ wind-force/aerodynamic representation and controller parameters with evidence.
 2. Rejects contradictory overrides and out-of-policy wind before arming.
 3. Checks required ports.
 4. Builds deterministic generated world/model artifacts.
-5. Starts Gazebo, ArduPilot SITL, controller and recorders.
-6. Arms, takes off, hovers, lands and disarms.
-7. Scores dynamics, health, mission outcome and real-time factor.
+5. Starts Gazebo, ArduPilot SITL and sensor/fault recorders.
+6. Publishes the active local session for an independent control client.
+7. Monitors child processes and sensor health until `Ctrl+C`.
 8. Writes a structured run directory and shuts everything down.
 
 ## Manual Testing Status
 
-The GUI currently displays an automated flight; it does not imply joystick or
-Mission Planner/QGroundControl ownership. Phase 6 will add a supported manual
-profile with a published MAVLink endpoint, safe control handover, preflight
-checklist and cleanup behavior. Until that profile exists, use the automated
-scenarios for acceptance and the GUI only for visual inspection.
+The keyboard client and SDL Xbox mapping are implemented. Keyboard/controller
+coexistence and automatic land-on-exit are part of the client design. The
+current machine had no Xbox controller attached during implementation, so the
+exact physical controller mapping still requires one operator verification.
 
 ## Build and Score Without Flying
 

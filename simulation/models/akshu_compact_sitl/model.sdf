@@ -692,7 +692,7 @@
           <noise>
             <type>gaussian</type>
             <mean>0.0</mean>
-            <stddev>0.005</stddev>
+            <stddev>0.0</stddev>
           </noise>
         </camera>
       </sensor>
@@ -723,8 +723,8 @@
           </range>
           <noise>
             <type>gaussian</type>
-            <mean>0.002</mean>
-            <stddev>0.02</stddev>
+            <mean>0.0</mean>
+            <stddev>0.0</stddev>
           </noise>
         </lidar>
       </sensor>
@@ -749,8 +749,8 @@
           </range>
           <noise>
             <type>gaussian</type>
-            <mean>0.001</mean>
-            <stddev>0.005</stddev>
+            <mean>0.0</mean>
+            <stddev>0.0</stddev>
           </noise>
         </lidar>
       </sensor>
@@ -763,40 +763,40 @@
           <linear_acceleration>
             <x>
               <noise type="gaussian">
-                <mean>0.003</mean>
-                <stddev>0.03</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.003</mean>
-                <stddev>0.03</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.003</mean>
-                <stddev>0.03</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </z>
           </linear_acceleration>
           <angular_velocity>
             <x>
               <noise type="gaussian">
-                <mean>0.0001</mean>
-                <stddev>0.002</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.0001</mean>
-                <stddev>0.002</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.0001</mean>
-                <stddev>0.002</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </z>
           </angular_velocity>
@@ -811,14 +811,14 @@
           <position_sensing>
             <horizontal>
               <noise type="gaussian">
-                <mean>0.02</mean>
-                <stddev>0.3</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </horizontal>
             <vertical>
               <noise type="gaussian">
-                <mean>0.02</mean>
-                <stddev>0.3</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </vertical>
           </position_sensing>
@@ -826,13 +826,13 @@
             <horizontal>
               <noise type="gaussian">
                 <mean>0.0</mean>
-                <stddev>0.05</stddev>
+                <stddev>0.0</stddev>
               </noise>
             </horizontal>
             <vertical>
               <noise type="gaussian">
                 <mean>0.0</mean>
-                <stddev>0.05</stddev>
+                <stddev>0.0</stddev>
               </noise>
             </vertical>
           </velocity_sensing>
@@ -847,40 +847,40 @@
           <linear_acceleration>
             <x>
               <noise type="gaussian">
-                <mean>0.003</mean>
-                <stddev>0.03</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.003</mean>
-                <stddev>0.03</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.003</mean>
-                <stddev>0.03</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </z>
           </linear_acceleration>
           <angular_velocity>
             <x>
               <noise type="gaussian">
-                <mean>0.0001</mean>
-                <stddev>0.002</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </x>
             <y>
               <noise type="gaussian">
-                <mean>0.0001</mean>
-                <stddev>0.002</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </y>
             <z>
               <noise type="gaussian">
-                <mean>0.0001</mean>
-                <stddev>0.002</stddev>
+                <mean>0.0</mean>
+                <stddev>0.0</stddev>
               </noise>
             </z>
           </angular_velocity>
@@ -986,20 +986,20 @@
         <magnetometer>
           <x>
             <noise type="gaussian">
-              <mean>1e-08</mean>
-              <stddev>2e-07</stddev>
+              <mean>0.0</mean>
+              <stddev>0.0</stddev>
             </noise>
           </x>
           <y>
             <noise type="gaussian">
-              <mean>1e-08</mean>
-              <stddev>2e-07</stddev>
+              <mean>0.0</mean>
+              <stddev>0.0</stddev>
             </noise>
           </y>
           <z>
             <noise type="gaussian">
-              <mean>1e-08</mean>
-              <stddev>2e-07</stddev>
+              <mean>0.0</mean>
+              <stddev>0.0</stddev>
             </noise>
           </z>
         </magnetometer>
@@ -1013,8 +1013,8 @@
           <reference_altitude>584</reference_altitude>
           <pressure>
             <noise type="gaussian">
-              <mean>0.5</mean>
-              <stddev>2.0</stddev>
+              <mean>0.0</mean>
+              <stddev>0.0</stddev>
             </noise>
           </pressure>
         </air_pressure>

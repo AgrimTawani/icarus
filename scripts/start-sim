@@ -1,0 +1,12 @@
+#!/usr/bin/python3
+"""Start Icarus Gazebo, ArduPilot SITL and sensors without a control client."""
+
+import os
+import sys
+from pathlib import Path
+
+launcher = Path(__file__).resolve().parent / "simulation/launch_compact.py"
+os.execv(
+    "/usr/bin/python3",
+    ["/usr/bin/python3", str(launcher), "--server-only", *sys.argv[1:]],
+)
