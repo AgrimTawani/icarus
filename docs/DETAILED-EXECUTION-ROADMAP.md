@@ -457,9 +457,10 @@ Implemented control separation, 2026-09-12:
 ```
 
 The first command owns the simulator lifecycle but never commands the vehicle.
-The latter two are interchangeable MAVLink clients. Keyboard control and a
-standard SDL Xbox mapping are implemented; physical Xbox verification and the
-20-cycle reliability gate remain open.
+The latter two are interchangeable MAVLink clients. Keyboard control, the
+standard SDL Xbox mapping and the independent H.264/RTP camera viewer are
+implemented. The physical Xbox/manual-camera workflow was operator-accepted on
+2026-09-12; the 20-cycle reliability gate remains open.
 
 ### 6.1 Define launch profiles
 

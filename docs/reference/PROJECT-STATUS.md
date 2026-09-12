@@ -45,6 +45,11 @@ LLM-controlled drone stack.
   maximum tilt, 2.973–3.026 m altitude, landing and disarm.
 - The physical sensor test measured non-zero noise at the intended rate on all
   nine sensors. Flight recording additionally verifies the atmosphere channel.
+- The operator accepted the final Xbox manual-flight and camera test. The run
+  exercised arming, STABILIZE/LOITER mode changes, RTL recovery and disarming;
+  recorded all ten telemetry channels; streamed 3,977/3,977 video frames with
+  zero push failures; and shut down without a stale active session. An altitude
+  fence event was recovered during the flight and remains in the local log.
 - The 8 m/s limit scenario was rejected before processes started or motors armed.
 
 Raw evidence remains local under ignored `logs/simulation/`; concise acceptance
