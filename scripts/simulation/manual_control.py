@@ -130,8 +130,13 @@ def main():
         "mode": "UNKNOWN",
         "altitude_m": 0.0,
         "battery_v": None,
+        "gps_fix": 0,
+        "local_position": False,
         "status": "Connected; LOITER requested",
     }
+    arm_pending = False
+    arm_deadline = 0.0
+    next_arm_request = 0.0
     pending_takeoff = False
     takeoff_sent = False
     running = True
@@ -171,12 +176,17 @@ def main():
         )
 
     def arm():
+        nonlocal arm_pending, arm_deadline, next_arm_request
         set_mode("LOITER")
-        command(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 1)
-        state["status"] = "Arm requested"
+        arm_pending = True
+        arm_deadline = time.monotonic() + 45
+        next_arm_request = 0.0
+        state["status"] = "Arm pending; waiting for EKF/GPS readiness"
         record("arm_request")
 
     def disarm():
+        nonlocal arm_pending
+        arm_pending = False
         if state["altitude_m"] > 0.3:
             state["status"] = "Disarm blocked above 0.3 m; LAND instead"
             return
@@ -195,6 +205,9 @@ def main():
         state["status"] = f"Preparing takeoff to {args.takeoff_altitude:.1f} m"
 
     def action(name):
+        nonlocal arm_pending
+        if name != "arm":
+            arm_pending = False
         if name == "arm":
             arm()
         elif name == "disarm":
@@ -205,6 +218,13 @@ def main():
             set_mode(name)
 
     set_mode("LOITER")
+    master.mav.request_data_stream_send(
+        master.target_system,
+        master.target_component,
+        mavutil.mavlink.MAV_DATA_STREAM_ALL,
+        20,
+        1,
+    )
     record("connected", controller=joystick.get_name() if joystick else None)
     previous_buttons = []
     try:
@@ -238,11 +258,35 @@ def main():
                     state["mode"] = mavutil.mode_string_v10(message)
                 elif kind == "GLOBAL_POSITION_INT":
                     state["altitude_m"] = message.relative_alt / 1000.0
+                elif kind == "GPS_RAW_INT":
+                    state["gps_fix"] = message.fix_type
+                elif kind == "LOCAL_POSITION_NED":
+                    state["local_position"] = True
                 elif kind == "SYS_STATUS" and message.voltage_battery != 65535:
                     state["battery_v"] = message.voltage_battery / 1000.0
                 elif kind == "STATUSTEXT":
                     state["status"] = str(message.text)
                     record("status_text", text=str(message.text))
+
+            now = time.monotonic()
+            if arm_pending:
+                if state["armed"]:
+                    arm_pending = False
+                    state["status"] = "Armed; press T or Xbox Y to take off"
+                    record("armed")
+                elif now >= arm_deadline:
+                    arm_pending = False
+                    state["status"] = "Arming timed out; check the latest PreArm message"
+                    record("arm_timeout")
+                elif now >= next_arm_request:
+                    command(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 1)
+                    next_arm_request = now + 3
+                    state["status"] = "Arming: waiting for position/EKF checks"
+                    record(
+                        "arm_retry",
+                        gps_fix=state["gps_fix"],
+                        local_position=state["local_position"],
+                    )
 
             if pending_takeoff and state["mode"] == "GUIDED" and not takeoff_sent:
                 command(
@@ -297,7 +341,6 @@ def main():
                 IGNORE,
                 IGNORE,
             )
-            now = time.monotonic()
             if now >= next_gcs_heartbeat:
                 master.mav.heartbeat_send(
                     mavutil.mavlink.MAV_TYPE_GCS,
@@ -315,6 +358,7 @@ def main():
             lines = [
                 f"Mode: {state['mode']}    Armed: {state['armed']}    Altitude: {state['altitude_m']:.2f} m",
                 f"Controller: {controller_name}",
+                f"Navigation: GPS fix {state['gps_fix']}    Local position: {state['local_position']}",
                 f"Axes  roll {roll:+.2f}  pitch {pitch:+.2f}  yaw {yaw:+.2f}  climb {climb:+.2f}",
                 "Keyboard: W/S pitch | A/D roll | Q/E yaw | Up/Down climb",
                 "Enter arm | T takeoff | H hold | L land | R RTL | Backspace disarm",
@@ -326,7 +370,7 @@ def main():
             ]
             for index, line in enumerate(lines):
                 color = (230, 235, 240) if index < 8 else (255, 205, 110)
-                screen.blit(small.render(line, True, color), (24, 75 + index * 38))
+                screen.blit(small.render(line, True, color), (24, 70 + index * 35))
             pygame.display.flip()
             clock.tick(20)
     finally:

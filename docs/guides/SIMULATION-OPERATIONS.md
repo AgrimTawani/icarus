@@ -58,6 +58,11 @@ hold, rather than zero motor throttle. Exiting while armed requests `LAND` and
 waits for disarm before releasing RC overrides. The client is hard-restricted to
 the localhost SITL endpoint and cannot connect to a physical aircraft.
 
+An arm request may arrive while the simulated GPS/EKF is still establishing its
+position. One arm press remains pending for up to 45 seconds and retries every
+three seconds; the pilot window shows GPS fix and local-position readiness plus
+the latest ArduPilot pre-arm reason. Disarm, LAND or RTL cancels a pending arm.
+
 List SDL-detected controllers with:
 
 ```bash
