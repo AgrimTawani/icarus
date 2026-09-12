@@ -44,7 +44,7 @@ pilot window must have focus for keyboard input.
 | Function | Keyboard | Standard Xbox mapping |
 | --- | --- | --- |
 | Roll / pitch | `A/D` and `W/S` | Right stick |
-| Yaw / climb | `Q/E` and `Up/Down` | Left stick |
+| Yaw / throttle | `Q/E` and `Up`/`Down` | Left stick |
 | Arm | `Enter` | A |
 | Take off to 3 m | `T` | Y |
 | Hold in LOITER | `H` | Start |
@@ -57,10 +57,13 @@ pilot window must have focus for keyboard input.
 | Acro mode | `4` | Hold LB + D-pad right |
 | Exit | `Esc` or close window | — |
 
-Stick input is spring-centered in `LOITER`: neutral climb requests altitude
-hold, rather than zero motor throttle. Exiting while armed requests `LAND` and
-waits for disarm before releasing RC overrides. The client is hard-restricted to
-the localhost SITL endpoint and cannot connect to a physical aircraft.
+The Xbox throttle is deliberately zero-based rather than centered like a normal
+altitude-control stick: center or downward travel commands 0%, and upward travel
+maps linearly to 0–100%. Because the Xbox stick springs to center, releasing it
+returns throttle to 0%; it must be held at the required position. Exiting while
+armed requests `LAND` and waits for disarm before releasing RC overrides. The
+client is hard-restricted to the localhost SITL endpoint and cannot connect to a
+physical aircraft.
 
 An arm request may arrive while the simulated GPS/EKF is still establishing its
 position. One arm press remains pending for up to 45 seconds and retries every
@@ -69,9 +72,10 @@ the latest ArduPilot pre-arm reason. Disarm, LAND or RTL cancels a pending arm.
 
 Mode switching is guarded by the Xbox left bumper to prevent an accidental
 D-pad press from selecting ACRO. `LOITER` holds position and altitude;
-`ALT_HOLD` holds altitude but not position; `STABILIZE` self-levels but uses
-manual throttle; and `ACRO` provides rate control with neither self-level nor
-altitude hold. Use ACRO only with enough clearance to recover.
+`ALT_HOLD` and `LOITER` still interpret the RC throttle channel through
+ArduPilot's climb/descent logic, while `STABILIZE` and `ACRO` use it as manual
+throttle. `STABILIZE` self-levels; `ACRO` provides rate control without
+self-leveling. Use ACRO only with enough clearance to recover.
 
 List SDL-detected controllers with:
 

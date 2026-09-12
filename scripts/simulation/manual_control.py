@@ -36,6 +36,18 @@ def shape_axis(value, deadzone=0.08):
     return math.copysign(scaled**1.5, value)
 
 
+def throttle_from_axis(value, deadzone=0.08):
+    """Map a spring-centered Xbox axis to transmitter throttle: center=0, up=1."""
+    upward = clamp(-float(value), 0.0, 1.0)
+    if upward <= deadzone:
+        return 0.0
+    return (upward - deadzone) / (1.0 - deadzone)
+
+
+def throttle_pwm(value):
+    return round(1000 + 1000 * clamp(value, 0.0, 1.0))
+
+
 def pwm(value, reverse=False):
     value = -value if reverse else value
     return round(1500 + 400 * clamp(value))
@@ -327,20 +339,25 @@ def main():
             ):
                 pending_takeoff = False
                 set_mode("LOITER")
-                state["status"] = "Takeoff complete; manual LOITER control active"
+                state["status"] = (
+                    "Takeoff complete; LOITER active — raise throttle above center "
+                    "to avoid a descent command"
+                )
 
             keys = pygame.key.get_pressed()
             roll = float(keys[pygame.K_d]) - float(keys[pygame.K_a])
             pitch = float(keys[pygame.K_w]) - float(keys[pygame.K_s])
             yaw = float(keys[pygame.K_e]) - float(keys[pygame.K_q])
-            climb = float(keys[pygame.K_UP]) - float(keys[pygame.K_DOWN])
+            throttle = float(keys[pygame.K_UP])
+            if keys[pygame.K_DOWN]:
+                throttle = 0.0
 
             if joystick:
                 axes = [joystick.get_axis(i) for i in range(joystick.get_numaxes())]
-                # SDL Xbox layout: left stick yaw/climb, right stick roll/pitch.
+                # SDL Xbox layout: left stick yaw/throttle, right stick roll/pitch.
                 if len(axes) >= 5:
                     yaw += shape_axis(axes[0])
-                    climb += shape_axis(-axes[1])
+                    throttle = max(throttle, throttle_from_axis(axes[1]))
                     roll += shape_axis(axes[3])
                     pitch += shape_axis(-axes[4])
                 buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
@@ -361,14 +378,15 @@ def main():
                     action(XBOX_MODE_HAT[hat])
                 previous_mode_chord = mode_chord
 
-            roll, pitch, yaw, climb = map(clamp, (roll, pitch, yaw, climb))
-            throttle_pwm = 1000 if not state["armed"] else pwm(climb)
+            roll, pitch, yaw = map(clamp, (roll, pitch, yaw))
+            throttle = clamp(throttle, 0.0, 1.0)
+            output_throttle_pwm = 1000 if not state["armed"] else throttle_pwm(throttle)
             master.mav.rc_channels_override_send(
                 master.target_system,
                 master.target_component,
                 pwm(roll),
                 pwm(pitch, reverse=True),
-                throttle_pwm,
+                output_throttle_pwm,
                 pwm(yaw),
                 IGNORE,
                 IGNORE,
@@ -393,13 +411,14 @@ def main():
                 f"Mode: {state['mode']}    Armed: {state['armed']}    Altitude: {state['altitude_m']:.2f} m",
                 f"Controller: {controller_name}",
                 f"Navigation: GPS fix {state['gps_fix']}    Local position: {state['local_position']}",
-                f"Axes  roll {roll:+.2f}  pitch {pitch:+.2f}  yaw {yaw:+.2f}  climb {climb:+.2f}",
-                "Keyboard: W/S pitch | A/D roll | Q/E yaw | Up/Down climb",
+                f"Axes  roll {roll:+.2f}  pitch {pitch:+.2f}  yaw {yaw:+.2f}  throttle {throttle * 100:5.1f}%",
+                "Keyboard: W/S pitch | A/D roll | Q/E yaw | Up throttle | Down zero",
                 "Enter arm | T takeoff | H hold | L land | R RTL | Backspace disarm",
-                "Xbox: left stick yaw/climb | right stick roll/pitch",
+                "Xbox: left stick yaw/throttle | right stick roll/pitch",
                 "A arm | Y takeoff | Start hold | B land | X RTL | Back disarm",
                 "Modes: hold LB + D-pad  left STABILIZE | down ALT_HOLD",
                 "                         up LOITER | right ACRO",
+                "WARNING: releasing the spring-centered throttle commands 0%",
                 "Esc/window close: LAND if armed, then exit",
                 f"Status: {state['status']}",
                 f"Log: {log_path}",
@@ -421,7 +440,7 @@ def main():
                     master.target_component,
                     1500,
                     1500,
-                    1500,
+                    1000,
                     1500,
                     IGNORE,
                     IGNORE,
