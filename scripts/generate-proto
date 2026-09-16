@@ -24,5 +24,9 @@ fi
     --grpc_python_out="${OUTPUT_DIR}/python" \
     "${PROTOS[@]}"
 
-protoc -I "${PROJECT_ROOT}/proto" --cpp_out="${OUTPUT_DIR}/cpp" "${PROTOS[@]}"
+protoc -I "${PROJECT_ROOT}/proto" \
+    --cpp_out="${OUTPUT_DIR}/cpp" \
+    --grpc_out="${OUTPUT_DIR}/cpp" \
+    --plugin=protoc-gen-grpc="$(command -v grpc_cpp_plugin)" \
+    "${PROTOS[@]}"
 echo "Generated protobuf outputs in ${OUTPUT_DIR}"

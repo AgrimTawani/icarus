@@ -128,6 +128,8 @@ def main():
         raise RuntimeError("Another compact launcher is active") from error
     for port, kind in ((5760, socket.SOCK_STREAM), (9002, socket.SOCK_DGRAM)):
         with socket.socket(socket.AF_INET, kind) as test:
+            if kind == socket.SOCK_STREAM:
+                test.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             test.bind(("127.0.0.1", port))
 
     def interrupted(signum, _frame):

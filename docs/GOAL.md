@@ -73,6 +73,7 @@ simulation and on the aircraft, failures are contained by deterministic layers,
 results are reproducible from repository state, and model quality can be
 compared using frozen scenarios and transparent metrics rather than anecdotes.
 
-Phases 6 and 7 have completed the reliable operator surface and reproducible
-development foundation. The immediate objective is Phase 8: implement the typed
-flight-service boundary that the later DCM must use.
+Phases 6 through 9 have completed the operator surface, reproducible runtime,
+typed flight services and deterministic LiDAR obstacle avoidance. The immediate
+objective is Phase 10: produce synchronized, immutable and replayable episode
+records before any DCM is allowed to direct flight.

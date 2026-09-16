@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+"""Run the live V1 acceptance suite against an active sim and Drone API."""
+
+import os
+from pathlib import Path
+
+root = Path(__file__).resolve().parent.parent
+python = root / ".venv/bin/python"
+test = root / "scripts/autonomy/run_v1_acceptance.py"
+os.execv(str(python), [str(python), str(test), *os.sys.argv[1:]])

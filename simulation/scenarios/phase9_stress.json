@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "name": "phase9_stress",
+  "world_profile": "adverse",
+  "environment_preset": "custom",
+  "vehicle_profile": "akshu_compact_sitl",
+  "initial_pose": {"x_m": 0, "y_m": 0, "z_m": 0.195, "yaw_deg": 0},
+  "home": {"latitude_deg": -35.363262, "longitude_deg": 149.165237, "elevation_m": 584, "heading_deg": 0},
+  "seed": 97,
+  "wind": {"enabled": true, "speed_m_s": 4.0, "direction_deg": 120, "rise_time_s": 3, "gust_amplitude_fraction": 0.5, "gust_period_s": 7, "direction_swing_deg": 60, "direction_period_s": 15, "operational_limit_m_s": 6},
+  "obstacles": [
+    {"name": "stress_wall", "type": "wall", "center_m": [8, 0, 2], "size_m": [0.3, 8, 4]},
+    {"name": "stress_building_north", "type": "building", "center_m": [14, 7, 3], "size_m": [7, 6, 6]},
+    {"name": "stress_building_south", "type": "building", "center_m": [14, -7, 3], "size_m": [7, 6, 6]},
+    {"name": "stress_box", "type": "box", "center_m": [20, 0, 1.5], "size_m": [2, 2, 3]},
+    {"name": "stress_tree_north", "type": "tree", "center_m": [23, 6, 0], "radius_m": 0.4, "height_m": 5, "canopy_radius_m": 2.4, "canopy_collision": "enabled"},
+    {"name": "stress_tree_south", "type": "tree", "center_m": [23, -6, 0], "radius_m": 0.4, "height_m": 5, "canopy_radius_m": 2.4, "canopy_collision": "enabled"}
+  ],
+  "sensor_profile": "physical",
+  "sensor_fault_schedule": [],
+  "gps_degradation": {"position_stddev_m": 0.5, "velocity_stddev_m_s": 0.12},
+  "communication": {"delay_s": 0, "dropout_s": 0},
+  "battery": {"initial_soc": 0.8, "load_w": 800},
+  "mission": {"type": "takeoff_hover_land", "altitude_m": 3, "hover_s": 10},
+  "maximum_duration_s": 180,
+  "success": {"expected_outcome": "pass", "maximum_drift_m": 1.0, "maximum_tilt_deg": 20, "minimum_real_time_factor": 0.8},
+  "ground_truth": {"routes": [
+    {"name": "stress_blocked", "clearance_m": 1.5, "waypoints_enu_m": [[0, 0, 3], [18, 12, 3]]}
+  ]}
+}

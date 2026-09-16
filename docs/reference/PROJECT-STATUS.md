@@ -25,9 +25,9 @@ LLM-controlled drone stack.
 | Keyboard manual control | Implemented; simulation-only | `scripts/manual-control` |
 | Xbox manual control | Background polling hardware-verified | SDL Xbox 360 mapping |
 | Forward video | H.264/RTP onboard stream and ground viewer verified | `scripts/view-camera` |
-| C++ autonomy services | Scaffold only | empty component directories |
-| Drone API protobuf | Valid proto3 package placeholders | definitions belong to Phase 8 |
-| Perception/obstacle avoidance | Not implemented | directories are scaffolds |
+| C++ autonomy services | Phase 8 complete | Drone API, authority, guardrails, executor, state engine, safety supervisor and MAVLink gateway |
+| Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
+| Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
 | DCM/model integration | Not implemented | runtime directories are scaffolds |
 | Dataset/evaluation system | Architecture only | planned Phases 10–12 |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
@@ -71,10 +71,32 @@ reports are versioned as `SIM-*` documents.
   avoidance planner exists.
 - No real Pixhawk, Jetson or physical sensor adapter has passed a test.
 
-## Next Gate
+## Current Gate
 
-Begin Phase 8 by defining the versioned state, action, mission and Drone API
-contracts, then generate their C++/Python bindings. Implement a deterministic
-mock client through guardrails before any DCM integration. The DCM must never
-connect directly to MAVLink; later integration passes proposed actions through
-the Drone API and guardrails.
+Phase 8 is complete. The local C++ daemon owns the ArduPilot MAVLink connection
+and exposes typed gRPC session, authority, state, health and action services.
+Commands are lease-controlled, idempotent, deadline-bound, validated against a
+versioned policy and tracked to physical terminal conditions. An independent
+safety monitor covers stale state, link loss, low/critical battery, geofence
+breach and manual takeover. `run-mission` and `test-phase8` are pure Drone API
+clients and never import a MAVLink library.
+
+The 2026-09-12 acceptance ran M01–M09 plus Orbit through the Drone API against
+ArduPilot SITL; every case passed. A native injected-failure test covers M10 by
+making telemetry stale during an action and verifying an
+`ABORTED_BY_SAFETY` result plus BRAKE recovery. See
+`simulation/PHASE-8-ACCEPTANCE.md`.
+
+Phase 9 is complete. The runtime consumes live 360° multilayer Gazebo LiDAR,
+normalizes body-frame returns into an expiring local-NED map, exposes perception
+health through gRPC, plans clearance-inflated local detours and independently
+commands BRAKE for stale perception or immediate frontal hazards. The headless
+stress acceptance reached its destination through a safe detour in turbulent
+gusts. Independent ground truth measured zero collisions, 1.606 m minimum
+clearance and a 0.540 m goal error. A live LiDAR dropout produced the required
+safety abort/BRAKE and recovered before landing; see
+`simulation/PHASE-9-ACCEPTANCE.md`.
+
+Phase 10 is next: immutable synchronized episode records and deterministic
+replay. Physical sensor drivers and measured self-masks remain Phase 13 work;
+their normalized contracts and frame-parity tests already exist.

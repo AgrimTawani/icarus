@@ -1,3 +1,234 @@
 syntax = "proto3";
 
 package icarus.v1;
+
+import "icarus/v1/state.proto";
+
+message CommandContext {
+  string request_id = 1;
+  string idempotency_key = 2;
+  string vehicle_id = 3;
+  string client_id = 4;
+  string control_lease_id = 5;
+  int64 issued_at_unix_ms = 6;
+  int64 expires_at_unix_ms = 7;
+  uint64 minimum_state_sequence = 8;
+  string trace_id = 9;
+  optional string mission_authorization_id = 10;
+  string session_id = 11;
+}
+
+enum ActionType {
+  ACTION_TYPE_UNSPECIFIED = 0;
+  ACTION_TYPE_ARM = 1;
+  ACTION_TYPE_DISARM = 2;
+  ACTION_TYPE_TAKEOFF = 3;
+  ACTION_TYPE_GOTO = 4;
+  ACTION_TYPE_EXECUTE_ROUTE = 5;
+  ACTION_TYPE_HOLD = 6;
+  ACTION_TYPE_RETURN_HOME = 7;
+  ACTION_TYPE_LAND = 8;
+  ACTION_TYPE_CANCEL = 9;
+  ACTION_TYPE_ORBIT = 10;
+}
+
+enum ActionState {
+  ACTION_STATE_UNSPECIFIED = 0;
+  ACTION_STATE_REJECTED = 1;
+  ACTION_STATE_ACCEPTED = 2;
+  ACTION_STATE_QUEUED = 3;
+  ACTION_STATE_VALIDATING = 4;
+  ACTION_STATE_EXECUTING = 5;
+  ACTION_STATE_SUCCEEDED = 6;
+  ACTION_STATE_CANCELLED = 7;
+  ACTION_STATE_TIMED_OUT = 8;
+  ACTION_STATE_FAILED = 9;
+  ACTION_STATE_PREEMPTED = 10;
+  ACTION_STATE_ABORTED_BY_SAFETY = 11;
+}
+
+enum ReasonCode {
+  REASON_CODE_UNSPECIFIED = 0;
+  REASON_CODE_OK = 1;
+  REASON_CODE_INVALID_ARGUMENT = 2;
+  REASON_CODE_UNSUPPORTED = 3;
+  REASON_CODE_NOT_CONNECTED = 4;
+  REASON_CODE_CONTROL_LEASE_REQUIRED = 5;
+  REASON_CODE_CONTROL_LEASE_EXPIRED = 6;
+  REASON_CODE_CONTROL_CONFLICT = 7;
+  REASON_CODE_REQUEST_EXPIRED = 8;
+  REASON_CODE_STATE_STALE = 9;
+  REASON_CODE_STATE_CHANGED = 10;
+  REASON_CODE_NOT_LANDED = 11;
+  REASON_CODE_NOT_ARMED = 12;
+  REASON_CODE_ALREADY_ARMED = 13;
+  REASON_CODE_PREFLIGHT_CHECK_FAILED = 14;
+  REASON_CODE_BATTERY_BELOW_THRESHOLD = 15;
+  REASON_CODE_ESTIMATOR_UNHEALTHY = 16;
+  REASON_CODE_POSITION_UNAVAILABLE = 17;
+  REASON_CODE_HOME_UNAVAILABLE = 18;
+  REASON_CODE_GEOFENCE_VIOLATION = 19;
+  REASON_CODE_ALTITUDE_LIMIT = 20;
+  REASON_CODE_SPEED_LIMIT = 21;
+  REASON_CODE_ACTION_CONFLICT = 22;
+  REASON_CODE_ACTION_NOT_FOUND = 23;
+  REASON_CODE_ACTION_NOT_CANCELLABLE = 24;
+  REASON_CODE_AUTOPILOT_REJECTED = 25;
+  REASON_CODE_AUTOPILOT_TIMEOUT = 26;
+  REASON_CODE_COMPLETION_TIMEOUT = 27;
+  REASON_CODE_MANUAL_OVERRIDE = 28;
+  REASON_CODE_SAFETY_INTERVENTION = 29;
+  REASON_CODE_MISSION_AUTHORIZATION_REQUIRED = 30;
+  REASON_CODE_INTERNAL_ERROR = 31;
+}
+
+enum HeadingMode {
+  HEADING_MODE_UNSPECIFIED = 0;
+  HEADING_MODE_KEEP_CURRENT = 1;
+  HEADING_MODE_FACE_PATH = 2;
+  HEADING_MODE_ABSOLUTE = 3;
+  HEADING_MODE_FACE_POINT = 4;
+}
+
+message HeadingPolicy {
+  HeadingMode mode = 1;
+  optional double heading_deg = 2;
+  optional Position face_point = 3;
+}
+
+message ActionLimits {
+  optional double maximum_ground_speed_mps = 1;
+  optional double maximum_climb_rate_mps = 2;
+  optional double maximum_descent_rate_mps = 3;
+  optional double minimum_clearance_m = 4;
+  optional uint32 execution_timeout_ms = 5;
+}
+
+message ArmRequest {
+  CommandContext context = 1;
+}
+
+message DisarmRequest {
+  CommandContext context = 1;
+}
+
+message TakeoffRequest {
+  CommandContext context = 1;
+  double target_altitude_agl_m = 2;
+  HeadingPolicy heading = 3;
+  ActionLimits limits = 4;
+}
+
+message GotoRequest {
+  CommandContext context = 1;
+  Position destination = 2;
+  double acceptance_radius_m = 3;
+  HeadingPolicy heading = 4;
+  ActionLimits limits = 5;
+  bool fly_through = 6;
+}
+
+message RoutePoint {
+  Position position = 1;
+  double acceptance_radius_m = 2;
+  HeadingPolicy heading = 3;
+  ActionLimits limits = 4;
+  bool fly_through = 5;
+  uint32 hold_time_ms = 6;
+}
+
+enum RouteCompletionBehavior {
+  ROUTE_COMPLETION_BEHAVIOR_UNSPECIFIED = 0;
+  ROUTE_COMPLETION_BEHAVIOR_HOLD = 1;
+  ROUTE_COMPLETION_BEHAVIOR_RETURN_HOME = 2;
+  ROUTE_COMPLETION_BEHAVIOR_LAND = 3;
+}
+
+message ExecuteRouteRequest {
+  CommandContext context = 1;
+  string route_id = 2;
+  repeated RoutePoint points = 3;
+  RouteCompletionBehavior completion_behavior = 4;
+}
+
+message HoldRequest {
+  CommandContext context = 1;
+  optional uint32 duration_ms = 2;
+  HeadingPolicy heading = 3;
+}
+
+enum ReturnCompletionBehavior {
+  RETURN_COMPLETION_BEHAVIOR_UNSPECIFIED = 0;
+  RETURN_COMPLETION_BEHAVIOR_LAND_AT_HOME = 1;
+  RETURN_COMPLETION_BEHAVIOR_HOLD_AT_HOME = 2;
+}
+
+message ReturnHomeRequest {
+  CommandContext context = 1;
+  ReturnCompletionBehavior completion_behavior = 2;
+}
+
+message LandRequest {
+  CommandContext context = 1;
+}
+
+message CancelActionRequest {
+  CommandContext context = 1;
+  string action_id = 2;
+}
+
+message OrbitRequest {
+  CommandContext context = 1;
+  Position center = 2;
+  double radius_m = 3;
+  double altitude_m = 4;
+  CoordinateFrame altitude_frame = 5;
+  double ground_speed_mps = 6;
+  bool clockwise = 7;
+  double revolutions = 8;
+  HeadingPolicy heading = 9;
+}
+
+message ActionCommand {
+  oneof request {
+    ArmRequest arm = 1;
+    DisarmRequest disarm = 2;
+    TakeoffRequest takeoff = 3;
+    GotoRequest goto = 4;
+    ExecuteRouteRequest execute_route = 5;
+    HoldRequest hold = 6;
+    ReturnHomeRequest return_home = 7;
+    LandRequest land = 8;
+    OrbitRequest orbit = 9;
+  }
+}
+
+message ActionReceipt {
+  string action_id = 1;
+  ActionState disposition = 2;
+  ReasonCode reason_code = 3;
+  string message = 4;
+  int64 received_at_unix_ms = 5;
+}
+
+message ActionStatus {
+  string action_id = 1;
+  ActionType type = 2;
+  ActionState state = 3;
+  ReasonCode reason_code = 4;
+  string message = 5;
+  int64 accepted_at_unix_ms = 6;
+  int64 started_at_unix_ms = 7;
+  int64 finished_at_unix_ms = 8;
+  double progress = 9;
+  DroneState terminal_state = 10;
+  string request_hash = 11;
+}
+
+message ValidationResult {
+  bool valid = 1;
+  ReasonCode reason_code = 2;
+  string message = 3;
+  uint64 evaluated_state_sequence = 4;
+  repeated string warnings = 5;
+}

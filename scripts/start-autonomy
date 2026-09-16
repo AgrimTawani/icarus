@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+"""Build and run the local Drone API against the active simulator."""
+
+import json
+import os
+import socket
+import subprocess
+from pathlib import Path
+
+root = Path(__file__).resolve().parent.parent
+session_path = root / "logs/simulation/active_session.json"
+if not session_path.is_file():
+    raise SystemExit("No active simulator; run ./scripts/start-sim first")
+session = json.loads(session_path.read_text())
+if session.get("status") != "ready":
+    raise SystemExit("Active simulator is not ready")
+try:
+    os.kill(int(session["launcher_pid"]), 0)
+except (KeyError, ValueError, ProcessLookupError) as error:
+    raise SystemExit("Simulator session is stale; restart ./scripts/start-sim") from error
+with socket.socket() as probe:
+    if probe.connect_ex(("127.0.0.1", 50051)) == 0:
+        raise SystemExit("Drone API port 50051 is already in use")
+
+subprocess.run([str(root / "scripts/generate-proto")], check=True)
+subprocess.run(
+    [
+        "cmake", "-S", str(root), "-B", str(root / "build/phase8"),
+        "-G", "Ninja", "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+    ],
+    check=True,
+)
+subprocess.run(
+    ["cmake", "--build", str(root / "build/phase8"), "-j", "2"], check=True
+)
+binary = root / "build/phase8/icarus-drone-api"
+if not binary.is_file():
+    raise SystemExit("Drone API target unavailable; simulation dependencies are incomplete")
+os.chdir(root)
+partition = session.get("partition")
+if not partition:
+    raise SystemExit("Active simulator did not publish its Gazebo partition")
+os.environ["GZ_PARTITION"] = partition
+os.execv(
+    str(binary),
+    [
+        str(binary), "--listen", "127.0.0.1:50051", "--mavlink-host",
+        "127.0.0.1", "--mavlink-port", "5760", "--safety-policy",
+        str(root / "config/safety/v1.yaml"),
+    ],
+)

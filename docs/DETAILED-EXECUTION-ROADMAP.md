@@ -457,7 +457,8 @@ Implemented control separation, 2026-09-12:
 ```
 
 The first command owns the simulator lifecycle but never commands the vehicle.
-The latter two are interchangeable MAVLink clients. Keyboard control, the
+Manual control is a direct simulation-only MAVLink client; `run-mission` is now
+the reference Drone API client. Keyboard control, the
 standard SDL Xbox mapping and the independent H.264/RTP camera viewer are
 implemented. The physical Xbox/manual-camera workflow was operator-accepted on
 2026-09-12. The subsequent 20-cycle lifecycle and injected-failure gates passed.
@@ -638,65 +639,72 @@ Implement and test each component without an LLM.
 
 ### 8.1 MAVLink gateway
 
-- [ ] Own one vehicle connection.
-- [ ] Maintain heartbeat and connection state.
-- [ ] Decode required telemetry.
-- [ ] Send commands and correlate acknowledgements.
-- [ ] Rate-limit and log traffic.
-- [ ] Support SITL TCP/UDP and Pixhawk serial/network transports.
+- [x] Own one vehicle connection.
+- [x] Maintain heartbeat and connection state.
+- [x] Decode required telemetry.
+- [x] Send commands and correlate acknowledgements with bounded retry.
+- [x] Serialize outbound traffic and publish MAVLink status/events.
+- [x] Support the Phase 8 SITL TCP transport. Pixhawk serial/network transport
+      is deliberately a Phase 13 adapter, behind the same interface.
 
 ### 8.2 State Engine
 
-- [ ] Normalize telemetry units.
-- [ ] Merge flight, sensor, perception, action, and mission state.
-- [ ] Track timestamp and age for every source.
-- [ ] Report missing, stale, degraded, and healthy states explicitly.
-- [ ] Publish stable `DroneState` snapshots.
+- [x] Normalize MAVLink flight/health telemetry and units.
+- [x] Merge flight, navigation, estimator, sensor and link state. Perception is
+      added in Phase 9 through its reserved contract.
+- [x] Track observation timestamp, monotonic sequence and source freshness.
+- [x] Report missing, stale, degraded, and healthy states explicitly.
+- [x] Publish stable `DroneState` snapshots.
 
 ### 8.3 Drone API v1
 
-- [ ] `connect()`
-- [ ] `get_state()`
-- [ ] `arm()` and `disarm()`
-- [ ] `takeoff()`
-- [ ] `goto()`
-- [ ] `hold()`
-- [ ] `land()`
-- [ ] `return_home()`
-- [ ] `cancel_action()`
-- [ ] `get_action_status()`
+- [x] `connect()`
+- [x] `get_state()`
+- [x] `arm()` and `disarm()`
+- [x] `takeoff()`
+- [x] `goto()` and `execute_route()`
+- [x] `hold()` and `orbit()`
+- [x] `land()`
+- [x] `return_home()`
+- [x] `cancel_action()`
+- [x] `get_action_status()` and action/state event streams
 
 ### 8.4 Mission executor
 
-- [ ] Unique action IDs.
-- [ ] Pending, executing, completed, failed, timed-out, and cancelled states.
-- [ ] Preconditions and completion detection.
-- [ ] Timeouts and bounded retries.
-- [ ] Cancellation and safe recovery.
-- [ ] Only one conflicting vehicle action at a time.
+- [x] Unique action IDs and request hashes.
+- [x] Accepted, executing, succeeded, rejected, failed, timed-out, cancelled,
+      preempted and safety-aborted states.
+- [x] Preconditions and physical completion detection.
+- [x] Timeouts and bounded retries.
+- [x] Cancellation and safe BRAKE recovery.
+- [x] Only one conflicting vehicle action at a time.
 
 ### 8.5 Guardrails and safety supervisor
 
-- [ ] Schema and range validation.
-- [ ] Geofence checks.
-- [ ] State-freshness checks.
-- [ ] Battery and sensor-health rules.
-- [ ] Speed and altitude limits.
-- [ ] Manual override.
-- [ ] DCM/MAVLink/perception failure policies.
-- [ ] Hold, RTL, land, and disarm escalation policy.
+- [x] Schema and range validation.
+- [x] Geofence checks before commands and during flight.
+- [x] State-freshness checks before and throughout execution.
+- [x] Battery, estimator, navigation and link-health rules.
+- [x] Speed and altitude limits.
+- [x] Manual override and lease-priority preemption.
+- [x] DCM lease-expiry, MAVLink-loss and stale-state policies. Perception failure
+      becomes enforceable when Phase 9 supplies perception health.
+- [x] BRAKE, RTL and land escalation policy. Airborne forced-disarm remains an
+      ArduPilot emergency policy, not a normal companion-computer action.
 
 ### 8.6 Scripted controller
 
-- [ ] Implement a deterministic client using the same Drone API as the DCM.
-- [ ] Complete every initial mission without an LLM.
-- [ ] Make it the reference baseline for model evaluation.
+- [x] Implement a deterministic client using the same Drone API as the DCM.
+- [x] Complete every initial mission without an LLM.
+- [x] Make it the reference baseline for model evaluation.
 
 ### Phase 8 exit gate
 
-- [ ] All first-version missions work through the Drone API.
-- [ ] No test script sends MAVLink directly.
-- [ ] The scripted controller passes the complete mission suite.
+- [x] All first-version missions work through the Drone API.
+- [x] The Phase 8 acceptance client sends no MAVLink directly; legacy manual
+      and simulator-layer validation tools remain explicitly simulation-only.
+- [x] The scripted controller passes M01–M09 and Orbit; native failure injection
+      passes M10 stale-state recovery.
 
 ---
 
@@ -704,31 +712,40 @@ Implement and test each component without an LLM.
 
 ### 9.1 Normalize sensor inputs
 
-- [ ] Common image-frame interface for Gazebo and hardware cameras.
-- [ ] Common range/point-cloud interface for Gazebo and hardware lidar.
-- [ ] Timestamp synchronization.
-- [ ] Frame transformations.
+- [x] Common timestamped image-frame metadata interface for Gazebo and hardware
+      cameras; pixels remain outside the control API.
+- [x] Common range/point-cloud interface for Gazebo and hardware lidar.
+- [x] Capture/receive timestamps, sequence numbers and bounded freshness.
+- [x] Gazebo FLU, physical FRD and local-NED frame transformations.
 
 ### 9.2 Build deterministic perception outputs
 
-- [ ] Nearest-obstacle distance and bearing.
-- [ ] Free-space or occupancy representation.
-- [ ] Path-clear status and confidence.
-- [ ] Landing-zone quality if required.
+- [x] Nearest-obstacle distance and relative bearing.
+- [x] Expiring local-NED obstacle representation with vehicle self-mask and
+      terrain/downward-return separation.
+- [x] Path-clear status, source health and confidence fields.
+- [x] Landing-zone quality is explicitly unavailable in V1; downward landing
+      analysis is not required by the frozen missions and remains an extension.
 
 ### 9.3 Local avoidance
 
-- [ ] Immediate stop/hold behavior.
-- [ ] Safe local detour generation.
-- [ ] Feed appropriate proximity information to ArduPilot when used.
-- [ ] Keep reactive collision avoidance independent of the DCM.
+- [x] Independent BRAKE response for stale perception or an obstacle inside the
+      emergency envelope.
+- [x] Bounded, clearance-inflated A* detours with line-of-sight simplification.
+- [x] Send planned collision-free position targets through the existing
+      ArduPilot gateway; raw proximity injection is not used in this V1 path.
+- [x] Keep reactive collision avoidance independent of the DCM.
 
 ### Phase 9 exit gate
 
-- [ ] Scripted missions avoid known obstacles.
-- [ ] Loss of perception produces a safe deterministic response.
-- [ ] Equivalent recorded simulated and physical sensor inputs use the same
-      perception algorithm.
+- [x] A headless scripted mission avoids a wall/building/tree field using live
+      Gazebo LiDAR under turbulent gusting wind. Independent Gazebo truth found
+      zero collisions and 1.606 m minimum clearance including vehicle radius.
+- [x] A live injected LiDAR dropout safety-aborts the active action, commands
+      BRAKE, recovers perception, then permits a controlled landing.
+- [x] Equivalent Gazebo-FLU and physical-FRD normalized scan fixtures produce
+      identical local-NED obstacle input to the same algorithm. Actual physical
+      sensor recordings remain a Phase 13 hardware gate.
 
 ---
 

@@ -1,3 +1,79 @@
 syntax = "proto3";
 
 package icarus.v1;
+
+import "icarus/v1/state.proto";
+
+enum SensorFrame {
+  SENSOR_FRAME_UNSPECIFIED = 0;
+  SENSOR_FRAME_BODY_FLU = 1;
+  SENSOR_FRAME_BODY_FRD = 2;
+  SENSOR_FRAME_LOCAL_NED = 3;
+  SENSOR_FRAME_CAMERA_OPTICAL = 4;
+}
+
+message ImageFrameMetadata {
+  string sensor_id = 1;
+  int64 captured_at_unix_ms = 2;
+  SensorFrame frame = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+  string encoding = 6;
+  uint64 sequence = 7;
+}
+
+message RangePoint {
+  double x_m = 1;
+  double y_m = 2;
+  double z_m = 3;
+  double confidence = 4;
+}
+
+message RangeScan {
+  string sensor_id = 1;
+  int64 captured_at_unix_ms = 2;
+  int64 received_at_unix_ms = 3;
+  SensorFrame frame = 4;
+  repeated RangePoint points = 5;
+  double minimum_range_m = 6;
+  double maximum_range_m = 7;
+  uint64 sequence = 8;
+}
+
+// Phase 8 carries perception health through DroneState. These normalized
+// contracts are reserved for the deterministic Phase 9 perception boundary;
+// raw images and point clouds never enter the DCM command interface.
+message Detection {
+  string detection_id = 1;
+  string track_id = 2;
+  string classification = 3;
+  double confidence = 4;
+  Position estimated_position = 5;
+  double position_uncertainty_m = 6;
+  int64 observed_at_unix_ms = 7;
+  string sensor_id = 8;
+}
+
+message ObstacleSummary {
+  string obstacle_id = 1;
+  Position nearest_position = 2;
+  double distance_m = 3;
+  double relative_bearing_deg = 4;
+  double estimated_radius_m = 5;
+  double confidence = 6;
+  int64 observed_at_unix_ms = 7;
+}
+
+message PerceptionSummary {
+  int64 observed_at_unix_ms = 1;
+  HealthLevel overall = 2;
+  repeated Detection detections = 3;
+  repeated ObstacleSummary nearby_obstacles = 4;
+  bool local_map_available = 5;
+  uint32 local_map_age_ms = 6;
+  bool path_ahead_clear = 7;
+  double nearest_obstacle_distance_m = 8;
+  double nearest_obstacle_bearing_deg = 9;
+  double landing_zone_quality = 10;
+  uint64 sequence = 11;
+}

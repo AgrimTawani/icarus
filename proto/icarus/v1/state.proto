@@ -1,3 +1,175 @@
 syntax = "proto3";
 
 package icarus.v1;
+
+enum CoordinateFrame {
+  COORDINATE_FRAME_UNSPECIFIED = 0;
+  COORDINATE_FRAME_WGS84_AMSL = 1;
+  COORDINATE_FRAME_WGS84_ABOVE_HOME = 2;
+  COORDINATE_FRAME_WGS84_ABOVE_TERRAIN = 3;
+  COORDINATE_FRAME_LOCAL_NED = 4;
+}
+
+enum HealthLevel {
+  HEALTH_LEVEL_UNSPECIFIED = 0;
+  HEALTH_LEVEL_HEALTHY = 1;
+  HEALTH_LEVEL_DEGRADED = 2;
+  HEALTH_LEVEL_FAILED = 3;
+  HEALTH_LEVEL_UNAVAILABLE = 4;
+}
+
+enum FlightPhase {
+  FLIGHT_PHASE_UNSPECIFIED = 0;
+  FLIGHT_PHASE_DISARMED = 1;
+  FLIGHT_PHASE_ARMED_GROUND = 2;
+  FLIGHT_PHASE_TAKING_OFF = 3;
+  FLIGHT_PHASE_AIRBORNE = 4;
+  FLIGHT_PHASE_HOLDING = 5;
+  FLIGHT_PHASE_RETURNING = 6;
+  FLIGHT_PHASE_LANDING = 7;
+  FLIGHT_PHASE_EMERGENCY = 8;
+}
+
+enum ControlRole {
+  CONTROL_ROLE_UNSPECIFIED = 0;
+  CONTROL_ROLE_OBSERVER = 1;
+  CONTROL_ROLE_DCM_AUTONOMY = 2;
+  CONTROL_ROLE_SCRIPTED_AUTONOMY = 3;
+  CONTROL_ROLE_MANUAL_OPERATOR = 4;
+  CONTROL_ROLE_SAFETY_SUPERVISOR = 5;
+  CONTROL_ROLE_MAINTAINER = 6;
+}
+
+message GeoPosition {
+  double latitude_deg = 1;
+  double longitude_deg = 2;
+  double altitude_m = 3;
+  CoordinateFrame frame = 4;
+}
+
+message LocalPositionNed {
+  double north_m = 1;
+  double east_m = 2;
+  double down_m = 3;
+  string origin_id = 4;
+}
+
+message Position {
+  oneof value {
+    GeoPosition geo = 1;
+    LocalPositionNed local_ned = 2;
+  }
+}
+
+message Vector3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Attitude {
+  double roll_rad = 1;
+  double pitch_rad = 2;
+  double yaw_rad = 3;
+}
+
+message SourceHealth {
+  string source_id = 1;
+  HealthLevel level = 2;
+  int64 sample_time_unix_ms = 3;
+  uint32 age_ms = 4;
+  double quality = 5;
+  string detail = 6;
+}
+
+message BatteryState {
+  HealthLevel level = 1;
+  double remaining_percent = 2;
+  double voltage_v = 3;
+  double current_a = 4;
+  double consumed_mah = 5;
+  double temperature_c = 6;
+  uint32 estimated_remaining_s = 7;
+}
+
+message EstimatorState {
+  HealthLevel level = 1;
+  bool attitude_valid = 2;
+  bool horizontal_position_valid = 3;
+  bool vertical_position_valid = 4;
+  bool absolute_position_valid = 5;
+  string primary_horizontal_source = 6;
+  string primary_vertical_source = 7;
+  double horizontal_uncertainty_m = 8;
+  double vertical_uncertainty_m = 9;
+}
+
+message LinkState {
+  HealthLevel level = 1;
+  bool connected = 2;
+  uint32 heartbeat_age_ms = 3;
+  double packet_loss_percent = 4;
+  double round_trip_time_ms = 5;
+  string transport = 6;
+}
+
+message ControlAuthority {
+  string lease_id = 1;
+  string client_id = 2;
+  ControlRole role = 3;
+  int64 expires_at_unix_ms = 4;
+}
+
+message DroneState {
+  string vehicle_id = 1;
+  uint64 sequence = 2;
+  int64 observed_at_unix_ms = 3;
+  FlightPhase flight_phase = 4;
+  bool armed = 5;
+  bool landed = 6;
+  Position position = 7;
+  Position home = 8;
+  Vector3 velocity_ned_mps = 9;
+  Attitude attitude = 10;
+  double relative_altitude_m = 11;
+  double ground_speed_mps = 12;
+  BatteryState battery = 13;
+  EstimatorState estimator = 14;
+  LinkState mavlink = 15;
+  ControlAuthority authority = 16;
+  string active_action_id = 17;
+  bool manual_override_active = 18;
+  bool geofence_breached = 19;
+  repeated SourceHealth sources = 20;
+  LocalPositionNed local_position_ned = 21;
+}
+
+message HealthReport {
+  string vehicle_id = 1;
+  uint64 state_sequence = 2;
+  int64 observed_at_unix_ms = 3;
+  HealthLevel overall = 4;
+  bool ready_to_arm = 5;
+  bool ready_to_navigate = 6;
+  repeated SourceHealth subsystems = 7;
+  repeated string blocking_reason_codes = 8;
+}
+
+enum EventSeverity {
+  EVENT_SEVERITY_UNSPECIFIED = 0;
+  EVENT_SEVERITY_INFO = 1;
+  EVENT_SEVERITY_WARNING = 2;
+  EVENT_SEVERITY_ERROR = 3;
+  EVENT_SEVERITY_CRITICAL = 4;
+}
+
+message VehicleEvent {
+  string event_id = 1;
+  string vehicle_id = 2;
+  int64 occurred_at_unix_ms = 3;
+  EventSeverity severity = 4;
+  string code = 5;
+  string message = 6;
+  string related_action_id = 7;
+  uint64 state_sequence = 8;
+}

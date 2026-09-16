@@ -125,6 +125,19 @@ These are testing commands, not part of the normal three-process manual launch:
 ./scripts/sim --scenario wind_limit_reject
 ```
 
+The rigorous Phase 9 gate uses three terminals and no GUI:
+
+```bash
+./scripts/start-sim --profile simulation-perception-stress
+./scripts/start-autonomy
+./scripts/test-phase9
+```
+
+It scores the independent Gazebo trajectory for collisions, physical clearance,
+goal error, path efficiency, tilt, speed and measured wind, then injects a live
+LiDAR dropout and requires deterministic BRAKE plus recovery. For manual visual
+inspection, add `--gui` to the first command.
+
 The launcher handles termination, stops owned children and releases TCP 5760
 and UDP 9002. Do not kill individual children first unless diagnosing cleanup.
 

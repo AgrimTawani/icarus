@@ -62,6 +62,47 @@ def collisions(scenario, a, b, radius):
     return hits
 
 
+def point_box_clearance(point, center, size):
+    outside = [
+        max(abs(point[i] - center[i]) - size[i] / 2, 0.0) for i in range(3)
+    ]
+    distance_outside = math.sqrt(sum(value * value for value in outside))
+    if distance_outside:
+        return distance_outside
+    return -min(size[i] / 2 - abs(point[i] - center[i]) for i in range(3))
+
+
+def point_obstacle_clearance(point, obstacle):
+    if obstacle["type"] != "tree":
+        return point_box_clearance(point, obstacle["center_m"], obstacle["size_m"])
+    x, y = obstacle["center_m"][:2]
+    trunk_center = [x, y, obstacle["height_m"] / 2]
+    trunk_size = [
+        2 * obstacle["radius_m"],
+        2 * obstacle["radius_m"],
+        obstacle["height_m"],
+    ]
+    clearances = [point_box_clearance(point, trunk_center, trunk_size)]
+    if obstacle["canopy_collision"] == "enabled":
+        canopy = [
+            x,
+            y,
+            obstacle["height_m"] + obstacle["canopy_radius_m"] * 0.65,
+        ]
+        clearances.append(distance(point, canopy) - obstacle["canopy_radius_m"])
+    return min(clearances)
+
+
+def minimum_clearance(scenario, points, vehicle_radius_m=0.35):
+    if not scenario["obstacles"] or not points:
+        return None
+    return min(
+        point_obstacle_clearance(point, obstacle) - vehicle_radius_m
+        for point in points
+        for obstacle in scenario["obstacles"]
+    )
+
+
 def score(scenario, points, route_name=None, vehicle_radius_m=0.35):
     if len(points) < 2:
         raise ValueError("trajectory needs at least two points")
@@ -79,6 +120,7 @@ def score(scenario, points, route_name=None, vehicle_radius_m=0.35):
             raise ValueError("unknown route: " + route_name)
         goal_error = distance(xyz[-1], route["waypoints_enu_m"][-1])
     duration = times[-1] - times[0]
+    clearance = minimum_clearance(scenario, xyz, vehicle_radius_m)
     checks = {
         "collision_free": not hits,
         "within_duration": duration <= scenario["maximum_duration_s"],
@@ -92,6 +134,7 @@ def score(scenario, points, route_name=None, vehicle_radius_m=0.35):
         "route": route_name,
         "goal_error_m": goal_error,
         "vehicle_radius_m": vehicle_radius_m,
+        "minimum_clearance_m": clearance,
     }
 
 

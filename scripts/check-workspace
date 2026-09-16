@@ -30,6 +30,10 @@ done
 "${PYTHON_BIN}" -m json.tool config/dependencies/platform.json >/dev/null
 "${PYTHON_BIN}" -m json.tool config/simulation/launch_profiles.json >/dev/null
 "${PROJECT_ROOT}/scripts/generate-proto" >/dev/null
+cmake -S "${PROJECT_ROOT}" -B "${PROJECT_ROOT}/build/phase8" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug >/dev/null
+cmake --build "${PROJECT_ROOT}/build/phase8" -j 2 >/dev/null
+ctest --test-dir "${PROJECT_ROOT}/build/phase8" --output-on-failure
 "${PROJECT_ROOT}/scripts/build-metadata" >/dev/null
 
 if [[ "${SCOPE}" == "simulation" ]]; then

@@ -21,6 +21,11 @@
       "scenario": "adverse_combined",
       "description": "Integrated wind, sensor, link and battery fault scenario"
     },
+    "simulation-perception-stress": {
+      "adapter": "sitl",
+      "scenario": "phase9_stress",
+      "description": "Turbulent obstacle field and live perception-failure gate"
+    },
     "hardware-bench": {
       "adapter": "hardware",
       "available": false,

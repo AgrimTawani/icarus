@@ -26,6 +26,12 @@ state_health:
   require_position_for_navigation: true
   require_home_for_takeoff: true
 
+perception:
+  maximum_age_ms: 750
+  minimum_clearance_m: 2.5
+  emergency_stop_distance_m: 2.5
+  failure_action: hold
+
 command:
   acknowledgement_timeout_ms: 2000
   maximum_retries: 1

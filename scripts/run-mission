@@ -1,12 +1,12 @@
 #!/usr/bin/python3
-"""Connect an automated mission client to the active Icarus simulator."""
+"""Connect a deterministic mission client exclusively through the Drone API."""
 
 import os
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
-python = root / "third_party/ardupilot/.venv/bin/python"
-client = root / "scripts/simulation/run_mission.py"
+python = root / ".venv/bin/python"
+client = root / "scripts/autonomy/run_mission.py"
 if not python.is_file():
-    raise SystemExit("Missing ArduPilot Python environment; run the dependency setup first")
+    raise SystemExit("Missing project environment; run ./scripts/bootstrap --profile dev")
 os.execv(str(python), [str(python), str(client), *os.sys.argv[1:]])

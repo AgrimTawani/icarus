@@ -23,6 +23,7 @@ def test_launch_profiles_resolve_to_versioned_scenarios():
         "simulation-wind",
         "simulation-obstacles",
         "simulation-adverse",
+        "simulation-perception-stress",
     }
     for name, profile in simulation.items():
         assert resolve_profile(name) == profile

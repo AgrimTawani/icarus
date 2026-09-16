@@ -1,3 +1,161 @@
 syntax = "proto3";
 
 package icarus.v1;
+
+import "icarus/v1/action.proto";
+import "icarus/v1/state.proto";
+import "icarus/v1/perception.proto";
+
+message ConnectRequest {
+  string client_id = 1;
+  string client_name = 2;
+  string requested_api_major = 3;
+}
+
+message ConnectResponse {
+  string session_id = 1;
+  string api_version = 2;
+  string server_instance_id = 3;
+  int64 server_time_unix_ms = 4;
+}
+
+message CloseSessionRequest {
+  string session_id = 1;
+}
+
+message Empty {}
+
+message GetCapabilitiesRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+}
+
+message Capability {
+  string name = 1;
+  bool supported = 2;
+  string version = 3;
+  map<string, string> attributes = 4;
+}
+
+message VehicleCapabilities {
+  string vehicle_id = 1;
+  string vehicle_type = 2;
+  string autopilot = 3;
+  string autopilot_version = 4;
+  repeated Capability capabilities = 5;
+}
+
+message AcquireControlRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+  ControlRole requested_role = 3;
+  uint32 requested_lease_ms = 4;
+  optional string mission_authorization_id = 5;
+  string client_id = 6;
+}
+
+message ControlLeaseResponse {
+  bool granted = 1;
+  ReasonCode reason_code = 2;
+  string message = 3;
+  ControlAuthority authority = 4;
+}
+
+message RenewControlRequest {
+  string session_id = 1;
+  string lease_id = 2;
+  uint32 requested_lease_ms = 3;
+}
+
+message ReleaseControlRequest {
+  string session_id = 1;
+  string lease_id = 2;
+}
+
+message GetStateRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+}
+
+message WatchStateRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+  uint32 maximum_rate_hz = 3;
+}
+
+message GetHealthRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+}
+
+message WatchEventsRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+  EventSeverity minimum_severity = 3;
+}
+
+message GetPerceptionRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+}
+
+message WatchPerceptionRequest {
+  string session_id = 1;
+  string vehicle_id = 2;
+  uint32 maximum_rate_hz = 3;
+}
+
+message ValidateActionRequest {
+  string session_id = 1;
+  ActionCommand command = 2;
+}
+
+message GetActionStatusRequest {
+  string session_id = 1;
+  string action_id = 2;
+}
+
+message WatchActionStatusRequest {
+  string session_id = 1;
+  string action_id = 2;
+}
+
+service SessionService {
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+  rpc CloseSession(CloseSessionRequest) returns (Empty);
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (VehicleCapabilities);
+}
+
+service AuthorityService {
+  rpc AcquireControl(AcquireControlRequest) returns (ControlLeaseResponse);
+  rpc RenewControl(RenewControlRequest) returns (ControlLeaseResponse);
+  rpc ReleaseControl(ReleaseControlRequest) returns (Empty);
+}
+
+service StateService {
+  rpc GetState(GetStateRequest) returns (DroneState);
+  rpc WatchState(WatchStateRequest) returns (stream DroneState);
+  rpc GetHealth(GetHealthRequest) returns (HealthReport);
+  rpc WatchEvents(WatchEventsRequest) returns (stream VehicleEvent);
+}
+
+service PerceptionService {
+  rpc GetPerception(GetPerceptionRequest) returns (PerceptionSummary);
+  rpc WatchPerception(WatchPerceptionRequest) returns (stream PerceptionSummary);
+}
+
+service ActionService {
+  rpc ValidateAction(ValidateActionRequest) returns (ValidationResult);
+  rpc Arm(ArmRequest) returns (ActionReceipt);
+  rpc Disarm(DisarmRequest) returns (ActionReceipt);
+  rpc Takeoff(TakeoffRequest) returns (ActionReceipt);
+  rpc Goto(GotoRequest) returns (ActionReceipt);
+  rpc ExecuteRoute(ExecuteRouteRequest) returns (ActionReceipt);
+  rpc Hold(HoldRequest) returns (ActionReceipt);
+  rpc ReturnHome(ReturnHomeRequest) returns (ActionReceipt);
+  rpc Land(LandRequest) returns (ActionReceipt);
+  rpc Orbit(OrbitRequest) returns (ActionReceipt);
+  rpc CancelAction(CancelActionRequest) returns (ActionReceipt);
+  rpc GetActionStatus(GetActionStatusRequest) returns (ActionStatus);
+  rpc WatchActionStatus(WatchActionStatusRequest) returns (stream ActionStatus);
+}

@@ -20,8 +20,8 @@ the corresponding simulation gates are measurable and stable.
 | 5 | Build deterministic worlds, wind, obstacles and faults | Complete |
 | 6 | Unified launch profiles, operator controls and manual test workflow | Complete |
 | 7 | Reproducible build/runtime packaging and CI foundation | Complete |
-| 8 | Drone API, state engine, MAVLink gateway, missions and guardrails | Planned |
-| 9 | Perception, obstacle map and local planner | Planned |
+| 8 | Drone API, state engine, MAVLink gateway, missions and guardrails | Complete |
+| 9 | Perception, obstacle map and local planner | Complete |
 | 10 | Synchronized logging, replay and dataset pipeline | Planned |
 | 11 | Pluggable DCM/model runtime with structured tool use | Planned |
 | 12 | Frozen scenario evaluation and model comparison | Planned |
@@ -114,7 +114,6 @@ train/evaluation separation before any fine-tuning experiment.
 
 1. Freeze the verified simulation and portable-runtime boundary; change it only
    for a demonstrated regression or later as-built calibration evidence.
-2. Define and implement the Phase 8 Drone API, state and action contracts.
-3. Put a deterministic mock client through guardrails before connecting a model.
-4. Implement the state engine, MAVLink gateway and safety-supervisor boundaries.
-5. Keep all later DCM actions behind the Drone API and guardrails—never MAVLink.
+2. Begin Phase 10 with the immutable episode manifest and synchronized streams.
+3. Add deterministic replay for state, perception, actions and safety decisions.
+4. Keep the later DCM behind the Drone API and guardrails—never MAVLink.

@@ -2,11 +2,10 @@
 
 ## Scope and Maturity
 
-This document defines the target architecture and clearly marks the implemented
-subset. As of 2026-09-12, the simulation foundation through Phase 5 is working.
-The protobuf files are initial contracts; most `cpp/`, `python/` and
-`perception/` service directories are scaffolds. Do not confuse the complete
-directory layout with a complete autonomy stack.
+As of 2026-09-16, the deterministic stack through Phase 9 is implemented:
+simulation, typed flight services, safety supervision, normalized LiDAR
+perception and local avoidance. DCM/model, replay/dataset and physical hardware
+areas remain later phases.
 
 ## System Boundary
 
@@ -143,9 +142,13 @@ continuously evaluates state even after acceptance. Loss of the DCM must not
 destabilize flight. Loss of companion compute or MAVLink follows an explicitly
 tested hold/RTL/land policy, while Pixhawk-native failsafes remain enabled.
 
-Obstacle avoidance is not currently implemented. Gazebo collision geometry and
-trajectory scoring are test infrastructure, not proof that the drone can avoid
-obstacles autonomously.
+Obstacle avoidance is deterministic and independent of the DCM. A normalized
+scan becomes a local-NED obstacle map; the planner inflates returns by policy
+clearance, searches a bounded grid, simplifies only line-of-sight-safe segments
+and sends those targets through the normal executor. The safety supervisor
+commands BRAKE if perception becomes stale or a frontal obstacle enters the
+emergency envelope. LiDAR is the V1 avoidance source; camera metadata is
+normalized but semantic vision is not claimed.
 
 ## Model Runtime and Evaluation
 

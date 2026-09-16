@@ -13,9 +13,15 @@ quickly establish the truth of the repository.
    — component boundaries, authority and deployment design.
 5. [`architecture/SIMULATION-CONNECTIONS.md`](architecture/SIMULATION-CONNECTIONS.md)
    — Gazebo, SITL, MAVLink and sensor connections.
-6. [`guides/GETTING-STARTED.md`](guides/GETTING-STARTED.md) — recreate the local
+6. [`architecture/DRONE-API-V1.md`](architecture/DRONE-API-V1.md) — Phase 8
+   command, authority, state and extension contract.
+7. [`simulation/PHASE-8-ACCEPTANCE.md`](simulation/PHASE-8-ACCEPTANCE.md) —
+   Drone API flight and injected-failure exit-gate evidence.
+8. [`simulation/PHASE-9-ACCEPTANCE.md`](simulation/PHASE-9-ACCEPTANCE.md) —
+   headless live-LiDAR obstacle-avoidance evidence.
+9. [`guides/GETTING-STARTED.md`](guides/GETTING-STARTED.md) — recreate the local
    environment.
-7. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
+10. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
    test and stop scenarios.
 
 ## Documentation Map
