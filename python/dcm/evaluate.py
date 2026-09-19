@@ -176,13 +176,18 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
     comparable = agreed = unscoreable = 0
     steady = []
     firsts = []
+    # The runtime stays up for the whole campaign, so only the very first
+    # decision pays to prefill a cold server. Pooling it with every episode's
+    # first decision would hide a 7218 ms cold start inside a 387 ms median.
+    cold_start_ms = (all_runs[0]["first_decision_latency_ms"]
+                     if all_runs else None)
     for run in all_runs:
         for status, value in run["counts"].items():
             totals[status] = totals.get(status, 0) + value
         comparable += run["comparable_points"]
         agreed += run["agreed_points"]
         unscoreable += run["unscoreable_points"]
-        if run["first_decision_latency_ms"] is not None:
+        if run["first_decision_latency_ms"] is not None and run is not all_runs[0]:
             firsts.append(run["first_decision_latency_ms"])
         if run["steady_latency"]:
             steady.append(run["steady_latency"]["median_ms"])
@@ -212,7 +217,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             "unscoreable_points": unscoreable,
         },
         "latency": {
-            "first_decision": summarize_latency(firsts),
+            "cold_start_ms": cold_start_ms,
+            "episode_first_decision": summarize_latency(firsts),
             "steady_state_medians": summarize_latency(steady),
         },
         "deterministic_episodes": sum(1 for e in per_episode if e["deterministic"]),
@@ -248,9 +254,12 @@ def format_report(report):
                  " (recorded action outside the vocabulary)")
     lines.append(f"{'stale refusals':<19}{totals['stale_refusals']}")
     lines.append("")
-    for label, key in (("first decision", "first_decision"),
+    cold = report["latency"].get("cold_start_ms")
+    if cold is not None:
+        lines.append(f"{'cold start':<19}{cold:.0f} ms (one per campaign)")
+    for label, key in (("episode first", "episode_first_decision"),
                        ("steady state", "steady_state_medians")):
-        stats = report["latency"][key]
+        stats = report["latency"].get(key)
         if stats:
             lines.append(
                 f"{label:<19}median {stats['median_ms']:.0f} ms, "

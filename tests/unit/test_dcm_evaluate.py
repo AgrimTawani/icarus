@@ -144,7 +144,8 @@ class ReportFormattingTests(unittest.TestCase):
                 "agreement_rate": 0.75, "unscoreable_points": 2,
             },
             "latency": {
-                "first_decision": summarize_latency([4257.0, 7204.0]),
+                "cold_start_ms": 7204.0,
+                "episode_first_decision": summarize_latency([4257.0]),
                 "steady_state_medians": summarize_latency([1200.0]),
             },
         }
