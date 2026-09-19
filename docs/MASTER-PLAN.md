@@ -22,8 +22,8 @@ the corresponding simulation gates are measurable and stable.
 | 7 | Reproducible build/runtime packaging and CI foundation | Complete |
 | 8 | Drone API, state engine, MAVLink gateway, missions and guardrails | Complete |
 | 9 | Perception, obstacle map and local planner | Complete |
-| 10 | Synchronized logging, replay and dataset pipeline | Planned |
-| 11 | Pluggable DCM/model runtime with structured tool use | Planned |
+| 10 | Synchronized logging, replay and dataset pipeline | Simulation capture/replay verified; full gate open |
+| 11 | Pluggable DCM/model runtime with structured tool use | Observe-only mock slice started; model not connected |
 | 12 | Frozen scenario evaluation and model comparison | Planned |
 | 13 | Hardware-in-loop and staged physical integration | Deferred |
 | 14 | Dataset curation, fine-tuning experiments and regression evaluation | Deferred |
@@ -114,6 +114,8 @@ train/evaluation separation before any fine-tuning experiment.
 
 1. Freeze the verified simulation and portable-runtime boundary; change it only
    for a demonstrated regression or later as-built calibration evidence.
-2. Begin Phase 10 with the immutable episode manifest and synchronized streams.
-3. Add deterministic replay for state, perception, actions and safety decisions.
-4. Keep the later DCM behind the Drone API and guardrails—never MAVLink.
+2. Phase 10 simulation episode capture and native guardrail replay are built;
+   audit real-flight privacy before using the same schema on hardware.
+3. Phase 11 observe-mode mock replay is implemented. Next connect a local model
+   behind a provider-neutral, hard-deadlined adapter; see [`NEXT-STEPS.md`](NEXT-STEPS.md).
+4. Keep the DCM behind the Drone API and guardrails—never MAVLink.

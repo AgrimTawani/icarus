@@ -2,10 +2,13 @@
 
 ## Scope and Maturity
 
-As of 2026-09-16, the deterministic stack through Phase 9 is implemented:
+As of 2026-09-19, the deterministic stack through Phase 9 is implemented:
 simulation, typed flight services, safety supervision, normalized LiDAR
-perception and local avoidance. DCM/model, replay/dataset and physical hardware
-areas remain later phases.
+perception and local avoidance. Phase 10 simulation episode capture and native
+guardrail replay are implemented, but its full exit gate remains open. Phase 11
+has an offline observe-only mock replay, not a connected model or live DCM.
+Physical hardware integration remains a later phase. See
+[`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the current handoff.
 
 ## System Boundary
 

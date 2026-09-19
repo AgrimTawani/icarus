@@ -6,17 +6,18 @@ long-term system lets interchangeable local language models plan missions
 through a typed Drone API while deterministic flight control, safety limits and
 emergency behavior remain outside the model.
 
-The repository currently contains a custom 10-inch quadrotor digital twin,
-realistic Gazebo environments, native simulated sensors, ArduPilot SITL
-integration, repeatable wind/fault scenarios and automated acceptance tests.
-The Drone API and autonomy services are architectural contracts and scaffolds;
-they are not yet a flight-ready autonomy implementation.
+The repository contains a custom 10-inch quadrotor digital twin, populated
+Gazebo environments, native simulated sensors, ArduPilot SITL integration,
+repeatable wind/fault scenarios, and tested Drone API, safety and local
+avoidance services. A first offline observe-mode DCM mock exists, but no LLM
+controls the drone and the stack is not validated for physical autonomy.
 
 ## Start Here
 
 1. Read the [project goal](docs/GOAL.md).
 2. Check the [master plan](docs/MASTER-PLAN.md) and
-   [current status](docs/reference/PROJECT-STATUS.md).
+   [current status](docs/reference/PROJECT-STATUS.md), then read the
+   [agent handoff](docs/NEXT-STEPS.md).
 3. Understand the [software architecture](docs/architecture/SOFTWARE-ARCHITECTURE.md)
    and [simulation connections](docs/architecture/SIMULATION-CONNECTIONS.md).
 4. Follow [getting started](docs/guides/GETTING-STARTED.md) and the
@@ -55,8 +56,10 @@ gets direct motor, MAVLink, shell or unrestricted operating-system access.
 
 ## Project State
 
-Phases 0–7 are complete. The next implementation phase is the typed Drone API,
-state engine, MAVLink gateway, missions and deterministic guardrails. Simulation
-realism will be audited later against as-built measurements. See
+Phases 0–9 are reported complete. Phase 10 simulation episode capture/replay
+is implemented but its full exit gate is open. Phase 11 has only an offline
+observe-mode mock slice; Qwen, mission orchestration and closed-loop LLM
+simulation remain next. Simulation realism will be audited later against
+as-built measurements. See
 [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

@@ -753,6 +753,11 @@ Implement and test each component without an LLM.
 
 Do this before adding Qwen so baseline and failure data are not lost.
 
+Simulation capture and replay are implemented; see
+`docs/simulation/PHASE-10-EPISODES.md`. Phase 11 may begin in observe mode.
+The physical-flight privacy/retention and complete planner/MAVLink trace gates
+below remain open and do not authorize autonomous hardware operation.
+
 ### 10.1 Define an immutable episode format
 
 Record:
@@ -773,27 +778,27 @@ Record:
 
 ### 10.2 Separate data views
 
-- [ ] Raw operational log.
-- [ ] Time-aligned replay record.
-- [ ] Evaluation summary.
-- [ ] Candidate training example.
+- [ ] Raw operational log (compact API event log exists; raw sensors are separate).
+- [x] Time-aligned replay record.
+- [x] Evaluation summary.
+- [x] Candidate training example (unapproved by default).
 - [ ] Human annotation and approval status.
 
 Never train directly from raw logs.
 
 ### 10.3 Build replay
 
-- [ ] Replay state and action sequences without Gazebo.
-- [ ] Re-run guardrails against recorded actions.
+- [x] Replay state and action sequences without Gazebo.
+- [x] Re-run guardrails against recorded actions.
 - [ ] Re-run DCM decisions against frozen state snapshots.
 - [ ] Compare controller or model versions on identical episodes.
 
 ### 10.4 Protect real-flight data
 
-- [ ] Remove secrets and operator-identifying information.
+- [x] Remove session/lease and operator-identifying fields from the compact record.
 - [ ] Define retention and backup policy.
 - [ ] Record whether an action was proposed, approved, executed, or overridden.
-- [ ] Never label a failed or unsafe action as preferred automatically.
+- [x] Never label a failed or unsafe action as preferred automatically.
 
 ### Phase 10 exit gate
 
@@ -804,6 +809,14 @@ Never train directly from raw logs.
 ---
 
 ## Phase 11: Integrate the DCM
+
+The first offline observe-mode wiring slice is implemented in
+`python/dcm/observe.py` and `scripts/observe-dcm`. It passed unit tests and
+produced five non-executed mock proposals on a sealed stress episode on
+2026-09-19. This does **not** complete any model-runtime or DCM exit gate:
+the mock always proposes `none`, no Qwen/Llama adapter is connected, and the
+current timeout only rejects a response after it returns. See
+`docs/architecture/DCM-OBSERVE-V1.md` and `docs/NEXT-STEPS.md`.
 
 ### 11.1 Model runtime abstraction
 

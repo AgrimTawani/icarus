@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-12
+Last updated: 2026-09-19
 
 ## Executive Summary
 
@@ -28,8 +28,8 @@ LLM-controlled drone stack.
 | C++ autonomy services | Phase 8 complete | Drone API, authority, guardrails, executor, state engine, safety supervisor and MAVLink gateway |
 | Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
-| DCM/model integration | Not implemented | runtime directories are scaffolds |
-| Dataset/evaluation system | Architecture only | planned Phases 10–12 |
+| DCM/model integration | Offline observe-only mock slice; no LLM connected | `python/dcm/observe.py`, `docs/architecture/DCM-OBSERVE-V1.md` |
+| Dataset/evaluation system | Phase 10 simulation episodes and replay implemented; model evaluation not implemented | `docs/simulation/PHASE-10-EPISODES.md` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
 
@@ -65,10 +65,10 @@ reports are versioned as `SIM-*` documents.
 
 - Component design-target inputs and aerodynamic coefficients require as-built
   measurements before the simulator can be called a validated digital twin.
-- Public Gazebo camera/lidar/range streams are health-tested but not yet fused
-  into Icarus perception or the ArduPilot EKF.
-- Obstacle routes have ground truth and scoring, but no route executor or local
-  avoidance planner exists.
+- Gazebo LiDAR is integrated with local avoidance; camera semantics and
+  physical sensor fusion remain later work.
+- The DCM has no local model adapter, mission orchestration, approval mode or
+  closed-loop autonomous simulation mode yet.
 - No real Pixhawk, Jetson or physical sensor adapter has passed a test.
 
 ## Current Gate
@@ -97,6 +97,21 @@ clearance and a 0.540 m goal error. A live LiDAR dropout produced the required
 safety abort/BRAKE and recovered before landing; see
 `simulation/PHASE-9-ACCEPTANCE.md`.
 
-Phase 10 is next: immutable synchronized episode records and deterministic
-replay. Physical sensor drivers and measured self-masks remain Phase 13 work;
-their normalized contracts and frame-parity tests already exist.
+Phase 10 simulation capture is implemented. Every Drone API mission client
+creates a sealed episode with time-aligned state/perception, actions, validation
+inputs/results, terminal statuses and configuration snapshots. Offline replay
+verifies integrity and re-runs the exact C++ guardrails; see
+`simulation/PHASE-10-EPISODES.md`. A fresh Phase 9 stress flight and its 677
+record episode passed after the LiDAR map was corrected to use full vehicle
+attitude, not yaw alone. Phase 11 can begin in observe mode. Real-flight
+privacy/retention review and physical sensor drivers remain later work; their
+normalized contracts and frame-parity tests already exist.
+
+The first Phase 11 slice is an offline observe-only replay using a
+`mock-no-action` runtime. On the sealed 677-record stress episode, it generated
+five valid mock proposals and executed zero actions. The mock is not a Qwen or
+Llama integration, and its post-return timeout is not a hard model deadline.
+The Phase 10 unit gate, native stress-episode replay, Phase 11 observe unit
+tests and existing Phase 8/9 C++ tests passed on 2026-09-19. Phase 10's full
+exit gate and all Phase 11 model/flight gates remain open. See
+[`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the agent handoff.
