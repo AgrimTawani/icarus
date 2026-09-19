@@ -24,7 +24,7 @@ done
 [[ -x "${PYTHON_BIN}" ]] || { echo "Missing .venv" >&2; exit 1; }
 
 "${PYTHON_BIN}" -m pip check
-"${PYTHON_BIN}" -m ruff check scripts tests
+"${PYTHON_BIN}" -m ruff check scripts tests python/dataset_tools python/dcm
 "${PYTHON_BIN}" -m pytest -q tests/unit
 "${PYTHON_BIN}" -m json.tool "${LOCK_FILE}" >/dev/null
 "${PYTHON_BIN}" -m json.tool config/dependencies/platform.json >/dev/null
