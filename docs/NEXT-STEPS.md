@@ -66,12 +66,17 @@ with the documented simulation mission workflow. Observe reports are under
    settings and latency. Enforce a real process/network deadline, not merely
    the current post-return timeout check. Do not install OpenClaw or ZeptoClaw
    as a prerequisite.
-4. **Evaluate offline before control.** This is now the next task. Replay
-   multiple successful and failed episodes, including held-out cases. Treat
-   decision points whose recorded action is outside the model vocabulary
-   (`goto`, and anything else not in `contract.ACTIONS`) as unscoreable rather
-   than as model failures. Report latency distributions over repeated runs
-   rather than single figures. Compare proposals to the scripted
+4. ~~**Build the offline evaluation harness.**~~ **Done 2026-09-19.**
+   `python/dcm/evaluate.py` and `./scripts/evaluate-dcm` replay a corpus with
+   repeats and report invalid/timeout/error rates, agreement over comparable
+   points, stale refusals, latency distributions and determinism.
+   `./scripts/fly-episode-corpus` builds the corpus headlessly across scenario
+   profiles. Points whose recorded action is outside `contract.ACTIONS` are
+   reported as unscoreable rather than as model failures.
+
+   What remains is the **campaign**, not the machinery: a frozen scenario set
+   with held-out episodes, a deterministic no-LLM baseline, and at least two
+   models compared. See `docs/architecture/DATA-AND-EVALUATION.md`. Compare proposals to the scripted
    baseline without treating that baseline as a perfect label. Report invalid
    actions, timeouts, model errors, safety-rule outcomes and latency. Keep eval
    episodes excluded from training exports.

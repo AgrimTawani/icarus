@@ -1,0 +1,267 @@
+"""Offline evaluation of a DCM runtime across an episode corpus.
+
+This scores how a model behaves on recorded decision points. It never touches
+the Drone API, MAVLink or a simulator, and nothing it measures is executed.
+
+Three rules shape the scoring, each learned from a real result rather than
+chosen for tidiness:
+
+* **Repeated runs, reported as a spread.** The same model on the same episode
+  produced first-decision latencies of 4257, 4563 and 7204 ms, one of which
+  breached the deadline. A single figure would have been misleading whichever
+  run it came from.
+* **Vocabulary mismatches are unscoreable, not failures.** A recorded flight
+  may use actions outside `contract.ACTIONS`, such as `goto`. A model that
+  cannot express the baseline's action has not disagreed with it, and counting
+  that as a miss would understate every model equally and hide real
+  differences.
+* **Agreement is not correctness.** The recorded action is one competent
+  choice, not ground truth, so agreement is reported as a rate against
+  comparable points and never as a score out of all points.
+"""
+
+import json
+import statistics
+import time
+from pathlib import Path
+
+from python.dataset_tools.replay import ReplayError
+from python.dcm.contract import ALLOWED_ACTIONS
+from python.dcm.observe import observe_episode
+
+SCHEMA = "icarus.dcm.evaluation.v1"
+STATUSES = ("valid", "invalid", "timeout", "error", "stale")
+
+
+def _percentile(values, fraction):
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, round(fraction * (len(ordered) - 1)))
+    return ordered[index]
+
+
+def summarize_latency(values):
+    """Describe a latency sample, or return None when there is nothing to say."""
+    if not values:
+        return None
+    return {
+        "count": len(values),
+        "min_ms": round(min(values), 1),
+        "median_ms": round(statistics.median(values), 1),
+        "p90_ms": round(_percentile(values, 0.90), 1),
+        "max_ms": round(max(values), 1),
+        "mean_ms": round(statistics.fmean(values), 1),
+    }
+
+
+def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
+    """Score one run's decision stream.
+
+    Latency is split between the first decision and the rest, because the
+    first pays a one-off prefill cost that is not representative of the loop.
+    """
+    counts = dict.fromkeys(STATUSES, 0)
+    comparable = 0
+    agreed = 0
+    unscoreable = []
+    first_latency = None
+    steady_latencies = []
+    asked = 0
+    for decision in decisions:
+        status = decision["status"]
+        counts[status] = counts.get(status, 0) + 1
+        if status != "stale":
+            # Stale points never reach the runtime, so their zero latency is
+            # not a measurement of the model.
+            if asked == 0:
+                first_latency = decision["latency_ms"]
+            else:
+                steady_latencies.append(decision["latency_ms"])
+            asked += 1
+        recorded = decision.get("recorded_action")
+        if recorded not in allowed:
+            unscoreable.append(recorded)
+            continue
+        if status != "valid":
+            continue
+        comparable += 1
+        if decision["proposal"]["action"] == recorded:
+            agreed += 1
+    decided = counts["valid"] + counts["invalid"] + counts["timeout"] + counts["error"]
+    return {
+        "decision_points": len(decisions),
+        "counts": counts,
+        "asked": asked,
+        "invalid_rate": (counts["invalid"] / decided) if decided else None,
+        "timeout_rate": (counts["timeout"] / decided) if decided else None,
+        "error_rate": (counts["error"] / decided) if decided else None,
+        "comparable_points": comparable,
+        "agreed_points": agreed,
+        "agreement_rate": (agreed / comparable) if comparable else None,
+        "unscoreable_points": len(unscoreable),
+        "unscoreable_actions": sorted(set(unscoreable)),
+        "first_decision_latency_ms": first_latency,
+        "steady_latency": summarize_latency(steady_latencies),
+    }
+
+
+def _aggregate(runs, key):
+    values = [run[key] for run in runs if run.get(key) is not None]
+    return summarize_latency(values) if values else None
+
+
+def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
+             descriptor=None, check_guardrails=True, progress=None):
+    """Replay every episode `repeats` times and score the result.
+
+    Returns (output_directory, report). Proposals are recorded, never executed.
+    """
+    episodes = [Path(e) for e in episodes]
+    if not episodes:
+        raise ValueError("no episodes to evaluate")
+    if repeats < 1:
+        raise ValueError("repeats must be at least 1")
+    output_root = Path(output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    output = output_root / time.strftime("%Y%m%dT%H%M%S")
+    output.mkdir(exist_ok=True)
+
+    per_episode = []
+    skipped = []
+    started = time.monotonic()
+    for episode in episodes:
+        runs = []
+        for attempt in range(1, repeats + 1):
+            if progress:
+                progress(episode.name, attempt, repeats)
+            try:
+                report_dir, _ = observe_episode(
+                    episode, runtime, output / "observe", timeout_ms=timeout_ms,
+                    check_guardrails=check_guardrails, descriptor=descriptor)
+            except (ReplayError, OSError, KeyError) as unusable:
+                # A corpus accumulates episodes that predate a schema change or
+                # were sealed mid-failure. Losing the whole campaign to one of
+                # them would be worse than reporting it and moving on.
+                skipped.append({"episode": episode.name,
+                                "reason": f"{type(unusable).__name__}: {unusable}"})
+                runs = []
+                break
+            decisions = [json.loads(line) for line
+                         in (report_dir / "decisions.jsonl").read_text().splitlines()]
+            scored = score_decisions(decisions)
+            scored["run"] = attempt
+            scored["report"] = report_dir.name
+            scored["proposals"] = [
+                {"recorded": d.get("recorded_action"),
+                 "proposed": d["proposal"]["action"] if d["proposal"] else None,
+                 "status": d["status"]}
+                for d in decisions
+            ]
+            runs.append(scored)
+        if not runs:
+            continue
+        # Determinism is worth measuring directly: a model that answers
+        # differently run to run at temperature 0 is a finding in itself.
+        signatures = {json.dumps(run["proposals"], sort_keys=True) for run in runs}
+        per_episode.append({
+            "episode": episode.name,
+            "runs": runs,
+            "deterministic": len(signatures) == 1,
+            "first_decision_latency": _aggregate(runs, "first_decision_latency_ms"),
+        })
+
+    all_runs = [run for entry in per_episode for run in entry["runs"]]
+    totals = dict.fromkeys(STATUSES, 0)
+    comparable = agreed = unscoreable = 0
+    steady = []
+    firsts = []
+    for run in all_runs:
+        for status, value in run["counts"].items():
+            totals[status] = totals.get(status, 0) + value
+        comparable += run["comparable_points"]
+        agreed += run["agreed_points"]
+        unscoreable += run["unscoreable_points"]
+        if run["first_decision_latency_ms"] is not None:
+            firsts.append(run["first_decision_latency_ms"])
+        if run["steady_latency"]:
+            steady.append(run["steady_latency"]["median_ms"])
+    decided = totals["valid"] + totals["invalid"] + totals["timeout"] + totals["error"]
+
+    report = {
+        "schema": SCHEMA,
+        "mode": "observe",
+        "executed_actions": 0,
+        "runtime": runtime.name,
+        "model": descriptor.as_record() if descriptor else None,
+        "episodes": len(per_episode),
+        "episodes_requested": len(episodes),
+        "skipped_episodes": skipped,
+        "repeats": repeats,
+        "timeout_ms": timeout_ms,
+        "wall_clock_s": round(time.monotonic() - started, 1),
+        "totals": {
+            "counts": totals,
+            "decision_points": sum(run["decision_points"] for run in all_runs),
+            "invalid_rate": (totals["invalid"] / decided) if decided else None,
+            "timeout_rate": (totals["timeout"] / decided) if decided else None,
+            "error_rate": (totals["error"] / decided) if decided else None,
+            "stale_refusals": totals["stale"],
+            "comparable_points": comparable,
+            "agreement_rate": (agreed / comparable) if comparable else None,
+            "unscoreable_points": unscoreable,
+        },
+        "latency": {
+            "first_decision": summarize_latency(firsts),
+            "steady_state_medians": summarize_latency(steady),
+        },
+        "deterministic_episodes": sum(1 for e in per_episode if e["deterministic"]),
+        "per_episode": per_episode,
+    }
+    (output / "evaluation.json").write_text(json.dumps(report, indent=2) + "\n")
+    return output, report
+
+
+def format_report(report):
+    """A short human summary. The JSON remains the authoritative record."""
+    totals = report["totals"]
+    lines = [
+        f"runtime            {report['runtime']}",
+        (f"episodes x repeats {report['episodes']} x {report['repeats']}"
+         f"  ({totals['decision_points']} decision points)"),
+        "",
+        "counts             " + "  ".join(
+            f"{name}={value}" for name, value in totals["counts"].items()),
+    ]
+    for label, key in (("invalid rate", "invalid_rate"),
+                       ("timeout rate", "timeout_rate"),
+                       ("error rate", "error_rate")):
+        value = totals[key]
+        lines.append(f"{label:<19}{value:.1%}" if value is not None
+                     else f"{label:<19}n/a")
+    agreement = totals["agreement_rate"]
+    lines.append(
+        f"{'agreement':<19}"
+        + (f"{agreement:.1%} of {totals['comparable_points']} comparable points"
+           if agreement is not None else "n/a"))
+    lines.append(f"{'unscoreable':<19}{totals['unscoreable_points']}"
+                 " (recorded action outside the vocabulary)")
+    lines.append(f"{'stale refusals':<19}{totals['stale_refusals']}")
+    lines.append("")
+    for label, key in (("first decision", "first_decision"),
+                       ("steady state", "steady_state_medians")):
+        stats = report["latency"][key]
+        if stats:
+            lines.append(
+                f"{label:<19}median {stats['median_ms']:.0f} ms, "
+                f"min {stats['min_ms']:.0f}, max {stats['max_ms']:.0f}")
+    lines.append("")
+    if report.get("skipped_episodes"):
+        lines.append(f"{'skipped episodes':<19}{len(report['skipped_episodes'])}"
+                     f" of {report.get('episodes_requested', '?')} (unusable)")
+        for entry in report["skipped_episodes"]:
+            lines.append(f"{'':<19}  {entry['episode']}: {entry['reason']}")
+    lines.append(f"{'deterministic':<19}"
+                 f"{report['deterministic_episodes']}/{report['episodes']} episodes")
+    lines.append(f"{'executed actions':<19}{report['executed_actions']}")
+    return "\n".join(lines)

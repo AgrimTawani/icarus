@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# Fly a set of headless missions across scenario profiles to build an episode
+# corpus for offline model evaluation.
+#
+# One evaluation episode is not evidence. This produces a spread across calm,
+# windy, obstacle and adverse conditions so that a model's behaviour can be
+# compared between situations rather than read off a single flight.
+#
+# Each run starts the simulator and the Drone API, flies one mission, then
+# shuts both down and verifies the session file was cleared. A failed mission
+# is recorded and the corpus continues: a failed flight is useful evaluation
+# data, not a reason to stop.
+#
+# Usage: ./scripts/fly-episode-corpus [--repeat N]
+
+set -uo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="${ROOT}/logs/corpus"
+STAMP="$(date +%Y%m%dT%H%M%S)"
+LOG_FILE="${LOG_DIR}/corpus-${STAMP}.log"
+INDEX="${LOG_DIR}/corpus-${STAMP}.json"
+SESSION="${ROOT}/logs/simulation/active_session.json"
+
+REPEAT=1
+while (($#)); do
+  case "$1" in
+    --repeat) REPEAT="${2:?missing count}"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+# profile | mission | altitude | hover seconds
+RUNS=(
+  "simulation-empty|takeoff_hover_land|3|8"
+  "simulation-wind|takeoff_hover_land|4|10"
+  "simulation-obstacles|takeoff_hover_land|3|8"
+  "simulation-adverse|takeoff_hover_land|3|10"
+  "simulation-empty|takeoff_hover_land|6|5"
+)
+
+C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
+C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_YELLOW=$'\033[33m'; C_BLUE=$'\033[34m'
+
+declare -a RESULTS=()
+START_ALL=$(date +%s)
+TOTAL=$(( ${#RUNS[@]} * REPEAT ))
+INDEX_N=0
+
+log()  { printf '%s\n' "$*" >>"${LOG_FILE}"; }
+note() { printf '      %s%s%s\n' "${C_DIM}" "$*" "${C_RESET}"; log "  $*"; }
+
+stop_everything() {
+  pkill -INT -f icarus-drone-api >/dev/null 2>&1
+  sleep 2
+  pkill -INT -f launch_compact >/dev/null 2>&1
+  for _ in $(seq 1 30); do
+    [[ -f "${SESSION}" ]] || break
+    sleep 1
+  done
+  pkill -f "gz sim -s" >/dev/null 2>&1
+  pkill -f arducopter >/dev/null 2>&1
+  sleep 2
+}
+
+wait_for_session() {
+  for _ in $(seq 1 120); do
+    if [[ -f "${SESSION}" ]] \
+       && grep -q '"status": *"ready"' "${SESSION}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_api() {
+  for _ in $(seq 1 240); do
+    ss -ltn 2>/dev/null | grep -q ':50051' && return 0
+    sleep 1
+  done
+  return 1
+}
+
+mkdir -p "${LOG_DIR}"
+: >"${LOG_FILE}"
+printf '%sIcarus episode corpus%s  %s%d flights%s\n' \
+  "${C_BOLD}" "${C_RESET}" "${C_DIM}" "${TOTAL}" "${C_RESET}"
+printf '%slog: %s%s\n' "${C_DIM}" "${LOG_FILE}" "${C_RESET}"
+
+trap 'echo; echo "interrupted, shutting down"; stop_everything; exit 130' INT TERM
+
+BEFORE_ALL=$(ls "${ROOT}/logs/episodes" 2>/dev/null | wc -l)
+
+for repeat in $(seq 1 "${REPEAT}"); do
+for entry in "${RUNS[@]}"; do
+  IFS='|' read -r profile mission altitude hover <<<"${entry}"
+  INDEX_N=$((INDEX_N + 1))
+  label="${profile} ${mission} ${altitude}m"
+  printf '\n%s[%d/%d]%s %s%s%s %s(run %d)%s\n' \
+    "${C_BLUE}" "${INDEX_N}" "${TOTAL}" "${C_RESET}" \
+    "${C_BOLD}" "${label}" "${C_RESET}" "${C_DIM}" "${repeat}" "${C_RESET}"
+  log "=== [${INDEX_N}/${TOTAL}] ${label} run ${repeat} ==="
+  STEP_START=$(date +%s)
+
+  stop_everything
+  before=$(ls "${ROOT}/logs/episodes" 2>/dev/null | wc -l)
+
+  "${ROOT}/scripts/start-sim" --profile "${profile}" \
+    >>"${LOG_FILE}" 2>&1 &
+  if ! wait_for_session; then
+    printf '      %s[FAIL]%s simulator never reported ready\n' "${C_RED}" "${C_RESET}"
+    RESULTS+=("FAIL|${label}|simulator not ready|")
+    stop_everything
+    continue
+  fi
+  note "simulator ready"
+
+  "${ROOT}/scripts/start-autonomy" >>"${LOG_FILE}" 2>&1 &
+  if ! wait_for_api; then
+    printf '      %s[FAIL]%s Drone API never listened on 50051\n' "${C_RED}" "${C_RESET}"
+    RESULTS+=("FAIL|${label}|drone api not ready|")
+    stop_everything
+    continue
+  fi
+  note "drone api ready"
+
+  note "flying..."
+  if timeout 600 "${ROOT}/scripts/run-mission" \
+        --mission "${mission}" --altitude "${altitude}" \
+        --hover-seconds "${hover}" >>"${LOG_FILE}" 2>&1; then
+    outcome="passed"; colour="${C_GREEN}"; mark="[ok]"
+  else
+    # A failed flight still seals an episode, and failure cases are exactly
+    # what an evaluation corpus is short of.
+    outcome="failed"; colour="${C_YELLOW}"; mark="[flight failed]"
+  fi
+
+  stop_everything
+  episode="$(ls -t "${ROOT}/logs/episodes" 2>/dev/null | head -1)"
+  after=$(ls "${ROOT}/logs/episodes" 2>/dev/null | wc -l)
+  duration=$(( $(date +%s) - STEP_START ))
+  if (( after > before )); then
+    printf '      %s%s%s %s %s(%ss, episode %s)%s\n' \
+      "${colour}" "${mark}" "${C_RESET}" "${outcome}" \
+      "${C_DIM}" "${duration}" "${episode}" "${C_RESET}"
+    RESULTS+=("${outcome}|${label}|${episode}|${duration}")
+  else
+    printf '      %s[FAIL]%s no episode was sealed\n' "${C_RED}" "${C_RESET}"
+    RESULTS+=("FAIL|${label}|no episode sealed|${duration}")
+  fi
+done
+done
+
+stop_everything
+
+printf '\n%s=== Corpus ===%s\n' "${C_BOLD}" "${C_RESET}"
+{
+  printf '{\n  "generated_at": "%s",\n  "flights": [\n' "$(date -Is)"
+  first=1
+  for row in "${RESULTS[@]}"; do
+    IFS='|' read -r outcome label episode duration <<<"${row}"
+    (( first )) || printf ',\n'
+    first=0
+    printf '    {"outcome": "%s", "profile": "%s", "episode": "%s", "seconds": %s}' \
+      "${outcome}" "${label}" "${episode}" "${duration:-0}"
+  done
+  printf '\n  ]\n}\n'
+} >"${INDEX}"
+
+passed=0; failed=0; broken=0
+for row in "${RESULTS[@]}"; do
+  IFS='|' read -r outcome label episode duration <<<"${row}"
+  case "${outcome}" in
+    passed) mark='v'; colour="${C_GREEN}";  passed=$((passed + 1)) ;;
+    failed) mark='!'; colour="${C_YELLOW}"; failed=$((failed + 1)) ;;
+    *)      mark='x'; colour="${C_RED}";    broken=$((broken + 1)) ;;
+  esac
+  printf '  %s%s%s  %-38s %s%s%s\n' \
+    "${colour}" "${mark}" "${C_RESET}" "${label}" "${C_DIM}" "${episode}" "${C_RESET}"
+done
+AFTER_ALL=$(ls "${ROOT}/logs/episodes" 2>/dev/null | wc -l)
+total=$(( $(date +%s) - START_ALL ))
+printf '\n  %d passed, %d failed flights, %d broken runs\n' \
+  "${passed}" "${failed}" "${broken}"
+printf '  episodes: %d -> %d\n' "${BEFORE_ALL}" "${AFTER_ALL}"
+printf '  elapsed: %dm %ds\n  index: %s\n' \
+  $((total / 60)) $((total % 60)) "${INDEX}"
