@@ -29,7 +29,7 @@ LLM-controlled drone stack.
 | Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
 | DCM/model integration | Local Qwen connected in observe mode behind a versioned contract and wall-clock deadline; not evaluated | `python/dcm/contract.py`, `python/dcm/llama_runtime.py` |
-| Dataset/evaluation system | Phase 10 simulation episodes and replay implemented; model evaluation not implemented | `docs/simulation/PHASE-10-EPISODES.md` |
+| Dataset/evaluation system | Episodes, replay, corpus builder and offline decision evaluation implemented; Phase 12 campaign not run | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
 
@@ -121,14 +121,23 @@ full-attitude LiDAR transform: zero collisions, 1.804 m minimum clearance,
 0.448 m goal error, 11.9 m/s peak wind, and a perception dropout that produced
 `ABORTED_BY_SAFETY` and recovered. Its episode passed the Phase 10 replay gate.
 
-Two measured results qualify everything above. Model proposals are
-deterministic at `temperature: 0.0`, but the first decision costs 3.5-6x the
-steady-state 1.1-1.3 s and timed out in one run of three against a 5 s
-deadline. And at the final decision point of that flight, with the vehicle
-airborne after a safety abort, the model proposed climbing to 5 m where the
-flight landed. That proposal is schema-valid, because the contract checks shape
-and bounds rather than whether an action makes sense in context.
+A first corpus evaluation ran 10 episodes across empty, wind, obstacle,
+adverse and perception-stress profiles, three runs each, 123 decision points.
+The model produced no malformed output at all: zero invalid proposals, zero
+runtime errors, one timeout, six stale refusals, and nothing executed.
 
-45 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
-2026-09-19. Phase 10's full exit gate and all Phase 11 evaluation and flight
+Its 74.8% agreement over comparable points should not be read as a pass. The
+per-action breakdown shows the model never once proposed `land`: at all 27
+land decision points it deterministically proposed climbing (18) or holding
+(9). Agreement on `arm`, `takeoff` and `hold` is total; on `land` it is zero.
+A single aggregate score would have reported a passable result for a model
+that cannot end a flight. The cause is not established and is a hypothesis
+about the prompt and observation rather than a measured property of the model.
+
+Latency: a 9370 ms cold start that exceeds the 5 s deadline outright, against
+a 540 ms steady-state median. A deployed loop must make a throwaway decision
+before the mission starts.
+
+63 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
+2026-09-19, alongside five consecutive headless corpus flights. Phase 10's full exit gate and all Phase 11 evaluation and flight
 gates remain open. See [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the handoff.

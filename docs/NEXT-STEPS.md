@@ -6,6 +6,10 @@ not a claim that Phase 10 or Phase 11 has passed its full exit gate.
 
 ## What is verified now
 
+Re-verified 2026-09-19 after the corpus run: 63 Python unit tests, both C++
+suites, the Phase 10 replay gate on every usable episode, and five
+consecutive headless flights across scenario profiles.
+
 - Phases 0–9 are reported complete in the project plan.
 - The Phase 10 **simulation slice** records sealed episodes and replays the
   recorded actions through native C++ guardrails. Its unit gate and replay of
@@ -41,12 +45,11 @@ with the documented simulation mission workflow. Observe reports are under
 
 ## Immediate implementation order
 
-1. **Review and stabilize the existing worktree.** Phase 10 and the observe
-   slice are currently uncommitted alongside other modifications. Inspect the
-   diff before staging; do not discard or silently commit unrelated changes.
-   Re-run the checks above. Phase 10's complete mission coverage, full planner/
-   MAVLink trace, physical-flight data governance, and full exit gate remain
-   open. Those hardware/data-policy items do not block offline Phase 11 work.
+1. ~~**Review and stabilize the existing worktree.**~~ **Done 2026-09-19.**
+   Phase 10 and the observe slice are committed. Phase 10's complete mission
+   coverage, full planner/MAVLink trace, physical-flight data governance and
+   full exit gate remain open; those hardware and data-policy items do not
+   block offline Phase 11 work.
 2. ~~**Make a provider-neutral model contract.**~~ **Done 2026-09-19.**
    `python/dcm/contract.py` holds the curated observation, the action table,
    the generated prompt, freshness limits and `RuntimeDescriptor`, behind
@@ -80,12 +83,19 @@ with the documented simulation mission workflow. Observe reports are under
    baseline without treating that baseline as a perfect label. Report invalid
    actions, timeouts, model errors, safety-rule outcomes and latency. Keep eval
    episodes excluded from training exports.
-5. **Only then add mission orchestration and controlled SITL modes.** Add
+5. **Investigate the `land` result before anything else.** Across 123 decision
+   points the model never proposed `land`, deterministically choosing takeoff
+   or hold at all 27 land points, while agreeing perfectly on arm, takeoff and
+   hold. Test whether adding mission-progress information to the observation,
+   or guidance about ending a flight to the prompt, changes it. Treat the
+   current explanation as a hypothesis, not a finding.
+
+6. **Only then add mission orchestration and controlled SITL modes.** Add
    persistent mission state, bounded reusable sequences and recovery logic.
    Progress from observe mode to explicit operator approval, then autonomous
    simulation behind the same Drone API, guardrails and safety supervisor. The
    model must never receive shell, raw MAVLink, motor or safety-policy access.
-6. **Run the Phase 12 scenario campaign.** Freeze seeds, prompts, model and
+7. **Run the Phase 12 scenario campaign.** Freeze seeds, prompts, model and
    policy versions; compare models against the deterministic baseline across
    wind, obstacles, sensor dropouts, link faults and recovery. Hardware work
    remains a separate later gate.

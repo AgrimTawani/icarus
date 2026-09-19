@@ -155,8 +155,77 @@ the concrete reason approval mode and independent guardrails must precede any
 control authority, and it should be read as evidence about an unprompted 4B
 model on a bare contract, not as a verdict on the model.
 
-Next: evaluate across many episodes including held-out ones, report invalid
-actions, timeouts, safety-rule outcomes and latency distributions, and treat
-vocabulary-mismatched decision points as unscoreable. Only after that should
-approval mode or closed-loop SITL control be considered. Hardware control
-remains out of scope.
+## First corpus evaluation
+
+Ten episodes across empty, wind, obstacle, adverse and perception-stress
+profiles, three runs each, 123 decision points:
+
+| Measure | Result |
+| --- | --- |
+| Invalid proposals | 0 of 117 asked |
+| Runtime errors | 0 |
+| Timeouts | 1 (the cold start) |
+| Stale refusals | 6 |
+| Agreement | 74.8% of 107 comparable points |
+| Unscoreable | 9 (`goto`, outside the vocabulary) |
+| Deterministic | 9 of 10 episodes |
+| Executed actions | 0 |
+
+The model never emitted malformed output. Every proposal across the whole
+corpus parsed, named an allowed action and satisfied its argument bounds.
+
+### The headline number is misleading
+
+74.8% agreement hides a systematic failure that only the per-action breakdown
+shows:
+
+| Recorded | Proposed | Count |
+| --- | --- | --- |
+| takeoff | takeoff | 30 |
+| arm | arm | 26 |
+| hold | hold | 24 |
+| land | **takeoff** | 18 |
+| land | **hold** | 9 |
+| goto | hold | 9 (unscoreable) |
+
+**The model never once proposed `land`.** At all 27 land decision points it
+proposed climbing or holding instead, and it did so deterministically. Its
+agreement on `arm`, `takeoff` and `hold` is total; its agreement on `land` is
+zero. A single aggregate score would have reported a passable 75% for a model
+that cannot end a flight.
+
+This is the argument against ranking models by one number, made concrete
+inside this project rather than borrowed from a paper. The Phase 12 campaign
+must report per-action breakdowns, not a combined score.
+
+The cause is not established. The prompt says to reply `none` when unsure but
+gives no guidance on when a flight should end, and the observation carries no
+mission-progress or remaining-objective field. A model with no notion that the
+mission is over has no reason to land. That is a hypothesis about the contract
+and the prompt, not a measured property of Qwen, and it needs a controlled
+test rather than a plausible story.
+
+### Latency
+
+| Measure | Result |
+| --- | --- |
+| Cold start (once per campaign) | 9370 ms |
+| Episode first decision | median 343 ms, max 780 ms |
+| Steady state | median 540 ms, max 823 ms |
+
+The cold start exceeds the 5000 ms deadline outright, so the first decision
+after a server start always times out. Warming the system prompt reduced it
+but never removed it, and it measured between 4257 and 9370 ms across
+sessions. A deployed loop must make a throwaway decision before the mission
+starts rather than set a deadline loose enough to cover it, since a deadline
+that tolerates 9 s is no longer protecting anything.
+
+Episode-first decisions are *faster* than steady state, because early-mission
+observations are shorter than later ones. That is a property of the prompt,
+not of the runtime.
+
+Next: a Phase 12 campaign with frozen scenarios, held-out episodes, a
+deterministic no-LLM baseline and at least two models, reported per action.
+Investigate the `land` result with a controlled prompt change before reading
+anything into it. Only after that should approval mode or closed-loop SITL
+control be considered. Hardware control remains out of scope.
