@@ -116,8 +116,11 @@ elif [[ -x /usr/local/cuda/bin/nvcc ]]; then
   export PATH="/usr/local/cuda/bin:${PATH}"
   skipped "nvcc found at /usr/local/cuda/bin"
 else
-  note "installing nvidia-cuda-toolkit, this is the slowest step..."
-  sudo apt-get install -y nvidia-cuda-toolkit >>"${LOG_FILE}" 2>&1 \
+  # --no-install-recommends avoids the nsight GUI profilers and their OpenJDK 8
+  # dependency: 48 packages instead of 68, and no Java on the host.
+  note "installing nvidia-cuda-toolkit (lean), this is the slowest step..."
+  sudo apt-get install -y --no-install-recommends nvidia-cuda-toolkit \
+    >>"${LOG_FILE}" 2>&1 \
     || fail "CUDA toolkit install failed; see ${LOG_FILE}"
   command -v nvcc >/dev/null || fail "nvcc still not on PATH after install"
   ok "nvcc $(nvcc --version | grep -o 'release [0-9.]*' | head -1)"
