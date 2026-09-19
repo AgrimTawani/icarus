@@ -261,7 +261,7 @@ ${C_BOLD}Next${C_RESET}
 
     ${LLAMA_DIR}/build/bin/llama-cli \\
       -m ${WEIGHTS_DIR}/${PRIMARY} \\
-      -ngl 99 -c 8192 --temp 0 -no-cnv \\
+      -ngl 99 -c 8192 --temp 0 -st \\
       -p 'Reply with only this JSON object: {"action":"none","arguments":{}}'
 
   -ngl 99 offloads every layer to the GPU. On an out-of-memory error, close GPU

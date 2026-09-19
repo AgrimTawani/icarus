@@ -24,17 +24,23 @@ class SlowRuntime:
 
 
 class ObserveTests(unittest.TestCase):
-    def make_episode(self, root):
+    def make_episode(self, root, state_age_offset=0, map_age_ms=10):
         episode = Path(root) / "example"
         episode.mkdir()
+        # Real episodes carry observed_at_unix_ms on state and perception and
+        # local_map_age_ms on perception; the fixture must too, or every
+        # decision is refused as stale before any runtime is called.
+        state = {"sequence": "1", "observed_at_unix_ms": 1000 + state_age_offset,
+                 "flight_phase": "FLIGHT_PHASE_DISARMED",
+                 "authority": {"lease_id": "secret"}}
         events = [
             ("episode_start", {"mission": "unit"}),
-            ("state", {"sequence": "1", "flight_phase": "FLIGHT_PHASE_DISARMED",
-                       "authority": {"lease_id": "secret"}}),
-            ("perception", {"sequence": "1", "path_ahead_clear": True}),
+            ("state", dict(state)),
+            ("perception", {"sequence": "1", "observed_at_unix_ms": 1000,
+                            "local_map_age_ms": map_age_ms,
+                            "path_ahead_clear": True}),
             ("guardrail_validation", {
-                "state": {"sequence": "1", "flight_phase": "FLIGHT_PHASE_DISARMED",
-                          "authority": {"lease_id": "secret"}},
+                "state": dict(state),
                 "command": {"arm": {"context": {"request_id": "secret"}}},
             }),
             ("action_request", {"method": "Arm", "request": {}}),
@@ -104,6 +110,47 @@ class ObserveTests(unittest.TestCase):
                 decision = json.loads((output / "decisions.jsonl").read_text())
                 self.assertEqual(summary["counts"][expected], 1)
                 self.assertIsNone(decision["proposal"])
+
+
+    def test_stale_observations_are_refused_before_the_runtime_is_asked(self):
+        class CountingRuntime:
+            name = "counting-test"
+
+            def __init__(self):
+                self.calls = 0
+
+            def propose(self, observation):
+                self.calls += 1
+                return '{"action":"none","arguments":{}}'
+
+        with tempfile.TemporaryDirectory() as temporary:
+            # local_map_age_ms of 811 is the age recorded by the real
+            # perception_stale safety event in episode 20260919T194115.
+            episode = self.make_episode(temporary, map_age_ms=811)
+            runtime = CountingRuntime()
+            output, summary = observe_episode(
+                episode, runtime, Path(temporary) / "reports",
+                check_guardrails=False)
+            decision = json.loads((output / "decisions.jsonl").read_text())
+            self.assertEqual(summary["counts"]["stale"], 1)
+            self.assertEqual(summary["counts"]["valid"], 0)
+            self.assertEqual(runtime.calls, 0)
+            self.assertIsNone(decision["proposal"])
+            self.assertIsNone(decision["raw_response"])
+            self.assertIn("perception map is", decision["error"])
+
+    def test_summary_records_contract_versions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            episode = self.make_episode(temporary)
+            _, summary = observe_episode(
+                episode, MockRuntime(), Path(temporary) / "reports",
+                check_guardrails=False)
+            contract = summary["contract"]
+            self.assertEqual(contract["contract_version"], "dcm-contract-v1")
+            self.assertEqual(contract["vocabulary_version"], "dcm-actions-v1")
+            self.assertEqual(contract["prompt_version"], "dcm-prompt-v1")
+            self.assertIn("none", contract["allowed_actions"])
+            self.assertIsNone(summary["model"])
 
 
 if __name__ == "__main__":

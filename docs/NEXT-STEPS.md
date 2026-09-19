@@ -14,8 +14,14 @@ not a claim that Phase 10 or Phase 11 has passed its full exit gate.
   `python/dcm/observe.py` and `scripts/observe-dcm`. It consumes a sealed episode,
   calls a mock runtime at pre-action points, strictly parses a narrow action
   schema, and writes a separate report. The mock always proposes `none`; it is
-  not Qwen, a trained DCM, or evidence of mission success. The stress episode
-  produced five valid mock proposals and **zero executed actions**.
+  not Qwen, a trained DCM, or evidence of mission success. On the stress
+  episode it produced four valid mock proposals, refused one decision point as
+  stale, and executed **zero actions**. The refused point is the one the
+  episode records as `REASON_CODE_SAFETY_INTERVENTION`.
+- The **model contract** is in `python/dcm/contract.py` behind explicit
+  versions, with 36 unit tests. The **model artifacts** are downloaded and
+  pinned; llama.cpp is built with CUDA at a pinned revision. No adapter
+  connects them yet, so no model has proposed anything.
 - Python unit tests and the existing Phase 8/9 C++ tests passed after this
   slice. No GUI or flight was launched for the observe-mode test.
 
@@ -41,13 +47,19 @@ with the documented simulation mission workflow. Observe reports are under
    Re-run the checks above. Phase 10's complete mission coverage, full planner/
    MAVLink trace, physical-flight data governance, and full exit gate remain
    open. Those hardware/data-policy items do not block offline Phase 11 work.
-2. **Make a provider-neutral model contract.** Keep the curated observation,
-   allowed-action vocabulary, prompt/schema version and runtime metadata
-   explicit. Preserve the rule that the recorded next action is comparison
-   data, never part of the model input. Add tests for invalid JSON, unknown
-   actions, unsafe arguments, stale data and model failure.
-3. **Connect the first local model in observe mode.** The user will provide the
-   absolute path to a Qwen GGUF artifact. Add a replaceable llama.cpp-compatible
+2. ~~**Make a provider-neutral model contract.**~~ **Done 2026-09-19.**
+   `python/dcm/contract.py` holds the curated observation, the action table,
+   the generated prompt, freshness limits and `RuntimeDescriptor`, behind
+   versions `dcm-contract-v1`, `dcm-actions-v1` and `dcm-prompt-v1`. `curate`
+   cannot receive the recorded next action. 36 unit tests cover invalid JSON,
+   unknown actions, unsafe arguments, stale data and runtime failure. See
+   `docs/architecture/DCM-OBSERVE-V1.md`.
+3. **Connect the first local model in observe mode.** The artifacts are in
+   place: Qwen3-4B-Instruct-2507 Q5_K_M and Q4_K_M under `~/models/qwen/`,
+   pinned by SHA-256 in `~/models/qwen/MANIFEST.json`, with llama.cpp built
+   with CUDA at the revision pinned in `third_party.lock.json`. A smoke test
+   returned exact schema-valid JSON at 40.1 tok/s. What remains is the adapter
+   itself. Add a replaceable llama.cpp-compatible
    adapter; pin and record model checksum, quantization, prompt, sampling
    settings and latency. Enforce a real process/network deadline, not merely
    the current post-return timeout check. Do not install OpenClaw or ZeptoClaw
@@ -69,8 +81,11 @@ with the documented simulation mission workflow. Observe reports are under
 
 ## Needed from the owner
 
-Provide the absolute local path to the first Qwen model artifact once
-downloaded. If the target Jetson is selected, provide its model and RAM size.
+The Qwen artifacts are downloaded and pinned, so nothing blocks the adapter.
+Confirm the intended Jetson module: the stated "Orin Nano 64GB" does not exist,
+as the Orin Nano ships in 4 GB and 8 GB only and 64 GB indicates the AGX Orin
+64GB. The two lead to different model choices; see
+`docs/architecture/DCM-MODEL-SELECTION.md`.
 No Claw framework installation or hardware-flight approval is needed now.
 
 ## Boundaries and caveats
