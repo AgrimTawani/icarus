@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Provision the local model runtime for Phase 11: build dependencies, CUDA
-# toolkit, llama.cpp with GPU support, and the pinned Qwen GGUF artifacts.
+# Provision the local model runtime for Phase 11.
+#
+# Layout, deliberately:
+#   third_party/llama.cpp  external source tree, pinned by third_party.lock.json
+#   ~/models/qwen/         GGUF weights only; large binaries kept out of the repo
+#   logs/model-runtime/    setup logs, already gitignored
 #
 # Safe to re-run. Every step detects existing work and skips it, so an
 # interrupted run can simply be started again.
@@ -10,18 +14,21 @@
 
 set -uo pipefail
 
-MODELS_DIR="${MODELS_DIR:-$HOME/models}"
-QWEN_DIR="${MODELS_DIR}/qwen"
-VENV_DIR="${MODELS_DIR}/.venv"
-LLAMA_DIR="${MODELS_DIR}/llama.cpp"
-LOG_FILE="${MODELS_DIR}/setup-$(date +%Y%m%dT%H%M%S).log"
+PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCK_FILE="${PROJECT_ROOT}/config/dependencies/third_party.lock.json"
+LLAMA_DIR="${PROJECT_ROOT}/third_party/llama.cpp"
+VENV="${PROJECT_ROOT}/.venv"
+LOG_DIR="${PROJECT_ROOT}/logs/model-runtime"
+LOG_FILE="${LOG_DIR}/setup-$(date +%Y%m%dT%H%M%S).log"
+
+WEIGHTS_DIR="${WEIGHTS_DIR:-$HOME/models/qwen}"
 CUDA_ARCH="${CUDA_ARCH:-89}"   # RTX 4050 Laptop = Ada Lovelace = sm_89
 
 HF_REPO="bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF"
 PRIMARY="Qwen_Qwen3-4B-Instruct-2507-Q5_K_M.gguf"
 SECONDARY="Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 
-TOTAL_STEPS=9
+TOTAL_STEPS=8
 STEP=0
 declare -a RESULTS=()
 START_ALL=$(date +%s)
@@ -29,8 +36,7 @@ START_ALL=$(date +%s)
 C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
 C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_YELLOW=$'\033[33m'; C_BLUE=$'\033[34m'
 
-log()  { printf '%s\n' "$*" >>"${LOG_FILE}"; }
-say()  { printf '%s\n' "$*"; log "$*"; }
+log() { printf '%s\n' "$*" >>"${LOG_FILE}"; }
 
 begin_step() {
   STEP=$((STEP + 1))
@@ -44,46 +50,47 @@ begin_step() {
 
 ok()      { local d=$(( $(date +%s) - STEP_START ))
             printf '      %s[ok]%s %s %s(%ss)%s\n' "${C_GREEN}" "${C_RESET}" "$1" "${C_DIM}" "${d}" "${C_RESET}"
-            RESULTS+=("ok|${STEP_NAME}|$1|${d}s"); log "[ok] $1 (${d}s)"; }
-skipped() { local d=$(( $(date +%s) - STEP_START ))
-            printf '      %s[skip]%s %s\n' "${C_YELLOW}" "${C_RESET}" "$1"
-            RESULTS+=("skip|${STEP_NAME}|$1|${d}s"); log "[skip] $1"; }
-fail()    { local d=$(( $(date +%s) - STEP_START ))
-            printf '      %s[FAIL]%s %s\n' "${C_RED}" "${C_RESET}" "$1"
-            RESULTS+=("FAIL|${STEP_NAME}|$1|${d}s"); log "[FAIL] $1"
+            RESULTS+=("ok|${STEP_NAME}|$1"); log "[ok] $1 (${d}s)"; }
+skipped() { printf '      %s[skip]%s %s\n' "${C_YELLOW}" "${C_RESET}" "$1"
+            RESULTS+=("skip|${STEP_NAME}|$1"); log "[skip] $1"; }
+fail()    { printf '      %s[FAIL]%s %s\n' "${C_RED}" "${C_RESET}" "$1"
+            RESULTS+=("FAIL|${STEP_NAME}|$1"); log "[FAIL] $1"
             summary; exit 1; }
 note()    { printf '      %s%s%s\n' "${C_DIM}" "$*" "${C_RESET}"; log "  $*"; }
 
 summary() {
   local total=$(( $(date +%s) - START_ALL ))
   printf '\n%s=== Summary ===%s\n' "${C_BOLD}" "${C_RESET}"
-  local row status name detail dur mark colour
+  local row status name detail mark colour
   for row in "${RESULTS[@]}"; do
-    IFS='|' read -r status name detail dur <<<"${row}"
+    IFS='|' read -r status name detail <<<"${row}"
     case "${status}" in
       ok)   mark='v'; colour="${C_GREEN}"  ;;
       skip) mark='-'; colour="${C_YELLOW}" ;;
       *)    mark='x'; colour="${C_RED}"    ;;
     esac
-    printf '  %s%s%s  %-34s %s%s%s\n' \
+    printf '  %s%s%s  %-32s %s%s%s\n' \
       "${colour}" "${mark}" "${C_RESET}" "${name}" "${C_DIM}" "${detail}" "${C_RESET}"
   done
   printf '\n  Elapsed: %dm %ds\n  Log: %s\n' \
     $((total / 60)) $((total % 60)) "${LOG_FILE}"
 }
 
-mkdir -p "${MODELS_DIR}" "${QWEN_DIR}"
+mkdir -p "${LOG_DIR}" "${WEIGHTS_DIR}"
 : >"${LOG_FILE}"
 
 printf '%sIcarus Phase 11 model runtime setup%s\n' "${C_BOLD}" "${C_RESET}"
-printf '%sTarget: %s | log: %s%s\n' "${C_DIM}" "${MODELS_DIR}" "${LOG_FILE}" "${C_RESET}"
+printf '%sruntime: %s%s\n' "${C_DIM}" "${LLAMA_DIR}" "${C_RESET}"
+printf '%sweights: %s%s\n' "${C_DIM}" "${WEIGHTS_DIR}" "${C_RESET}"
 
 # ---------------------------------------------------------------- 1. preflight
 begin_step "Preflight checks"
 command -v nvidia-smi >/dev/null || fail "nvidia-smi not found; NVIDIA driver required"
+[[ -f "${LOCK_FILE}" ]] || fail "missing ${LOCK_FILE}"
+[[ -x "${VENV}/bin/hf" ]] || fail "hf CLI missing; run ./scripts/bootstrap --profile ml"
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
 VRAM_FREE=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
-DISK_FREE_GB=$(df -BG --output=avail "${MODELS_DIR}" | tail -1 | tr -dc '0-9')
+DISK_FREE_GB=$(df -BG --output=avail "${WEIGHTS_DIR}" | tail -1 | tr -dc '0-9')
 note "GPU: ${GPU_NAME}"
 note "VRAM free: ${VRAM_FREE} MiB"
 note "Disk free: ${DISK_FREE_GB} GiB"
@@ -93,13 +100,13 @@ ok "environment suitable"
 
 # ------------------------------------------------------------ 2. build deps
 begin_step "Build dependencies (apt)"
-APT_PKGS=(build-essential cmake git ccache libcurl4-openssl-dev python3-venv)
+APT_PKGS=(build-essential cmake git ccache libcurl4-openssl-dev)
 MISSING=()
 for p in "${APT_PKGS[@]}"; do
   dpkg -s "$p" >/dev/null 2>&1 || MISSING+=("$p")
 done
 if (( ${#MISSING[@]} == 0 )); then
-  skipped "all present: ${APT_PKGS[*]}"
+  skipped "all present"
 else
   note "installing: ${MISSING[*]}"
   sudo apt-get update -qq >>"${LOG_FILE}" 2>&1
@@ -109,7 +116,7 @@ else
 fi
 
 # ------------------------------------------------------------ 3. CUDA toolkit
-begin_step "CUDA toolkit (large: ~3 GiB, several minutes)"
+begin_step "CUDA toolkit (~3 GiB, several minutes)"
 if command -v nvcc >/dev/null 2>&1; then
   skipped "nvcc present: $(nvcc --version | grep -o 'release [0-9.]*' | head -1)"
 elif [[ -x /usr/local/cuda/bin/nvcc ]]; then
@@ -117,48 +124,55 @@ elif [[ -x /usr/local/cuda/bin/nvcc ]]; then
   skipped "nvcc found at /usr/local/cuda/bin"
 else
   # --no-install-recommends avoids the nsight GUI profilers and their OpenJDK 8
-  # dependency: 48 packages instead of 68, and no Java on the host.
+  # dependency: 48 packages instead of 68, and no Java on the host. A dry run
+  # confirmed this removes and upgrades nothing, so it cannot disturb other
+  # projects, and `apt-get remove nvidia-cuda-toolkit` fully reverses it.
   note "installing nvidia-cuda-toolkit (lean), this is the slowest step..."
   sudo apt-get install -y --no-install-recommends nvidia-cuda-toolkit \
-    >>"${LOG_FILE}" 2>&1 \
-    || fail "CUDA toolkit install failed; see ${LOG_FILE}"
+    >>"${LOG_FILE}" 2>&1 || fail "CUDA toolkit install failed; see ${LOG_FILE}"
   command -v nvcc >/dev/null || fail "nvcc still not on PATH after install"
   ok "nvcc $(nvcc --version | grep -o 'release [0-9.]*' | head -1)"
 fi
 
-# ------------------------------------------------- 4. python env for downloads
-begin_step "Python environment for model downloads"
-if [[ -x "${VENV_DIR}/bin/hf" ]]; then
-  skipped "huggingface_hub already installed"
-else
-  note "creating venv at ${VENV_DIR} (kept separate from the project .venv)"
-  python3 -m venv "${VENV_DIR}" >>"${LOG_FILE}" 2>&1 || fail "venv creation failed"
-  "${VENV_DIR}/bin/pip" install -q --upgrade pip >>"${LOG_FILE}" 2>&1
-  "${VENV_DIR}/bin/pip" install -q "huggingface_hub[hf_transfer,cli]" >>"${LOG_FILE}" 2>&1 \
-    || fail "huggingface_hub install failed; see ${LOG_FILE}"
-  [[ -x "${VENV_DIR}/bin/hf" ]] || fail "hf CLI missing after install"
-  ok "huggingface_hub ready"
-fi
-
-# ------------------------------------------------------------ 5. llama.cpp src
-begin_step "llama.cpp source"
+# ------------------------------------------------- 4. pinned llama.cpp source
+begin_step "llama.cpp source (pinned revision)"
+lock_value() {
+  "${VENV}/bin/python" - "${LOCK_FILE}" "$1" "$2" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["repositories"][sys.argv[2]][sys.argv[3]])
+PY
+}
+LLAMA_URL="$(lock_value llama_cpp url)"   || fail "llama_cpp missing from lock file"
+LLAMA_REV="$(lock_value llama_cpp revision)" || fail "llama_cpp revision missing"
+note "pinned to ${LLAMA_REV:0:12} from third_party.lock.json"
 if [[ -d "${LLAMA_DIR}/.git" ]]; then
-  note "updating existing checkout"
-  git -C "${LLAMA_DIR}" fetch --quiet origin >>"${LOG_FILE}" 2>&1
-  git -C "${LLAMA_DIR}" pull --quiet --ff-only >>"${LOG_FILE}" 2>&1 || note "fast-forward skipped"
-  skipped "already cloned at ${LLAMA_DIR}"
+  # Match bootstrap's contract: refuse to clobber a dirty external checkout.
+  git -C "${LLAMA_DIR}" diff --quiet && git -C "${LLAMA_DIR}" diff --cached --quiet \
+    || fail "third_party/llama.cpp has local changes; resolve them first"
+  [[ "$(git -C "${LLAMA_DIR}" remote get-url origin)" == "${LLAMA_URL}" ]] \
+    || fail "unexpected origin in third_party/llama.cpp"
 else
-  git clone --depth 1 https://github.com/ggml-org/llama.cpp "${LLAMA_DIR}" >>"${LOG_FILE}" 2>&1 \
-    || fail "clone failed; see ${LOG_FILE}"
-  ok "cloned"
+  mkdir -p "$(dirname "${LLAMA_DIR}")"
+  git init --quiet "${LLAMA_DIR}" >>"${LOG_FILE}" 2>&1
+  git -C "${LLAMA_DIR}" remote add origin "${LLAMA_URL}"
 fi
-LLAMA_REV=$(git -C "${LLAMA_DIR}" rev-parse --short HEAD)
-note "revision ${LLAMA_REV}"
+if [[ "$(git -C "${LLAMA_DIR}" rev-parse HEAD 2>/dev/null)" == "${LLAMA_REV}" ]]; then
+  skipped "already at pinned revision"
+else
+  note "fetching pinned revision..."
+  git -C "${LLAMA_DIR}" fetch --depth 1 origin "${LLAMA_REV}" >>"${LOG_FILE}" 2>&1 \
+    || fail "fetch failed; see ${LOG_FILE}"
+  git -C "${LLAMA_DIR}" checkout --detach "${LLAMA_REV}" >>"${LOG_FILE}" 2>&1 \
+    || fail "checkout failed; see ${LOG_FILE}"
+  ok "checked out ${LLAMA_REV:0:12}"
+fi
 
-# --------------------------------------------------------- 6. build llama.cpp
+# --------------------------------------------------------- 5. build llama.cpp
 begin_step "Build llama.cpp with CUDA (several minutes)"
-if [[ -x "${LLAMA_DIR}/build/bin/llama-cli" ]]; then
-  skipped "llama-cli already built"
+BUILT_REV_FILE="${LLAMA_DIR}/build/.icarus-built-revision"
+if [[ -x "${LLAMA_DIR}/build/bin/llama-cli" ]] \
+   && [[ "$(cat "${BUILT_REV_FILE}" 2>/dev/null)" == "${LLAMA_REV}" ]]; then
+  skipped "already built at pinned revision"
 else
   note "configuring for sm_${CUDA_ARCH}"
   cmake -S "${LLAMA_DIR}" -B "${LLAMA_DIR}/build" \
@@ -172,10 +186,11 @@ else
     --target llama-cli llama-server >>"${LOG_FILE}" 2>&1 \
     || fail "build failed; see ${LOG_FILE}"
   [[ -x "${LLAMA_DIR}/build/bin/llama-cli" ]] || fail "llama-cli missing after build"
+  printf '%s\n' "${LLAMA_REV}" >"${BUILT_REV_FILE}"
   ok "built llama-cli and llama-server"
 fi
 
-# ------------------------------------------------------ 7. verify GPU support
+# ------------------------------------------------------ 6. verify GPU support
 begin_step "Verify CUDA backend is active"
 DEVICES=$("${LLAMA_DIR}/build/bin/llama-cli" --list-devices 2>&1)
 log "${DEVICES}"
@@ -186,56 +201,56 @@ else
   fail "llama.cpp built without a usable CUDA device; inspect ${LOG_FILE}"
 fi
 
-# ------------------------------------------------------- 8. download artifacts
-begin_step "Download Qwen artifacts (~5 GiB, slowest on a slow link)"
-export HF_HUB_ENABLE_HF_TRANSFER=1
+# ------------------------------------------------------- 7. download weights
+begin_step "Download Qwen weights (~5 GiB)"
 download_one() {
   local name="$1" label="$2"
-  if [[ -f "${QWEN_DIR}/${name}" ]]; then
-    note "${label}: already present ($(du -h "${QWEN_DIR}/${name}" | cut -f1))"
+  if [[ -f "${WEIGHTS_DIR}/${name}" ]]; then
+    note "${label}: present ($(du -h "${WEIGHTS_DIR}/${name}" | cut -f1))"
     return 0
   fi
-  note "${label}: downloading ${name}"
-  "${VENV_DIR}/bin/hf" download "${HF_REPO}" "${name}" \
-    --local-dir "${QWEN_DIR}" 2>&1 | tee -a "${LOG_FILE}" | tail -1
-  [[ -f "${QWEN_DIR}/${name}" ]] || return 1
-  note "${label}: done ($(du -h "${QWEN_DIR}/${name}" | cut -f1))"
+  note "${label}: downloading..."
+  "${VENV}/bin/hf" download "${HF_REPO}" "${name}" \
+    --local-dir "${WEIGHTS_DIR}" >>"${LOG_FILE}" 2>&1
+  [[ -f "${WEIGHTS_DIR}/${name}" ]] || return 1
+  note "${label}: done ($(du -h "${WEIGHTS_DIR}/${name}" | cut -f1))"
 }
 download_one "${PRIMARY}"   "primary   Q5_K_M" || fail "primary download failed"
 download_one "${SECONDARY}" "secondary Q4_K_M" || fail "secondary download failed"
 ok "both artifacts present"
 
-# ---------------------------------------------------------- 9. pin provenance
+# ---------------------------------------------------------- 8. pin provenance
 begin_step "Checksum and pin provenance"
-MANIFEST="${QWEN_DIR}/MANIFEST.json"
-note "hashing (a few seconds per GiB)..."
-SHA_PRIMARY=$(sha256sum "${QWEN_DIR}/${PRIMARY}" | cut -d' ' -f1)
-SHA_SECONDARY=$(sha256sum "${QWEN_DIR}/${SECONDARY}" | cut -d' ' -f1)
+MANIFEST="${WEIGHTS_DIR}/MANIFEST.json"
+note "hashing, a few seconds per GiB..."
+SHA_PRIMARY=$(sha256sum "${WEIGHTS_DIR}/${PRIMARY}" | cut -d' ' -f1)
+SHA_SECONDARY=$(sha256sum "${WEIGHTS_DIR}/${SECONDARY}" | cut -d' ' -f1)
 cat >"${MANIFEST}" <<JSON
 {
   "recorded_at": "$(date -Is)",
   "repository": "${HF_REPO}",
   "llama_cpp_revision": "${LLAMA_REV}",
+  "llama_cpp_binary": "${LLAMA_DIR}/build/bin/llama-cli",
   "cuda_arch": "sm_${CUDA_ARCH}",
   "artifacts": [
     {
       "role": "primary",
-      "path": "${QWEN_DIR}/${PRIMARY}",
+      "path": "${WEIGHTS_DIR}/${PRIMARY}",
       "quantization": "q5_k_m",
       "sha256": "${SHA_PRIMARY}"
     },
     {
       "role": "secondary",
-      "path": "${QWEN_DIR}/${SECONDARY}",
+      "path": "${WEIGHTS_DIR}/${SECONDARY}",
       "quantization": "q4_k_m",
       "sha256": "${SHA_SECONDARY}"
     }
   ]
 }
 JSON
-note "Q5_K_M  ${SHA_PRIMARY}"
-note "Q4_K_M  ${SHA_SECONDARY}"
-ok "manifest written to ${MANIFEST}"
+note "Q5_K_M  ${SHA_PRIMARY:0:32}..."
+note "Q4_K_M  ${SHA_SECONDARY:0:32}..."
+ok "manifest written"
 
 summary
 
@@ -245,13 +260,13 @@ ${C_BOLD}Next${C_RESET}
   Smoke test the primary artifact:
 
     ${LLAMA_DIR}/build/bin/llama-cli \\
-      -m ${QWEN_DIR}/${PRIMARY} \\
-      -ngl 99 -c 8192 --temp 0 \\
+      -m ${WEIGHTS_DIR}/${PRIMARY} \\
+      -ngl 99 -c 8192 --temp 0 -no-cnv \\
       -p 'Reply with only this JSON object: {"action":"none","arguments":{}}'
 
-  -ngl 99 offloads every layer to the GPU. If it reports an out-of-memory
-  error, close GPU applications or add --cache-type-k q8_0 --cache-type-v q8_0
-  before reducing the quantization.
+  -ngl 99 offloads every layer to the GPU. On an out-of-memory error, close GPU
+  applications or add --cache-type-k q8_0 --cache-type-v q8_0 before reducing
+  the quantization.
 
   Then hand ${MANIFEST} to the Phase 11 adapter work.
 EOF

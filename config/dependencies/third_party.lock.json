@@ -10,6 +10,11 @@
       "url": "https://github.com/ArduPilot/ardupilot_gazebo.git",
       "revision": "082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5",
       "submodules": false
+    },
+    "llama_cpp": {
+      "url": "https://github.com/ggml-org/llama.cpp.git",
+      "revision": "1af554f8fc78ba029665a47b839484d9763e2a75",
+      "submodules": false
     }
   }
 }

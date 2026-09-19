@@ -12,6 +12,15 @@ Recorded on 2026-09-12:
 | --- | --- | --- |
 | ArduPilot | `https://github.com/ArduPilot/ardupilot.git` | `14c871f2732ccc5f5f558d003eb46fb2fe29d832` |
 | ArduPilot Gazebo | `https://github.com/ArduPilot/ardupilot_gazebo.git` | `082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5` |
+| llama.cpp | `https://github.com/ggml-org/llama.cpp.git` | `1af554f8fc78ba029665a47b839484d9763e2a75` |
+
+llama.cpp is fetched by `scripts/setup-model-runtime` rather than the
+simulation bootstrap, because building it compiles CUDA kernels that only the
+Phase 11 model runtime needs. It reads the same lock file, so the pinned
+revision is authoritative either way. Pinning it matters for the same reason
+the model checksum does: llama.cpp changes sampling defaults, chat-template
+handling and GGUF parsing frequently, and an unpinned runtime would let those
+changes silently alter Phase 12 comparisons.
 
 These commits are enforced by
 `config/dependencies/third_party.lock.json`. The bootstrap fetches and checks

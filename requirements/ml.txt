@@ -3,6 +3,7 @@
 accelerate==1.15.0
 bitsandbytes==0.50.2
 datasets==5.0.1
+huggingface-hub==1.31.0
 jupyterlab==4.6.3
 pandas==3.0.5
 peft==0.20.0
