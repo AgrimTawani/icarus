@@ -92,6 +92,14 @@ class StaleObservationError(ValueError):
     """The observation was too old to put in front of a model."""
 
 
+class DeadlineExceeded(Exception):
+    """A runtime did not answer within its deadline and was abandoned.
+
+    Deliberately not a ValueError: a missed deadline is a runtime failure, not
+    a malformed proposal, and the two are counted separately.
+    """
+
+
 def _describe_bounds(spec):
     kind = "integer" if spec["kind"] == "integer" else "number"
     return (f"{kind} in [{spec['minimum']}, {spec['maximum']}]"

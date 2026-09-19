@@ -20,6 +20,7 @@ from python.dcm.contract import (
     FRESHNESS_LIMITS,
     PROMPT_VERSION,
     VOCABULARY_VERSION,
+    DeadlineExceeded,
     ModelRuntime,
     RuntimeDescriptor,
     assess_freshness,
@@ -108,6 +109,11 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                         else:
                             proposal = validate_proposal(raw)
                             status = "valid"
+                    except DeadlineExceeded as failure:
+                        # The adapter enforced its own deadline and abandoned
+                        # the request; trust it over the elapsed-time check.
+                        elapsed_ms = (time.monotonic_ns() - started) / 1_000_000
+                        status, error = "timeout", str(failure)
                     except ValueError as failure:
                         elapsed_ms = (time.monotonic_ns() - started) / 1_000_000
                         status, error = "invalid", str(failure)
