@@ -26,8 +26,9 @@ quickly establish the truth of the repository.
    test and stop scenarios.
 
 For the current data and DCM work, continue with
-[`simulation/PHASE-10-EPISODES.md`](simulation/PHASE-10-EPISODES.md) and
-[`architecture/DCM-OBSERVE-V1.md`](architecture/DCM-OBSERVE-V1.md).
+[`simulation/PHASE-10-EPISODES.md`](simulation/PHASE-10-EPISODES.md),
+[`architecture/DCM-OBSERVE-V1.md`](architecture/DCM-OBSERVE-V1.md) and
+[`architecture/DCM-MODEL-SELECTION.md`](architecture/DCM-MODEL-SELECTION.md).
 
 ## Documentation Map
 
