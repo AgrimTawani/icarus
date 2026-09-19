@@ -13,6 +13,7 @@ import grpc
 from google.protobuf.json_format import MessageToDict
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "build/generated/python"))
 
 from icarus.v1 import (
@@ -21,6 +22,8 @@ from icarus.v1 import (
     drone_api_pb2_grpc,
     state_pb2,
 )
+
+from python.dataset_tools.episode import ActionRecorder, Episode
 
 TERMINAL = {
     action_pb2.ACTION_STATE_REJECTED,
@@ -34,7 +37,8 @@ TERMINAL = {
 
 
 class MissionClient:
-    def __init__(self, endpoint: str):
+    def __init__(self, endpoint: str, mission_name: str = "drone_api_mission"):
+        self.endpoint = endpoint
         self.channel = grpc.insecure_channel(endpoint)
         grpc.channel_ready_future(self.channel).result(timeout=15)
         self.session_api = drone_api_pb2_grpc.SessionServiceStub(self.channel)
@@ -47,6 +51,10 @@ class MissionClient:
         self.stop_renewal = threading.Event()
         self.renewal_thread = None
         self.trace_id = uuid.uuid4().hex
+        self.mission_name = mission_name
+        self.episode = None
+        self.episode_outcome = "completed"
+        self.episode_score = None
 
     def connect(self):
         response = self.session_api.Connect(
@@ -69,6 +77,19 @@ class MissionClient:
         missing = required - available
         if missing:
             raise RuntimeError("Drone API lacks required capabilities: " + str(missing))
+        session_path = ROOT / "logs/simulation/active_session.json"
+        session = None
+        if session_path.is_file():
+            candidate = json.loads(session_path.read_text())
+            try:
+                import os
+                os.kill(int(candidate["launcher_pid"]), 0)
+                session = candidate
+            except (KeyError, ValueError, ProcessLookupError):
+                pass
+        self.episode = Episode(ROOT, self.mission_name, self.endpoint, session)
+        self.action_api = ActionRecorder(self.action_api, self.episode, self)
+        self.episode.start_sampling(self)
 
     def acquire(self):
         response = self.authority_api.AcquireControl(
@@ -156,6 +177,9 @@ class MissionClient:
         self.stop_renewal.set()
         if self.renewal_thread:
             self.renewal_thread.join(timeout=2)
+        if self.episode:
+            self.episode.seal(self.episode_outcome, self.episode_score)
+            self.episode = None
         if self.lease_id:
             try:
                 self.authority_api.ReleaseControl(
@@ -193,7 +217,7 @@ def main():
     if not 1 <= args.hover_seconds <= 120:
         parser.error("--hover-seconds must be in 1..120")
 
-    client = MissionClient(args.endpoint)
+    client = MissionClient(args.endpoint, args.mission)
     result = {"status": "failed", "mission": args.mission}
     started = time.monotonic()
     try:
@@ -260,6 +284,8 @@ def main():
         print("FAIL:", error, flush=True)
         return 1
     finally:
+        client.episode_outcome = result["status"]
+        client.episode_score = result
         result["duration_s"] = time.monotonic() - started
         output = ROOT / "logs/phase8"
         output.mkdir(parents=True, exist_ok=True)

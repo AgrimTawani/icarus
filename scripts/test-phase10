@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT}"
+"${ROOT}/.venv/bin/python" -m unittest tests.unit.test_episode_replay -v
+if [[ $# -gt 0 ]]; then
+  exec "${ROOT}/scripts/replay-episode" "$1"
+fi
+printf '%s\n' 'Episode unit gate passed. Supply an episode path to test native replay.'

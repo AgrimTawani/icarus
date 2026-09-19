@@ -52,7 +52,7 @@ def main() -> int:
     from gz.transport13 import Node
 
     _, scenario = load_scenario("phase9_stress")
-    client = MissionClient("127.0.0.1:50051")
+    client = MissionClient("127.0.0.1:50051", "phase9_stress_acceptance")
     state_samples = []
     truth_samples = []
     wind_samples = []
@@ -292,6 +292,8 @@ def main() -> int:
                     client.wait_action(land, 100)
             except (grpc.RpcError, RuntimeError, TimeoutError) as recovery_error:
                 report["recovery_error"] = str(recovery_error)
+        client.episode_outcome = report["status"]
+        client.episode_score = report
         client.close()
         report["generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         output = ROOT / "logs/phase9"

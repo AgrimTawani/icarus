@@ -41,6 +41,12 @@ target_include_directories(icarus_phase8_core PUBLIC cpp "${CMAKE_CURRENT_SOURCE
 target_link_libraries(icarus_phase8_core PUBLIC icarus_proto yaml-cpp OpenSSL::Crypto)
 target_compile_options(icarus_phase8_core PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
+add_executable(icarus-replay-guardrails cpp/guardrails/replay_main.cpp)
+target_include_directories(icarus-replay-guardrails PRIVATE cpp)
+target_link_libraries(icarus-replay-guardrails PRIVATE icarus_phase8_core)
+target_compile_options(icarus-replay-guardrails PRIVATE
+  -Wall -Wextra -Wpedantic -Werror)
+
 set(ICARUS_MAVLINK_INCLUDE
   "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ardupilot/build/sitl/libraries/GCS_MAVLink/include/mavlink/v2.0")
 if(EXISTS "${ICARUS_MAVLINK_INCLUDE}/ardupilotmega/mavlink.h")

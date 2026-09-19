@@ -33,7 +33,7 @@ def local_point(north, east, altitude, radius=1.5):
 
 class Acceptance:
     def __init__(self):
-        self.client = MissionClient("127.0.0.1:50051")
+        self.client = MissionClient("127.0.0.1:50051", "v1_acceptance_suite")
         self.results = []
 
     def action(self, name, request, timeout):
@@ -295,6 +295,8 @@ def main():
         print("ACCEPTANCE FAILED:", error, flush=True)
         return 1
     finally:
+        acceptance.client.episode_outcome = status
+        acceptance.client.episode_score = {"missions": acceptance.results}
         acceptance.client.close()
         report = {
             "status": status,
