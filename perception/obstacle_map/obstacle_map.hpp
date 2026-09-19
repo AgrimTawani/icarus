@@ -14,6 +14,7 @@ class ObstacleMap {
   explicit ObstacleMap(std::uint32_t expiry_ms = 750);
   void Ingest(const RangeScan& scan, double vehicle_north_m,
               double vehicle_east_m, double vehicle_down_m,
+              double vehicle_roll_rad, double vehicle_pitch_rad,
               double vehicle_yaw_rad);
   [[nodiscard]] std::vector<Point3> Points(std::int64_t now_ms) const;
   [[nodiscard]] v1::PerceptionSummary Summary(

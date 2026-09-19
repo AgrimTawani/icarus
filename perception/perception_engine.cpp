@@ -12,7 +12,9 @@ void PerceptionEngine::Ingest(const RangeScan& scan) {
   if (!state || !state->has_local_position_ned()) return;
   map_.Ingest(scan, state->local_position_ned().north_m(),
               state->local_position_ned().east_m(),
-              state->local_position_ned().down_m(), state->attitude().yaw_rad());
+              state->local_position_ned().down_m(),
+              state->attitude().roll_rad(), state->attitude().pitch_rad(),
+              state->attitude().yaw_rad());
 }
 
 v1::PerceptionSummary PerceptionEngine::Summary() const {

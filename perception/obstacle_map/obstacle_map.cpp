@@ -18,7 +18,7 @@ constexpr double kMaximumDownwardReturnM = 0.05;
 ObstacleMap::ObstacleMap(std::uint32_t expiry_ms) : expiry_ms_(expiry_ms) {}
 
 void ObstacleMap::Ingest(const RangeScan& scan, double north, double east,
-                         double down, double yaw) {
+                         double down, double roll, double pitch, double yaw) {
   std::vector<Point3> transformed;
   transformed.reserve(scan.points.size());
   for (const auto& point : scan.points) {
@@ -33,9 +33,22 @@ void ObstacleMap::Ingest(const RangeScan& scan, double north, double east,
       const double body_down = scan.frame == SensorFrame::kBodyFlu
                                    ? -point.z_m
                                    : point.z_m;
-      local.x_m = north + std::cos(yaw) * forward - std::sin(yaw) * right;
-      local.y_m = east + std::sin(yaw) * forward + std::cos(yaw) * right;
-      local.z_m = down + body_down;
+      // Rotate body FRD into local NED in roll-pitch-yaw order. Ignoring pitch
+      // makes a level LiDAR beam look level in the map even when the aircraft
+      // noses down and the beam actually strikes terrain during takeoff.
+      const double rolled_right = std::cos(roll) * right -
+                                  std::sin(roll) * body_down;
+      const double rolled_down = std::sin(roll) * right +
+                                 std::cos(roll) * body_down;
+      const double pitched_forward = std::cos(pitch) * forward +
+                                     std::sin(pitch) * rolled_down;
+      const double pitched_down = -std::sin(pitch) * forward +
+                                  std::cos(pitch) * rolled_down;
+      local.x_m = north + std::cos(yaw) * pitched_forward -
+                  std::sin(yaw) * rolled_right;
+      local.y_m = east + std::sin(yaw) * pitched_forward +
+                  std::cos(yaw) * rolled_right;
+      local.z_m = down + pitched_down;
       local.confidence = point.confidence;
     }
     // Retain the forward/upward collision envelope. Downward returns belong to

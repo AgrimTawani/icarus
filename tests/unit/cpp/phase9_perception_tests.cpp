@@ -36,8 +36,8 @@ void TestFrameParityAndFreshness() {
 
   icarus::perception::ObstacleMap sim_map(750);
   icarus::perception::ObstacleMap real_map(750);
-  sim_map.Ingest(simulation, 10.0, 20.0, -5.0, 0.0);
-  real_map.Ingest(physical, 10.0, 20.0, -5.0, 0.0);
+  sim_map.Ingest(simulation, 10.0, 20.0, -5.0, 0.0, 0.0, 0.0);
+  real_map.Ingest(physical, 10.0, 20.0, -5.0, 0.0, 0.0, 0.0);
   const auto sim_points = sim_map.Points(1'100);
   const auto real_points = real_map.Points(1'100);
   Require(sim_points.size() == 1 && real_points.size() == 1,
@@ -95,13 +95,29 @@ void TestGroundReturnsDoNotBecomeFrontalObstacles() {
   scan.points.push_back({7.72, 0.0, 0.0, 1.0});
 
   icarus::perception::ObstacleMap map(750);
-  map.Ingest(scan, 0.0, 0.0, 0.0, 0.0);
+  map.Ingest(scan, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
   const auto points = map.Points(1'100);
   Require(points.size() == 1,
           "ground-grazing LiDAR rings must be excluded from frontal map");
   const auto summary = map.Summary(1'100, 0.0, 0.0, 0.0);
   Require(std::abs(summary.nearest_obstacle_distance_m() - 7.72) < 1e-9,
           "real level obstacle must remain after terrain filtering");
+}
+
+void TestPitchedHorizontalBeamHitsTerrain() {
+  icarus::perception::RangeScan scan;
+  scan.sensor_id = "gazebo-lidar";
+  scan.captured_at_unix_ms = 1'000;
+  scan.frame = icarus::perception::SensorFrame::kBodyFlu;
+  scan.points.push_back({2.3, 0.0, 0.0, 1.0});
+  scan.points.push_back({7.7, 0.0, 1.0, 1.0});
+  icarus::perception::ObstacleMap map(750);
+  map.Ingest(scan, 0.0, 0.0, -0.05, 0.0, -0.08, 0.0);
+  const auto points = map.Points(1'100);
+  Require(points.size() == 1,
+          "pitch-down level beam striking terrain must not become an obstacle");
+  Require(points[0].x_m > 7.0,
+          "elevated wall return must remain after full attitude transform");
 }
 
 }  // namespace
@@ -111,6 +127,7 @@ int main() {
     TestFrameParityAndFreshness();
     TestCollisionFreePlanning();
     TestGroundReturnsDoNotBecomeFrontalObstacles();
+    TestPitchedHorizontalBeamHitsTerrain();
     std::cout << "Phase 9 perception and planning tests passed\n";
     return 0;
   } catch (const std::exception& error) {
