@@ -54,18 +54,24 @@ with the documented simulation mission workflow. Observe reports are under
    cannot receive the recorded next action. 36 unit tests cover invalid JSON,
    unknown actions, unsafe arguments, stale data and runtime failure. See
    `docs/architecture/DCM-OBSERVE-V1.md`.
-3. **Connect the first local model in observe mode.** The artifacts are in
-   place: Qwen3-4B-Instruct-2507 Q5_K_M and Q4_K_M under `~/models/qwen/`,
-   pinned by SHA-256 in `~/models/qwen/MANIFEST.json`, with llama.cpp built
-   with CUDA at the revision pinned in `third_party.lock.json`. A smoke test
-   returned exact schema-valid JSON at 40.1 tok/s. What remains is the adapter
-   itself. Add a replaceable llama.cpp-compatible
+3. ~~**Connect the first local model in observe mode.**~~ **Done 2026-09-19.**
+   `python/dcm/llama_runtime.py` runs the pinned Qwen3-4B Q5_K_M behind a
+   wall-clock deadline that abandons the request and restarts the server.
+   `./scripts/observe-dcm <episode> --runtime llama`. Read the measured
+   behaviour in `docs/architecture/DCM-OBSERVE-V1.md` before trusting any
+   number from it: the first decision is 3.5-6x steady state and timed out in
+   one run of three, and at one decision point the model proposed climbing
+   immediately after a safety abort where the flight landed. Add a replaceable llama.cpp-compatible
    adapter; pin and record model checksum, quantization, prompt, sampling
    settings and latency. Enforce a real process/network deadline, not merely
    the current post-return timeout check. Do not install OpenClaw or ZeptoClaw
    as a prerequisite.
-4. **Evaluate offline before control.** Replay multiple successful and failed
-   episodes, including held-out cases. Compare proposals to the scripted
+4. **Evaluate offline before control.** This is now the next task. Replay
+   multiple successful and failed episodes, including held-out cases. Treat
+   decision points whose recorded action is outside the model vocabulary
+   (`goto`, and anything else not in `contract.ACTIONS`) as unscoreable rather
+   than as model failures. Report latency distributions over repeated runs
+   rather than single figures. Compare proposals to the scripted
    baseline without treating that baseline as a perfect label. Report invalid
    actions, timeouts, model errors, safety-rule outcomes and latency. Keep eval
    episodes excluded from training exports.

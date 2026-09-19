@@ -23,7 +23,7 @@ the corresponding simulation gates are measurable and stable.
 | 8 | Drone API, state engine, MAVLink gateway, missions and guardrails | Complete |
 | 9 | Perception, obstacle map and local planner | Complete |
 | 10 | Synchronized logging, replay and dataset pipeline | Simulation capture/replay verified; full gate open |
-| 11 | Pluggable DCM/model runtime with structured tool use | Observe-only mock slice started; model not connected |
+| 11 | Pluggable DCM/model runtime with structured tool use | Contract and llama.cpp adapter built; local Qwen proposing in observe mode; evaluation open |
 | 12 | Frozen scenario evaluation and model comparison | Planned |
 | 13 | Hardware-in-loop and staged physical integration | Deferred |
 | 14 | Dataset curation, fine-tuning experiments and regression evaluation | Deferred |

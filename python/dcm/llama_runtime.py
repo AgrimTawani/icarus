@@ -92,7 +92,40 @@ class LlamaCppRuntime:
         self.process = subprocess.Popen(
             command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         self._await_ready()
+        self._warm()
         return self
+
+    def _warm(self):
+        """Prefill the fixed system prompt before the decision clock starts.
+
+        /health reports ready once weights are loaded, but the first request
+        still pays to prefill the shared prompt prefix that `cache_prompt`
+        serves to every later decision. Warming with the real system prompt is
+        legitimate rather than flattering: it is fixed and known before any
+        episode runs, so what remains is the steady-state cost a deployed loop
+        would actually see.
+
+        This reduces the first decision's cost but does not remove it; see
+        docs/architecture/DCM-OBSERVE-V1.md for the measured spread and why the
+        deadline must be set with it in mind.
+        """
+        prompt = render_prompt({"warmup": True})
+        body = json.dumps({
+            "messages": [
+                {"role": "system", "content": prompt["system"]},
+                {"role": "user", "content": prompt["user"]},
+            ],
+            "temperature": 0.0, "stream": False, "max_tokens": 1,
+            "cache_prompt": True,
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            self.endpoint + "/v1/chat/completions", data=body,
+            headers={"Content-Type": "application/json"})
+        # A failed warmup is not fatal: the first decision simply pays the
+        # cost it would have paid anyway.
+        with contextlib.suppress(Exception), \
+                urllib.request.urlopen(request, timeout=STARTUP_TIMEOUT_S) as r:
+            r.read()
 
     def _await_ready(self):
         deadline = time.monotonic() + STARTUP_TIMEOUT_S

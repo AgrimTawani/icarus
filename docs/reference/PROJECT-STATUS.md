@@ -28,7 +28,7 @@ LLM-controlled drone stack.
 | C++ autonomy services | Phase 8 complete | Drone API, authority, guardrails, executor, state engine, safety supervisor and MAVLink gateway |
 | Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
-| DCM/model integration | Offline observe-only mock slice; no LLM connected | `python/dcm/observe.py`, `docs/architecture/DCM-OBSERVE-V1.md` |
+| DCM/model integration | Local Qwen connected in observe mode behind a versioned contract and wall-clock deadline; not evaluated | `python/dcm/contract.py`, `python/dcm/llama_runtime.py` |
 | Dataset/evaluation system | Phase 10 simulation episodes and replay implemented; model evaluation not implemented | `docs/simulation/PHASE-10-EPISODES.md` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
@@ -67,8 +67,10 @@ reports are versioned as `SIM-*` documents.
   measurements before the simulator can be called a validated digital twin.
 - Gazebo LiDAR is integrated with local avoidance; camera semantics and
   physical sensor fusion remain later work.
-- The DCM has no local model adapter, mission orchestration, approval mode or
-  closed-loop autonomous simulation mode yet.
+- The DCM has no mission orchestration, approval mode or closed-loop autonomous
+  simulation mode, and no model has been evaluated. A local Qwen proposes in
+  observe mode only, and at one recorded decision point it proposed climbing
+  immediately after a safety abort where the flight landed.
 - No real Pixhawk, Jetson or physical sensor adapter has passed a test.
 
 ## Current Gate
@@ -107,11 +109,26 @@ attitude, not yaw alone. Phase 11 can begin in observe mode. Real-flight
 privacy/retention review and physical sensor drivers remain later work; their
 normalized contracts and frame-parity tests already exist.
 
-The first Phase 11 slice is an offline observe-only replay using a
-`mock-no-action` runtime. On the sealed 677-record stress episode, it generated
-five valid mock proposals and executed zero actions. The mock is not a Qwen or
-Llama integration, and its post-return timeout is not a hard model deadline.
-The Phase 10 unit gate, native stress-episode replay, Phase 11 observe unit
-tests and existing Phase 8/9 C++ tests passed on 2026-09-19. Phase 10's full
-exit gate and all Phase 11 model/flight gates remain open. See
-[`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the agent handoff.
+Phase 11 has a versioned model contract and a working llama.cpp adapter. The
+contract declares the action table, the generated prompt, freshness limits and
+the runtime descriptor; the adapter runs the pinned Qwen3-4B Q5_K_M behind a
+wall-clock deadline that abandons the request and restarts the server. Local
+Qwen now proposes against sealed episodes in observe mode, and has executed
+nothing.
+
+A fresh headless Phase 9 stress flight passed on 2026-09-19 with the corrected
+full-attitude LiDAR transform: zero collisions, 1.804 m minimum clearance,
+0.448 m goal error, 11.9 m/s peak wind, and a perception dropout that produced
+`ABORTED_BY_SAFETY` and recovered. Its episode passed the Phase 10 replay gate.
+
+Two measured results qualify everything above. Model proposals are
+deterministic at `temperature: 0.0`, but the first decision costs 3.5-6x the
+steady-state 1.1-1.3 s and timed out in one run of three against a 5 s
+deadline. And at the final decision point of that flight, with the vehicle
+airborne after a safety abort, the model proposed climbing to 5 m where the
+flight landed. That proposal is schema-valid, because the contract checks shape
+and bounds rather than whether an action makes sense in context.
+
+45 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
+2026-09-19. Phase 10's full exit gate and all Phase 11 evaluation and flight
+gates remain open. See [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the handoff.
