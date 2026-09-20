@@ -23,6 +23,13 @@ outputs, requested and approved actions, execution feedback, safety decisions,
 MAVLink events and simulator ground truth. Raw video/lidar is optional and kept
 separate with explicit retention and privacy rules.
 
+For simulation episodes, the bounded Gazebo sensor recorder is now snapshotted
+into `raw_sensors/` at seal time when available. It contains compressed native
+protobuf streams and an indexed schema for IMU, GPS, LiDAR, range, battery and
+other numeric sensors. RGB/depth records retain metadata only—never pixels—and
+the manifest hashes every copied file. This keeps raw-sensor provenance with a
+replayable episode without turning the flight-control API into a bulk-media bus.
+
 ## Dataset Pipeline
 
 ```text

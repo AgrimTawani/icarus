@@ -1,8 +1,10 @@
 """Compact, append-only flight episode capture at the Drone API boundary.
 
-This records the control contract, not raw imagery or operator credentials.
-Every record has a common monotonic sequence and wall-clock timestamp; a final
-manifest seals the stream hash so incomplete/tampered episodes fail replay.
+This records the control contract, excludes operator credentials, and snapshots
+the bounded simulator sensor recording when one exists. Camera pixels remain
+excluded; the simulator's RGB/depth streams contain metadata only. Every record
+has a common monotonic sequence and wall-clock timestamp; a final manifest seals
+the stream hash so incomplete/tampered episodes fail replay.
 """
 
 import hashlib
@@ -85,6 +87,34 @@ def _source_fingerprint(root):
             digest.update(b"\0")
             digest.update(bytes.fromhex(_sha256(path)))
     return digest.hexdigest()
+
+
+def _snapshot_simulator_sensors(session, destination):
+    """Copy the bounded sensor stream into an episode, if this is a sim run.
+
+    The recorder owns the live source files and may still append while a
+    mission client closes. A copy is therefore a valid point-in-time snapshot,
+    not a move or a hard link to a mutable simulator directory. Image streams
+    have already had pixel payloads removed by ``record_compact_sensors.py``.
+    """
+    if not session or not session.get("run_directory"):
+        return None
+    source = Path(session["run_directory"]) / "sensors"
+    if not (source / "schema.json").is_file() or not (source / "index.jsonl").is_file():
+        return None
+    target = destination / "raw_sensors"
+    shutil.copytree(source, target)
+    hashes = {
+        str(path.relative_to(destination)): _sha256(path)
+        for path in sorted(target.rglob("*")) if path.is_file()
+    }
+    schema = json.loads((target / "schema.json").read_text())
+    return {
+        "format": schema.get("format"),
+        "image_pixels_saved": schema.get("image_pixels_saved"),
+        "channels": sorted((schema.get("channels") or {}).keys()),
+        "files": hashes,
+    }
 
 
 class ActionRecorder:
@@ -250,6 +280,8 @@ class Episode:
                 shutil.copyfile(source, target)
                 target.chmod(0o444)
                 config_hashes[str(target.relative_to(self.directory))] = _sha256(target)
+        raw_sensor_snapshot = _snapshot_simulator_sensors(
+            session, self.directory)
         manifest = {
             "schema": "icarus.episode.v1", "episode_id": self.id,
             "mission": self.mission, "source": "simulation" if session else "physical",
@@ -262,7 +294,8 @@ class Episode:
             "scenario": session.get("scenario") if session else None,
             "seed": session.get("seed") if session else None,
             "vehicle_id": "icarus-01",
-            "raw_sensor_payloads": False,
+            "raw_sensor_payloads": raw_sensor_snapshot is not None,
+            "raw_sensor_snapshot": raw_sensor_snapshot,
             "model": None,
             "privacy": {"operator_identifiers": "excluded",
                         "training_status": "unreviewed_do_not_train"},
