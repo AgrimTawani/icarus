@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# Phase 12.1 golden test run: empty world, fixed seed, a takeoff-route-
+# return-land mission, complete logs and replay, scripted vs DCM compared
+# on the identical scenario.
+#
+# simulation/scenarios/golden_run.json controls the world (empty, seed 7)
+# and its own ground-truth scoring only. Its "mission" field is locked by
+# scripts/simulation/scenario_config.py to the one built-in shape
+# (takeoff_hover_land, altitude_m=3, hover_s=10) regardless of what actually
+# flies; the route below is commanded independently through dcm-fly's own
+# --mission text, which is what the DCM and scripted controllers actually
+# read.
+#
+# The scripted leg runs autonomously and unattended: the deterministic
+# baseline's behaviour is fully known in advance (roughly thirty
+# if-statements, see python/dcm/baseline.py), so there is nothing to
+# supervise. The DCM leg is not launched autonomously by this script. The
+# corpus evaluation in this project found a live model climbing after a
+# safety abort and defaulting to `orbit` on ~40% of decisions; running an
+# unproven model unattended, even behind real guardrails and a geofence, is
+# a decision the operator should make watching it happen, not one this
+# script makes for them. It prints the exact command to run that leg in
+# approval mode instead.
+#
+# Usage: ./scripts/run-golden-run
+
+set -Eeuo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SCENARIO="golden_run"
+MISSION="take off to 5 metres, fly to a point 15 metres north and 10 metres east, then return home and land"
+LOG_DIR="${ROOT}/logs/golden-run"
+STAMP="$(date +%Y%m%dT%H%M%S)"
+LOG_FILE="${LOG_DIR}/run-${STAMP}.log"
+
+C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
+C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_YELLOW=$'\033[33m'; C_BLUE=$'\033[34m'
+
+mkdir -p "${LOG_DIR}"
+: >"${LOG_FILE}"
+
+STEP=0; TOTAL_STEPS=6
+begin_step() {
+  STEP=$((STEP + 1))
+  printf '\n%s[%d/%d]%s %s%s%s\n' "${C_BLUE}" "${STEP}" "${TOTAL_STEPS}" \
+    "${C_RESET}" "${C_BOLD}" "$1" "${C_RESET}"
+  echo "=== [${STEP}/${TOTAL_STEPS}] $1 ===" >>"${LOG_FILE}"
+}
+note() { printf '      %s%s%s\n' "${C_DIM}" "$*" "${C_RESET}"; echo "  $*" >>"${LOG_FILE}"; }
+ok()   { printf '      %s[ok]%s %s\n' "${C_GREEN}" "${C_RESET}" "$1"; }
+fail() { printf '      %s[FAIL]%s %s\n' "${C_RED}" "${C_RESET}" "$1"; exit 1; }
+
+stop_everything() {
+  pkill -INT -f icarus-drone-api >/dev/null 2>&1 || true
+  sleep 2
+  pkill -INT -f launch_compact >/dev/null 2>&1 || true
+  for _ in $(seq 1 40); do
+    [[ -f "${ROOT}/logs/simulation/active_session.json" ]] || break
+    sleep 1
+  done
+  pkill -f "gz sim -s" >/dev/null 2>&1 || true
+  pkill -f arducopter >/dev/null 2>&1 || true
+  sleep 2
+}
+trap 'stop_everything' EXIT
+
+wait_for_session() {
+  for _ in $(seq 1 120); do
+    grep -q '"status": *"ready"' "${ROOT}/logs/simulation/active_session.json" \
+      2>/dev/null && return 0
+    sleep 1
+  done
+  return 1
+}
+wait_for_api() {
+  for _ in $(seq 1 240); do
+    ss -ltn 2>/dev/null | grep -q ':50051' && return 0
+    sleep 1
+  done
+  return 1
+}
+
+BEFORE=$(ls "${ROOT}/logs/episodes" 2>/dev/null | wc -l)
+
+begin_step "Start simulator (empty world, seed 7, scenario ${SCENARIO})"
+stop_everything
+"${ROOT}/scripts/start-sim" --scenario "${SCENARIO}" >>"${LOG_FILE}" 2>&1 &
+wait_for_session || fail "simulator never reported ready; see ${LOG_FILE}"
+ok "simulator ready"
+
+begin_step "Start the Drone API and guardrails"
+"${ROOT}/scripts/start-autonomy" >>"${LOG_FILE}" 2>&1 &
+wait_for_api || fail "Drone API never listened on 50051; see ${LOG_FILE}"
+ok "drone api ready"
+
+begin_step "Fly the scripted deterministic controller (autonomous, unattended)"
+note "mission: ${MISSION}"
+if timeout 300 "${ROOT}/scripts/dcm-fly" --runtime scripted \
+      --mode autonomous --mission "${MISSION}" --max-decisions 20 \
+      >>"${LOG_FILE}" 2>&1; then
+  ok "scripted controller flight completed"
+else
+  fail "scripted controller flight failed; see ${LOG_FILE}"
+fi
+
+begin_step "Replay and verify the scripted episode"
+SCRIPTED_EPISODE="$(ls -t "${ROOT}/logs/episodes" | head -1)"
+if "${ROOT}/scripts/test-phase10" "${ROOT}/logs/episodes/${SCRIPTED_EPISODE}" \
+      >>"${LOG_FILE}" 2>&1; then
+  ok "episode ${SCRIPTED_EPISODE} replays and its guardrail decisions verify"
+else
+  fail "phase10 replay failed on ${SCRIPTED_EPISODE}; see ${LOG_FILE}"
+fi
+
+begin_step "Shut down"
+stop_everything
+trap - EXIT
+ok "simulator and drone api stopped"
+
+begin_step "Summary"
+AFTER=$(ls "${ROOT}/logs/episodes" 2>/dev/null | wc -l)
+printf '\n%s=== Golden run: scripted leg ===%s\n' "${C_BOLD}" "${C_RESET}"
+printf '  episode:  %s\n' "${SCRIPTED_EPISODE}"
+printf '  episodes on disk: %d -> %d\n' "${BEFORE}" "${AFTER}"
+printf '  log:      %s\n\n' "${LOG_FILE}"
+printf '%sNext: fly the DCM leg yourself, watching it.%s\n' "${C_BOLD}" "${C_RESET}"
+cat <<EOF
+
+  ./scripts/start-sim --scenario ${SCENARIO}
+  ./scripts/start-autonomy   # in another terminal
+  ./scripts/dcm-fly --runtime llama --mode approval \\
+    --mission "${MISSION}"
+
+  Then compare the two episodes' terminal state, and once both are sealed:
+
+  ./scripts/test-phase10 logs/episodes/${SCRIPTED_EPISODE}
+  ./scripts/test-phase10 logs/episodes/<dcm-episode-id>
+EOF

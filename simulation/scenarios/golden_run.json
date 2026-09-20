@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "golden_run",
+  "world_profile": "empty",
+  "environment_preset": "empty",
+  "vehicle_profile": "akshu_compact_sitl",
+  "initial_pose": {"x_m": 0, "y_m": 0, "z_m": 0.195, "yaw_deg": 0},
+  "home": {"latitude_deg": -35.363262, "longitude_deg": 149.165237, "elevation_m": 584, "heading_deg": 0},
+  "seed": 7,
+  "wind": {"enabled": false, "speed_m_s": 0, "direction_deg": 0, "rise_time_s": 0, "gust_amplitude_fraction": 0, "gust_period_s": 0, "direction_swing_deg": 0, "direction_period_s": 0, "operational_limit_m_s": 6},
+  "obstacles": [],
+  "sensor_profile": "physical",
+  "sensor_fault_schedule": [],
+  "gps_degradation": {"position_stddev_m": 0, "velocity_stddev_m_s": 0},
+  "communication": {"delay_s": 0, "dropout_s": 0},
+  "battery": {"initial_soc": 1.0, "load_w": 700},
+  "mission": {"type": "takeoff_hover_land", "altitude_m": 3, "hover_s": 10},
+  "maximum_duration_s": 300,
+  "success": {"expected_outcome": "pass", "maximum_drift_m": 1.0, "maximum_tilt_deg": 15, "minimum_real_time_factor": 0.8},
+  "ground_truth": {"routes": [
+    {"name": "golden_route", "clearance_m": 5.0, "waypoints_enu_m": [[0, 0, 5], [10, 15, 5], [0, 0, 5]]}
+  ]}
+}
