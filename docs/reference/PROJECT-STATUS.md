@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 ## Executive Summary
 
@@ -10,6 +10,13 @@ canonical vehicle derives mass, centre of gravity and inertia from a versioned
 three-axis turbulent atmosphere run in populated worlds, including shear,
 aerodynamic forces/moments and obstacle wakes. It is not yet an autonomous
 LLM-controlled drone stack.
+
+Update: the typed live DCM path now exists (chat, approval mode and
+simulator-only autonomous mode), but the evaluated language models do **not**
+meet the defined unattended-flight threshold. Phase 12 now has replay-verified
+simulator MAVLink loss and latency evidence; the full scenario campaign and
+model-promotion gate are still open. Vision model weights are pinned, while
+visual-command execution and a VLM are still future work.
 
 | Capability | State | Evidence or source |
 | --- | --- | --- |

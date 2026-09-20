@@ -1,8 +1,24 @@
 # Next Steps / Agent Handoff
 
-Status as of 2026-09-19. Read this with [`MASTER-PLAN.md`](MASTER-PLAN.md) and
+Status originally written 2026-09-19; current addendum 2026-09-21. Read this with [`MASTER-PLAN.md`](MASTER-PLAN.md) and
 [`reference/PROJECT-STATUS.md`](reference/PROJECT-STATUS.md). This is a handoff,
 not a claim that Phase 10 or Phase 11 has passed its full exit gate.
+
+## Current addendum — 2026-09-21
+
+The historical sections below describe the route taken; they do not describe
+the current implementation state by themselves.
+
+| Area | Current state | What remains before promotion |
+| --- | --- | --- |
+| Live DCM | Qwen/Llama runtime adapters, terminal chat, explicit approval and simulator-only autonomous modes are implemented behind typed Drone API actions. | Neither evaluated model meets the autonomous promotion threshold. |
+| Episode integrity | Every live DCM session seals an episode truthfully on success, action failure, exception or interruption; replay re-checks recorded guardrails. | Raw-sensor attachment and physical-flight retention policy remain Phase 10 work. |
+| Model comparison | Qwen3-4B Q5, Llama-3.2-3B Q4 and scripted baseline have versioned comparison reports with checksum, latency, VRAM/RAM, validity and guardrail results. | Grow the held-out mission corpus; do not select a winner from the current inadequate model results. |
+| Phase 12 link faults | Simulator-only bidirectional MAVLink loss and fixed-latency cases ran headlessly and replayed. Loss aborted active work, refused stale commands, recovered and landed; latency completed nominally. | Continue the rest of the fixed/randomized scenario campaign. |
+| Visual semantics | Grounding-DINO Tiny is downloaded and pinned. | Camera ingestion, detector/count action, depth landing-zone assessment and a user-selected VLM remain unimplemented. Do not download a VLM until the owner supplies the intended command/artifact. |
+
+The authoritative promotion thresholds and exact Phase 12 fault episode IDs are
+in [`architecture/PHASE-12-REGRESSION-POLICY.md`](architecture/PHASE-12-REGRESSION-POLICY.md).
 
 ## What is verified now
 
