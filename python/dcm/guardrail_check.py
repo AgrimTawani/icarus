@@ -64,6 +64,9 @@ def check_proposal(action, arguments, full_state, binary=None, policy=None):
     observation. Raises GuardrailUnavailable if the binary or policy file is
     missing, so a caller can record "unchecked" rather than a false verdict.
     """
+    from python.dcm._paths import ensure_generated_proto_on_path
+    ensure_generated_proto_on_path()
+
     from icarus.v1 import action_pb2
 
     from python.dcm.actions import build_command

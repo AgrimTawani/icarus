@@ -66,6 +66,9 @@ def build_request(action_pb2, action, arguments, context):
 
 
 def local_position(action_pb2, arguments, prefix=""):
+    from python.dcm._paths import ensure_generated_proto_on_path
+    ensure_generated_proto_on_path()
+
     from icarus.v1 import state_pb2
     return state_pb2.Position(
         local_ned=state_pb2.LocalPositionNed(

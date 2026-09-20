@@ -67,6 +67,9 @@ class LlamaCppRuntime:
         # The model identity belongs in the name so a report cannot be
         # mistaken for one produced by a different artifact.
         self.name = f"llama_cpp:{descriptor.model_id}"
+        # Speed and token counts from the most recent propose(), as reported
+        # by llama-server itself. None until a decision has actually run.
+        self.last_stats = None
 
     # ---------------------------------------------------------------- server
     @property
@@ -237,6 +240,17 @@ class LlamaCppRuntime:
             raise failure
         if payload is None:
             raise RuntimeError("llama-server returned no payload")
+        # llama-server already reports generation speed and token counts on
+        # every non-streaming response; record rather than recompute them.
+        self.last_stats = {
+            "tokens_predicted": (payload.get("usage") or {}).get(
+                "completion_tokens"),
+            "tokens_prompt": (payload.get("usage") or {}).get("prompt_tokens"),
+            "predicted_per_second": (payload.get("timings") or {}).get(
+                "predicted_per_second"),
+            "prompt_per_second": (payload.get("timings") or {}).get(
+                "prompt_per_second"),
+        }
         return payload["choices"][0]["message"]["content"]
 
     def restart(self):

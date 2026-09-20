@@ -32,6 +32,7 @@ from python.dcm.contract import (
     CONTRACT_VERSION_HISTORY,
 )
 from python.dcm.observe import observe_episode
+from python.dcm.resource_sampler import ResourceSampler
 
 SCHEMA = "icarus.dcm.evaluation.v1"
 STATUSES = ("valid", "invalid", "timeout", "error", "stale")
@@ -45,18 +46,27 @@ def _percentile(values, fraction):
     return ordered[index]
 
 
-def summarize_latency(values):
-    """Describe a latency sample, or return None when there is nothing to say."""
+def _summarize(values, suffix):
     if not values:
         return None
     return {
         "count": len(values),
-        "min_ms": round(min(values), 1),
-        "median_ms": round(statistics.median(values), 1),
-        "p90_ms": round(_percentile(values, 0.90), 1),
-        "max_ms": round(max(values), 1),
-        "mean_ms": round(statistics.fmean(values), 1),
+        f"min{suffix}": round(min(values), 1),
+        f"median{suffix}": round(statistics.median(values), 1),
+        f"p90{suffix}": round(_percentile(values, 0.90), 1),
+        f"max{suffix}": round(max(values), 1),
+        f"mean{suffix}": round(statistics.fmean(values), 1),
     }
+
+
+def summarize_latency(values):
+    """Describe a latency sample, or return None when there is nothing to say."""
+    return _summarize(values, "_ms")
+
+
+def summarize_rate(values):
+    """Describe a tokens-per-second sample; same shape, a different unit."""
+    return _summarize(values, "_tps")
 
 
 def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
@@ -76,6 +86,7 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
     guardrail_rejected = 0
     guardrail_unchecked = 0
     rejection_reasons = []
+    tokens_per_second = []
     for decision in decisions:
         status = decision["status"]
         counts[status] = counts.get(status, 0) + 1
@@ -88,6 +99,9 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
                     rejection_reasons.append(guardrail.get("reason_code"))
             else:
                 guardrail_unchecked += 1
+        stats = decision.get("runtime_stats")
+        if stats and stats.get("predicted_per_second") is not None:
+            tokens_per_second.append(stats["predicted_per_second"])
         if status != "stale":
             # Stale points never reach the runtime, so their zero latency is
             # not a measurement of the model.
@@ -131,6 +145,7 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
             else None),
         "guardrail_rejection_reasons": sorted(
             r for r in set(rejection_reasons) if r),
+        "tokens_per_second": summarize_rate(tokens_per_second),
     }
 
 
@@ -195,49 +210,63 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
     per_episode = []
     skipped = []
     started = time.monotonic()
-    for episode in episodes:
-        runs = []
-        for attempt in range(1, repeats + 1):
-            if progress:
-                progress(episode.name, attempt, repeats)
-            try:
-                report_dir, _ = observe_episode(
-                    episode, runtime, output / "observe", timeout_ms=timeout_ms,
-                    check_guardrails=check_guardrails, descriptor=descriptor,
-                    include_history=include_history,
-                    include_elapsed=include_elapsed,
-                    check_proposal_guardrails=check_proposal_guardrails)
-            except (ReplayError, OSError, KeyError) as unusable:
-                # A corpus accumulates episodes that predate a schema change or
-                # were sealed mid-failure. Losing the whole campaign to one of
-                # them would be worse than reporting it and moving on.
-                skipped.append({"episode": episode.name,
-                                "reason": f"{type(unusable).__name__}: {unusable}"})
-                runs = []
-                break
-            decisions = [json.loads(line) for line
-                         in (report_dir / "decisions.jsonl").read_text().splitlines()]
-            scored = score_decisions(decisions)
-            scored["run"] = attempt
-            scored["report"] = report_dir.name
-            scored["proposals"] = [
-                {"recorded": d.get("recorded_action"),
-                 "proposed": d["proposal"]["action"] if d["proposal"] else None,
-                 "status": d["status"]}
-                for d in decisions
-            ]
-            runs.append(scored)
-        if not runs:
-            continue
-        # Determinism is worth measuring directly: a model that answers
-        # differently run to run at temperature 0 is a finding in itself.
-        signatures = {json.dumps(run["proposals"], sort_keys=True) for run in runs}
-        per_episode.append({
-            "episode": episode.name,
-            "runs": runs,
-            "deterministic": len(signatures) == 1,
-            "first_decision_latency": _aggregate(runs, "first_decision_latency_ms"),
-        })
+    # A 14B model and a 4B model can score identically and cost completely
+    # different amounts of memory; that trade-off is invisible unless it is
+    # measured across the whole campaign rather than assumed from the
+    # quantization alone.
+    sampler = ResourceSampler(
+        pid_provider=lambda: getattr(getattr(runtime, "process", None),
+                                     "pid", None))
+    with sampler:
+        for episode in episodes:
+            runs = []
+            for attempt in range(1, repeats + 1):
+                if progress:
+                    progress(episode.name, attempt, repeats)
+                try:
+                    report_dir, _ = observe_episode(
+                        episode, runtime, output / "observe",
+                        timeout_ms=timeout_ms,
+                        check_guardrails=check_guardrails, descriptor=descriptor,
+                        include_history=include_history,
+                        include_elapsed=include_elapsed,
+                        check_proposal_guardrails=check_proposal_guardrails)
+                except (ReplayError, OSError, KeyError) as unusable:
+                    # A corpus accumulates episodes that predate a schema
+                    # change or were sealed mid-failure. Losing the whole
+                    # campaign to one of them would be worse than reporting
+                    # it and moving on.
+                    skipped.append({
+                        "episode": episode.name,
+                        "reason": f"{type(unusable).__name__}: {unusable}"})
+                    runs = []
+                    break
+                decisions = [json.loads(line) for line in
+                            (report_dir / "decisions.jsonl").read_text().splitlines()]
+                scored = score_decisions(decisions)
+                scored["run"] = attempt
+                scored["report"] = report_dir.name
+                scored["proposals"] = [
+                    {"recorded": d.get("recorded_action"),
+                     "proposed": d["proposal"]["action"] if d["proposal"] else None,
+                     "status": d["status"]}
+                    for d in decisions
+                ]
+                runs.append(scored)
+            if not runs:
+                continue
+            # Determinism is worth measuring directly: a model that answers
+            # differently run to run at temperature 0 is a finding in itself.
+            signatures = {json.dumps(run["proposals"], sort_keys=True)
+                         for run in runs}
+            per_episode.append({
+                "episode": episode.name,
+                "runs": runs,
+                "deterministic": len(signatures) == 1,
+                "first_decision_latency": _aggregate(
+                    runs, "first_decision_latency_ms"),
+            })
+    resource_peaks = sampler.peaks()
 
     all_runs = [run for entry in per_episode for run in entry["runs"]]
     totals = dict.fromkeys(STATUSES, 0)
@@ -246,6 +275,7 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
     rejection_reasons = []
     steady = []
     firsts = []
+    tokens_per_second = []
     # The runtime stays up for the whole campaign, so only the very first
     # decision pays to prefill a cold server. Pooling it with every episode's
     # first decision would hide a 7218 ms cold start inside a 387 ms median.
@@ -265,6 +295,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             firsts.append(run["first_decision_latency_ms"])
         if run["steady_latency"]:
             steady.append(run["steady_latency"]["median_ms"])
+        if run["tokens_per_second"]:
+            tokens_per_second.append(run["tokens_per_second"]["median_tps"])
     decided = totals["valid"] + totals["invalid"] + totals["timeout"] + totals["error"]
 
     report = {
@@ -307,6 +339,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             "episode_first_decision": summarize_latency(firsts),
             "steady_state_medians": summarize_latency(steady),
         },
+        "tokens_per_second": summarize_rate(tokens_per_second),
+        "resource_peaks": resource_peaks,
         "deterministic_episodes": sum(1 for e in per_episode if e["deterministic"]),
         "per_action": per_action_breakdown(per_episode),
         "per_episode": per_episode,
@@ -365,6 +399,17 @@ def format_report(report):
             lines.append(
                 f"{label:<19}median {stats['median_ms']:.0f} ms, "
                 f"min {stats['min_ms']:.0f}, max {stats['max_ms']:.0f}")
+    tps = report.get("tokens_per_second")
+    if tps:
+        lines.append(f"{'tokens/sec':<19}median {tps['median_tps']:.1f}, "
+                     f"min {tps['min_tps']:.1f}, max {tps['max_tps']:.1f}")
+    peaks = report.get("resource_peaks") or {}
+    if peaks.get("peak_vram_mib") is not None:
+        lines.append(f"{'peak VRAM':<19}{peaks['peak_vram_mib']:.0f} MiB"
+                     " (whole GPU, not process-isolated)")
+    if peaks.get("peak_ram_mib") is not None:
+        lines.append(f"{'peak RAM':<19}{peaks['peak_ram_mib']:.0f} MiB"
+                     " (model runtime process)")
     breakdown = report.get("per_action")
     if breakdown:
         lines.append("")

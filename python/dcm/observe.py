@@ -188,6 +188,9 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                                     "reason": str(unavailable)}
                         guardrail_counts["unchecked"] += 1
 
+                # Some runtimes (llama.cpp) report their own generation speed
+                # and token counts per decision; record rather than recompute.
+                runtime_stats = getattr(runtime, "last_stats", None)
                 recorded_action = next(iter(payload["command"]))
                 target.write(json.dumps({
                     "decision": proposals, "observation": observation,
@@ -197,6 +200,7 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     "status": status, "error": error,
                     "latency_ms": round(elapsed_ms, 3),
                     "guardrail": guardrail,
+                    "runtime_stats": runtime_stats,
                     "executed": False,
                 }, sort_keys=True) + "\n")
     summary = {
