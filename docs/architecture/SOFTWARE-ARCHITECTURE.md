@@ -111,6 +111,16 @@ that adapter. The ground-station viewer is identical in both cases. Raw RGB and
 depth frames remain separate internal perception inputs and are not transported
 through MAVLink or the command API.
 
+Landing-surface assessment is a separate deterministic depth boundary. It
+accepts a calibrated float32 depth frame and the camera optical axis in
+body-FRD, then returns coverage, plane slope, residual roughness and a bounded
+``suitable`` result. It refuses a source that is not calibrated within 15° of
+downward; the present forward RGB-D camera therefore cannot certify a landing
+area. `scripts/capture-depth-frame` and `scripts/assess-landing-zone` provide
+the Gazebo adapter and offline analyzer respectively. A downward depth sensor
+and live calibration evidence remain required before this becomes an
+operational landing capability.
+
 ## Runtime Topology
 
 The expected process topology after Phase 8 is:
