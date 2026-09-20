@@ -21,7 +21,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]
                        / "build/generated/python"))
 
 from python.dcm.contract import DeadlineExceeded
-from python.dcm.fly import MissionMemory, approve, fly_mission, summarize
+from python.dcm.fly import (
+    MissionMemory,
+    approve,
+    fly_mission,
+    session_episode_summary,
+    summarize,
+)
 
 FRESH = 1_789_827_075_000
 
@@ -284,6 +290,27 @@ class MissionMemoryTests(unittest.TestCase):
         snapshot = memory.as_history()
         memory.remember("land", "SUCCEEDED")
         self.assertEqual(len(snapshot), 1)
+
+
+class EpisodeSealSummaryTests(unittest.TestCase):
+    def test_failed_action_marks_the_session_episode_failed(self):
+        status, score = session_episode_summary([{
+            "mission": "m", "counts": {"failed": 1}, "executed": [],
+        }])
+        self.assertEqual(status, "failed")
+        self.assertEqual(score["missions"][0]["mission"], "m")
+
+    def test_declined_action_is_retained_without_claiming_a_flight_failure(self):
+        status, score = session_episode_summary([{
+            "mission": "m", "counts": {"declined": 1, "failed": 0},
+        }])
+        self.assertEqual(status, "completed")
+        self.assertNotIn("error", score)
+
+    def test_session_exception_marks_the_episode_failed(self):
+        status, score = session_episode_summary([], RuntimeError("server died"))
+        self.assertEqual(status, "failed")
+        self.assertEqual(score["error"]["type"], "RuntimeError")
 
 
 class ModeValidationTests(unittest.TestCase):

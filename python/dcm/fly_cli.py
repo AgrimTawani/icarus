@@ -18,7 +18,7 @@ from python.dcm.contract import (
     PROMPT_VERSION_ENDING,
     RuntimeDescriptor,
 )
-from python.dcm.fly import dumps, fly_mission, summarize
+from python.dcm.fly import dumps, fly_mission, session_episode_summary, summarize
 
 DEFAULT_MANIFEST = Path.home() / "models/qwen/MANIFEST.json"
 
@@ -91,6 +91,7 @@ def main():
     runtime, descriptor = build_runtime(args)
     client = MissionClient(args.endpoint, args.mission or "dcm_chat_session")
     mode = args.mode
+    session_results = []
     try:
         client.connect()
         client.acquire()
@@ -133,11 +134,24 @@ def main():
             result = fly_mission(
                 client, runtime, mission, mode=mode, descriptor=descriptor,
                 max_decisions=args.max_decisions)
+            session_results.append(result)
+            # MissionClient.close() seals unconditionally.  Update these after
+            # every mission so an operator exit still retains all previous
+            # results and any terminal action failure is marked truthfully.
+            client.episode_outcome, client.episode_score = session_episode_summary(
+                session_results)
             print()
             print(summarize(result))
             if args.json:
                 print(dumps(result))
             print()
+    except BaseException as error:
+        # This covers model/server failures and interruption after connect.  A
+        # sealed failed episode is valuable regression evidence; never let a
+        # chat-session exception turn into the default "completed" manifest.
+        client.episode_outcome, client.episode_score = session_episode_summary(
+            session_results, error)
+        raise
     finally:
         stop = getattr(runtime, "stop", None)
         if stop:

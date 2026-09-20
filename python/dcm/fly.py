@@ -204,6 +204,24 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             "model": descriptor.as_record() if descriptor else None}
 
 
+def session_episode_summary(results, error=None):
+    """Return the final outcome and compact score stored when a DCM client closes.
+
+    ``MissionClient.close`` seals its active episode unconditionally.  The live
+    chat wrapper may run several missions in that one client session, so it
+    must give ``close`` a truthful terminal outcome before it does so.  A
+    declined proposal is an operator decision, not a failed flight; a terminal
+    action failure or an uncaught session error is retained as a failed
+    episode.
+    """
+    failed = error is not None or any(
+        result.get("counts", {}).get("failed", 0) > 0 for result in results)
+    score = {"missions": list(results), "status": "failed" if failed else "completed"}
+    if error is not None:
+        score["error"] = {"type": type(error).__name__, "message": str(error)}
+    return score["status"], score
+
+
 def _execute(client, action_pb2, proposal, index, echo):
     """Send one approved action and wait for its terminal state."""
     action = proposal["action"]
