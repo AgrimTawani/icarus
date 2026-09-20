@@ -75,6 +75,15 @@ def local_position(action_pb2, arguments, prefix=""):
             north_m=arguments[prefix + "north_m"],
             east_m=arguments[prefix + "east_m"],
             down_m=-arguments["altitude_agl_m"],
+            # The guardrails reject a local position with an empty origin id
+            # outright (REASON_CODE_INVALID_ARGUMENT). Every goto and orbit
+            # proposal was failing this check silently until the offline
+            # guardrail check caught it: "silently" because it never reached
+            # the contract's own bounds check, which has no notion of
+            # origin frames. "ekf-origin" is the identifier the MAVLink
+            # gateway itself sets (cpp/mavlink_gateway/mavlink_gateway.cpp)
+            # and what the Phase 8/9 acceptance clients already use.
+            origin_id="ekf-origin",
         ))
 
 

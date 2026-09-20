@@ -74,6 +74,27 @@ class RealGuardrailTests(unittest.TestCase):
         result = check_proposal("land", {}, airborne)
         self.assertTrue(result["would_execute"])
 
+    def test_a_reachable_goto_is_accepted(self):
+        # Regression: local_position() previously left origin_id empty, which
+        # the guardrails reject outright regardless of the destination's
+        # actual reachability. This was caught by exactly this check running
+        # against Qwen's real goto proposals, not by any offline bounds check.
+        airborne = disarmed_state(
+            flight_phase="FLIGHT_PHASE_AIRBORNE", armed=True, landed=False)
+        result = check_proposal(
+            "goto", {"north_m": 12.0, "east_m": 18.0, "altitude_agl_m": 5.0},
+            airborne)
+        self.assertTrue(result["would_execute"], result)
+
+    def test_an_orbit_with_a_local_center_is_accepted(self):
+        airborne = disarmed_state(
+            flight_phase="FLIGHT_PHASE_AIRBORNE", armed=True, landed=False)
+        result = check_proposal(
+            "orbit", {"center_north_m": 10.0, "center_east_m": 10.0,
+                     "radius_m": 5.0, "altitude_agl_m": 5.0},
+            airborne)
+        self.assertTrue(result["would_execute"], result)
+
     def test_a_stale_state_is_rejected_by_the_context_check(self):
         # now_unix_ms is taken from the state's own timestamp, so staleness
         # here can only come from a state older than the policy allows

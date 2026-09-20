@@ -20,12 +20,14 @@ from python.dcm.evaluate import (
 from python.dcm.observe import MockRuntime
 
 
-def decision(recorded, proposed=None, status="valid", latency_ms=1000.0):
+def decision(recorded, proposed=None, status="valid", latency_ms=1000.0,
+             guardrail=None):
     return {
         "recorded_action": recorded,
         "proposal": {"action": proposed, "arguments": {}} if proposed else None,
         "status": status,
         "latency_ms": latency_ms,
+        "guardrail": guardrail,
     }
 
 
@@ -116,6 +118,81 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(scored["asked"], 0)
 
 
+class ActionCountAndCostTests(unittest.TestCase):
+    def test_none_proposals_are_not_counted_as_actions(self):
+        scored = score_decisions([
+            decision("arm", "arm"),
+            decision("hold", "none"),
+        ])
+        self.assertEqual(scored["action_count"], 1)
+
+    def test_invalid_and_stale_decisions_are_not_actions_either(self):
+        scored = score_decisions([
+            decision("arm", None, status="invalid"),
+            decision("hold", None, status="stale", latency_ms=0.0),
+        ])
+        self.assertEqual(scored["action_count"], 0)
+
+    def test_decision_cost_sums_every_decisions_latency(self):
+        scored = score_decisions([
+            decision("arm", "arm", latency_ms=500.0),
+            decision("hold", "hold", latency_ms=750.0),
+        ])
+        self.assertEqual(scored["decision_cost_ms"], 1250.0)
+
+
+class RecoveryProxyTests(unittest.TestCase):
+    def test_a_valid_decision_after_a_bad_one_counts_as_recovered(self):
+        scored = score_decisions([
+            decision("arm", None, status="invalid"),
+            decision("arm", "arm"),
+        ])
+        self.assertEqual(scored["recoverable_events"], 1)
+        self.assertEqual(scored["recovered_events"], 1)
+        self.assertEqual(scored["recovery_rate"], 1.0)
+
+    def test_another_bad_decision_after_a_bad_one_does_not_recover(self):
+        scored = score_decisions([
+            decision("arm", None, status="invalid"),
+            decision("arm", None, status="timeout"),
+        ])
+        self.assertEqual(scored["recovered_events"], 0)
+        self.assertEqual(scored["recovery_rate"], 0.0)
+
+    def test_a_guardrail_rejected_valid_proposal_is_recoverable(self):
+        # Schema-valid but something the real safety policy would refuse is
+        # a bad decision too, distinct from a malformed one.
+        rejected = decision("takeoff", "takeoff", guardrail={
+            "checked": True, "would_execute": False,
+            "reason_code": "REASON_CODE_NOT_ARMED"})
+        scored = score_decisions([rejected, decision("arm", "arm")])
+        self.assertEqual(scored["recoverable_events"], 1)
+        self.assertEqual(scored["recovered_events"], 1)
+
+    def test_recovering_into_another_guardrail_rejection_does_not_count(self):
+        rejected = decision("takeoff", "takeoff", guardrail={
+            "checked": True, "would_execute": False,
+            "reason_code": "REASON_CODE_NOT_ARMED"})
+        also_rejected = decision("takeoff", "land", guardrail={
+            "checked": True, "would_execute": False,
+            "reason_code": "REASON_CODE_NOT_LANDED"})
+        scored = score_decisions([rejected, also_rejected])
+        self.assertEqual(scored["recovered_events"], 0)
+
+    def test_a_bad_decision_with_no_follow_up_is_not_recovered(self):
+        scored = score_decisions([decision("arm", None, status="timeout")])
+        self.assertEqual(scored["recoverable_events"], 1)
+        self.assertEqual(scored["recovered_events"], 0)
+
+    def test_no_bad_decisions_yields_no_rate_rather_than_zero(self):
+        # A perfect run should not read as "0% recovery", which would look
+        # like a failure to recover from anything rather than nothing to
+        # recover from.
+        scored = score_decisions([decision("arm", "arm")])
+        self.assertEqual(scored["recoverable_events"], 0)
+        self.assertIsNone(scored["recovery_rate"])
+
+
 class LatencySummaryTests(unittest.TestCase):
     def test_empty_sample_has_no_summary(self):
         self.assertIsNone(summarize_latency([]))
@@ -147,6 +224,9 @@ class ReportFormattingTests(unittest.TestCase):
                 "guardrail_checked": 8, "guardrail_rejected": 1,
                 "guardrail_unchecked": 0, "guardrail_rejection_rate": 0.125,
                 "guardrail_rejection_reasons": ["REASON_CODE_NOT_ARMED"],
+                "action_count": 6, "decision_cost_ms": 4500.0,
+                "recoverable_events": 3, "recovered_events": 2,
+                "recovery_rate": 2 / 3,
             },
             "latency": {
                 "cold_start_ms": 7204.0,

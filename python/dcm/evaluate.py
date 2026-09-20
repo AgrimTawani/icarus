@@ -87,7 +87,11 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
     guardrail_unchecked = 0
     rejection_reasons = []
     tokens_per_second = []
-    for decision in decisions:
+    action_count = 0
+    decision_cost_ms = 0.0
+    recoverable = 0
+    recovered = 0
+    for index, decision in enumerate(decisions):
         status = decision["status"]
         counts[status] = counts.get(status, 0) + 1
         guardrail = decision.get("guardrail")
@@ -102,6 +106,29 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
         stats = decision.get("runtime_stats")
         if stats and stats.get("predicted_per_second") is not None:
             tokens_per_second.append(stats["predicted_per_second"])
+        decision_cost_ms += decision["latency_ms"]
+        if (status == "valid" and decision["proposal"]["action"] != "none"):
+            action_count += 1
+        # A "recoverable" event is one that produced no usable action: a
+        # stale refusal, a malformed or late response, or a valid proposal
+        # the real safety policy would have refused. "Recovered" means the
+        # very next decision produced something that could actually be
+        # acted on. This is an offline proxy, not the real closed-loop
+        # recovery success the roadmap asks for: nothing here re-simulates
+        # what would have happened after a bad decision, since the
+        # recorded state does not change in response to it.
+        failed_guardrail = bool(decision.get("guardrail")
+                                and decision["guardrail"].get("checked")
+                                and not decision["guardrail"].get("would_execute"))
+        if status in ("stale", "invalid", "timeout", "error") or failed_guardrail:
+            recoverable += 1
+            if index + 1 < len(decisions):
+                nxt = decisions[index + 1]
+                next_guardrail_ok = not (
+                    nxt.get("guardrail") and nxt["guardrail"].get("checked")
+                    and not nxt["guardrail"].get("would_execute"))
+                if nxt["status"] == "valid" and next_guardrail_ok:
+                    recovered += 1
         if status != "stale":
             # Stale points never reach the runtime, so their zero latency is
             # not a measurement of the model.
@@ -146,6 +173,16 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
         "guardrail_rejection_reasons": sorted(
             r for r in set(rejection_reasons) if r),
         "tokens_per_second": summarize_rate(tokens_per_second),
+        # Offline proxies. Neither is the roadmap's real closed-loop
+        # "mission success" or "recovery success": nothing here re-simulates
+        # a flight in response to the model's own choices, so these describe
+        # decision-level behavior, not flight outcomes. Real mission success
+        # and recovery need dcm-fly in autonomous mode (Phase 12).
+        "action_count": action_count,
+        "decision_cost_ms": round(decision_cost_ms, 1),
+        "recoverable_events": recoverable,
+        "recovered_events": recovered,
+        "recovery_rate": (recovered / recoverable) if recoverable else None,
     }
 
 
@@ -276,6 +313,10 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
     steady = []
     firsts = []
     tokens_per_second = []
+    action_count = 0
+    decision_cost_ms = 0.0
+    recoverable = 0
+    recovered = 0
     # The runtime stays up for the whole campaign, so only the very first
     # decision pays to prefill a cold server. Pooling it with every episode's
     # first decision would hide a 7218 ms cold start inside a 387 ms median.
@@ -297,6 +338,10 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             steady.append(run["steady_latency"]["median_ms"])
         if run["tokens_per_second"]:
             tokens_per_second.append(run["tokens_per_second"]["median_tps"])
+        action_count += run["action_count"]
+        decision_cost_ms += run["decision_cost_ms"]
+        recoverable += run["recoverable_events"]
+        recovered += run["recovered_events"]
     decided = totals["valid"] + totals["invalid"] + totals["timeout"] + totals["error"]
 
     report = {
@@ -333,6 +378,11 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
                 guardrail_rejected / guardrail_checked if guardrail_checked
                 else None),
             "guardrail_rejection_reasons": sorted(set(rejection_reasons)),
+            "action_count": action_count,
+            "decision_cost_ms": round(decision_cost_ms, 1),
+            "recoverable_events": recoverable,
+            "recovered_events": recovered,
+            "recovery_rate": (recovered / recoverable) if recoverable else None,
         },
         "latency": {
             "cold_start_ms": cold_start_ms,
@@ -341,6 +391,15 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
         },
         "tokens_per_second": summarize_rate(tokens_per_second),
         "resource_peaks": resource_peaks,
+        # The roadmap also asks for mission success rate and full recovery
+        # success. Neither is measurable from offline replay: nothing here
+        # re-simulates a flight in response to the model's own choices, so
+        # there is no notion of "did the mission actually succeed" to
+        # compute. That requires dcm-fly in autonomous mode against a live
+        # simulator, which is Phase 12 work, not this harness. Left explicit
+        # as None rather than omitted, so it reads as measured-absent rather
+        # than forgotten.
+        "mission_success_rate": None,
         "deterministic_episodes": sum(1 for e in per_episode if e["deterministic"]),
         "per_action": per_action_breakdown(per_episode),
         "per_episode": per_episode,
@@ -388,6 +447,16 @@ def format_report(report):
     if totals["guardrail_rejection_reasons"]:
         lines.append(f"{'':<19}reasons: "
                      + ", ".join(totals["guardrail_rejection_reasons"]))
+    recovery = totals["recovery_rate"]
+    lines.append(
+        f"{'recovery (proxy)':<19}"
+        + (f"{recovery:.1%} of {totals['recoverable_events']} bad decisions"
+           " followed by a usable one" if recovery is not None
+           else "n/a (no bad decisions to recover from)"))
+    lines.append(f"{'action count':<19}{totals['action_count']} non-none "
+                 "proposals actually made")
+    lines.append(f"{'decision cost':<19}{totals['decision_cost_ms']:.0f} ms "
+                 "total time spent deciding (not flight time)")
     lines.append("")
     cold = report["latency"].get("cold_start_ms")
     if cold is not None:
