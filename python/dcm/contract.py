@@ -367,7 +367,11 @@ class RuntimeDescriptor:
             raise ValueError("no artifact with role " + role)
         fields = {
             "model_id": Path(artifact["path"]).stem,
-            "family": "qwen",
+            # A manifest may name its own family (needed once a manifest
+            # holds more than one model family, as the vision manifest does);
+            # falling back to "qwen" keeps existing single-family manifests
+            # working without every one of them needing updating.
+            "family": artifact.get("family", manifest.get("family", "qwen")),
             "quantization": artifact["quantization"],
             "artifact_path": artifact["path"],
             "artifact_sha256": artifact["sha256"],

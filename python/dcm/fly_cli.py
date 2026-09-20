@@ -69,7 +69,7 @@ def main():
     parser.add_argument("--runtime", choices=("llama", "mock", "scripted"), default="llama")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--role", default="primary",
-                        choices=("primary", "secondary"))
+                        choices=("primary", "secondary", "second_family"))
     parser.add_argument("--mode", choices=("approval", "autonomous"),
                         default="approval",
                         help="approval asks before every action; autonomous "

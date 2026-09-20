@@ -26,7 +26,7 @@ def main():
     parser.add_argument("--runtime", choices=("mock", "llama", "scripted"), default="llama")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--role", default="primary",
-                        choices=("primary", "secondary"),
+                        choices=("primary", "secondary", "second_family"),
                         help="which pinned artifact to evaluate")
     parser.add_argument("--repeats", type=int, default=3,
                         help="runs per episode; one run is not a measurement")

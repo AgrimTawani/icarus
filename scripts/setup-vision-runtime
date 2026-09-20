@@ -152,6 +152,15 @@ if [[ -f "${LLAMA_DIR}/${LLAMA_FILE}" ]]; then
   LLAMA_SHA=$(sha256sum "${LLAMA_DIR}/${LLAMA_FILE}" | cut -d' ' -f1)
 fi
 MANIFEST="${VISION_DIR}/MANIFEST.json"
+LOCK_FILE_PATH="${PROJECT_ROOT}/config/dependencies/third_party.lock.json"
+LLAMA_CPP_REV=$("${VENV}/bin/python" -c '
+import json, sys
+print(json.load(open(sys.argv[1]))["repositories"]["llama_cpp"]["revision"])
+' "${LOCK_FILE_PATH}")
+# "artifacts" matches the schema RuntimeDescriptor.from_manifest already
+# parses (setup-model-runtime's MANIFEST.json), so the second model family
+# loads through the same code path as the primary Qwen artifact rather than
+# needing a parallel loader for one field-name difference.
 cat >"${MANIFEST}" <<JSON
 {
   "recorded_at": "$(date -Is)",
@@ -168,7 +177,17 @@ cat >"${MANIFEST}" <<JSON
     "quantization": "q4_k_m",
     "sha256": "${LLAMA_SHA}",
     "runtime": "llama_cpp"
-  }
+  },
+  "llama_cpp_revision": "${LLAMA_CPP_REV}",
+  "artifacts": [
+    {
+      "role": "second_family",
+      "family": "llama",
+      "path": "${LLAMA_DIR}/${LLAMA_FILE}",
+      "quantization": "q4_k_m",
+      "sha256": "${LLAMA_SHA}"
+    }
+  ]
 }
 JSON
 note "detector ${DETECTOR_SHA:0:32}..."

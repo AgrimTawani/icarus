@@ -426,6 +426,36 @@ class RuntimeDescriptorTests(unittest.TestCase):
                         "contract_version", "vocabulary_version"):
                 self.assertIn(key, record)
 
+    def test_family_defaults_to_qwen_when_unstated(self):
+        # Every manifest before setup-vision-runtime holds one family and
+        # never named it; this default must not silently change for them.
+        with tempfile.TemporaryDirectory() as root:
+            descriptor = RuntimeDescriptor.from_manifest(
+                self.manifest(root, "0" * 64))
+            self.assertEqual(descriptor.family, "qwen")
+
+    def test_a_manifest_can_name_a_different_family_per_artifact(self):
+        # setup-vision-runtime's manifest holds a second model family
+        # alongside the detector, so family must come from the artifact
+        # rather than being assumed for the whole manifest.
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "MANIFEST.json"
+            path.write_text(json.dumps({
+                "llama_cpp_revision": "1af554f8fc78ba029665a47b839484d9763e2a75",
+                "artifacts": [
+                    {"role": "primary", "family": "qwen",
+                     "path": str(Path(root) / "qwen.gguf"),
+                     "quantization": "q5_k_m", "sha256": "0" * 64},
+                    {"role": "second_family", "family": "llama",
+                     "path": str(Path(root) / "llama.gguf"),
+                     "quantization": "q4_k_m", "sha256": "1" * 64},
+                ],
+            }))
+            primary = RuntimeDescriptor.from_manifest(path, role="primary")
+            second = RuntimeDescriptor.from_manifest(path, role="second_family")
+            self.assertEqual(primary.family, "qwen")
+            self.assertEqual(second.family, "llama")
+
 
 if __name__ == "__main__":
     unittest.main()

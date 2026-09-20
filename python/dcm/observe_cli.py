@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST,
                         help="model manifest written by setup-model-runtime")
     parser.add_argument("--role", default="primary",
-                        choices=("primary", "secondary"),
+                        choices=("primary", "secondary", "second_family"),
                         help="which pinned artifact to load")
     parser.add_argument("--timeout-ms", type=int, default=5000,
                         help="hard per-decision deadline for the llama runtime")
