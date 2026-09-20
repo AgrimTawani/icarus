@@ -73,3 +73,16 @@ both inbound telemetry and outbound commands, while `delay` delays both paths.
 It is not enabled by hardware launchers. The Phase 12 MAVLink delay/loss gate
 remains open until these scenarios have live, retained evidence; their mere
 presence is not a passing result.
+
+## Live fault evidence
+
+`mavlink_loss` was executed headlessly on 2026-09-21 with the scripted
+controller. Episode `20260921T043858_337256fd9326` retained 528 records and
+replayed successfully through `scripts/test-phase10`. During the injected
+three-second loss, the active hold was aborted by the safety supervisor, an
+attempted command was rejected as stale, four model requests were refused
+before execution because state freshness exceeded its limit, telemetry
+recovered, and the final land action succeeded and disarmed the aircraft. The
+episode outcome remains `failed` intentionally: it is a retained fault case,
+not a nominal mission success. The matching `mavlink_delay` live evidence is
+still required before the combined delay/loss matrix item can be checked off.

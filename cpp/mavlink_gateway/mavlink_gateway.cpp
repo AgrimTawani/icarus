@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <limits>
 #include <utility>
 
@@ -217,19 +218,37 @@ void ArdupilotGateway::ReaderLoop() {
   mavlink_message_t message{};
   mavlink_status_t parser_status{};
   std::array<std::uint8_t, 4096> buffer{};
+  using DelayedMessage =
+      std::pair<std::chrono::steady_clock::time_point, mavlink_message_t>;
+  std::deque<DelayedMessage> delayed_messages;
+  const auto flush_delayed = [&] {
+    const auto now = std::chrono::steady_clock::now();
+    while (!delayed_messages.empty() &&
+           delayed_messages.front().first <= now) {
+      auto delayed = std::move(delayed_messages.front().second);
+      delayed_messages.pop_front();
+      if (!TestLinkLossActive()) HandleMessage(&delayed);
+    }
+  };
   while (running_) {
     const auto count = recv(socket_.load(), buffer.data(), buffer.size(), 0);
     if (count <= 0) break;
+    flush_delayed();
     for (ssize_t index = 0; index < count; ++index) {
       if (mavlink_parse_char(MAVLINK_COMM_0, buffer[index], &message,
                              &parser_status)) {
         if (TestLinkLossActive()) continue;
         if (const auto delay_ms = TestLinkDelayMs(); delay_ms > 0) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+          delayed_messages.emplace_back(
+              std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(delay_ms),
+              message);
+          continue;
         }
         HandleMessage(&message);
       }
     }
+    flush_delayed();
   }
   running_ = false;
   state_changed_.notify_all();
