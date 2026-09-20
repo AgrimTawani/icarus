@@ -928,7 +928,7 @@ evaluations/<evaluation-id>/
 - [ ] Autonomous simulation never bypasses the deterministic executor.
 - [ ] Qwen and Llama candidates can be evaluated without changing simulator or
       autonomy-core code.
-- [ ] A versioned comparison report identifies the best model for the current
+- [x] A versioned comparison report identifies the best model for the current
       constraints and shows why it won.
 
 ---
