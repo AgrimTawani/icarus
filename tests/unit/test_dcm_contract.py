@@ -65,10 +65,14 @@ class UnknownActionTests(unittest.TestCase):
                 validate_proposal(raw)
 
     def test_every_declared_action_has_a_valid_minimal_form(self):
+        minimal = {
+            "takeoff": {"target_altitude_agl_m": 3.0},
+            "goto": {"north_m": 1.0, "east_m": 1.0, "altitude_agl_m": 3.0},
+            "orbit": {"center_north_m": 1.0, "center_east_m": 1.0,
+                      "radius_m": 5.0, "altitude_agl_m": 3.0},
+        }
         for action, specification in ACTIONS.items():
-            arguments = {}
-            if action == "takeoff":
-                arguments = {"target_altitude_agl_m": 3.0}
+            arguments = minimal.get(action, {})
             with self.subTest(action=action):
                 proposal = validate_proposal(
                     json.dumps({"action": action, "arguments": arguments}))
@@ -138,6 +142,88 @@ class UnsafeArgumentTests(unittest.TestCase):
             raw = '{"action":"arm","arguments":' + arguments + "}"
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 validate_proposal(raw)
+
+
+class NavigationActionTests(unittest.TestCase):
+    """goto and orbit widen the argument surface, so bound them explicitly.
+
+    Every bound here is tighter than config/safety/v1.yaml: a 30 m ceiling,
+    100 m from home and 2.5 m minimum clearance. The contract should refuse
+    before the guardrails have to.
+    """
+
+    def goto(self, north=10.0, east=10.0, altitude=5.0):
+        return json.dumps({"action": "goto", "arguments": {
+            "north_m": north, "east_m": east, "altitude_agl_m": altitude}})
+
+    def orbit(self, **overrides):
+        arguments = {"center_north_m": 10.0, "center_east_m": 10.0,
+                     "radius_m": 5.0, "altitude_agl_m": 5.0}
+        arguments.update(overrides)
+        return json.dumps({"action": "orbit", "arguments": arguments})
+
+    def test_a_reasonable_goto_is_accepted(self):
+        proposal = validate_proposal(self.goto())
+        self.assertEqual(proposal["arguments"]["north_m"], 10.0)
+
+    def test_goto_stays_inside_the_geofence_radius(self):
+        # The policy allows 100 m from home; the corner of this range is
+        # sqrt(50^2 + 50^2) = 70.7 m, so no in-bounds goto can breach it.
+        for north, east in ((50.0, 50.0), (-50.0, -50.0)):
+            with self.subTest(north=north, east=east):
+                validate_proposal(self.goto(north, east))
+        for north in (50.1, -50.1, 500.0):
+            with self.subTest(north=north), self.assertRaises(ValueError):
+                validate_proposal(self.goto(north=north))
+
+    def test_goto_altitude_stays_under_the_ceiling(self):
+        # The policy ceiling is 30 m; the contract stops at 25 m.
+        validate_proposal(self.goto(altitude=25.0))
+        for altitude in (25.1, 30.0, 50.0, 0.4, -5.0):
+            with self.subTest(altitude=altitude), self.assertRaises(ValueError):
+                validate_proposal(self.goto(altitude=altitude))
+
+    def test_goto_requires_a_full_destination(self):
+        for arguments in ({"north_m": 1.0}, {"north_m": 1.0, "east_m": 1.0},
+                          {"east_m": 1.0, "altitude_agl_m": 5.0}, {}):
+            raw = json.dumps({"action": "goto", "arguments": arguments})
+            with self.subTest(arguments=arguments), self.assertRaises(ValueError):
+                validate_proposal(raw)
+
+    def test_orbit_radius_clears_the_minimum_separation(self):
+        # minimum_clearance_m is 2.5, so an orbit radius below 3 m is refused.
+        validate_proposal(self.orbit(radius_m=3.0))
+        for radius in (2.9, 2.5, 0.0, -5.0, 15.1, 100.0):
+            with self.subTest(radius=radius), self.assertRaises(ValueError):
+                validate_proposal(self.orbit(radius_m=radius))
+
+    def test_orbit_revolutions_are_optional_but_bounded(self):
+        self.assertNotIn("revolutions",
+                         validate_proposal(self.orbit())["arguments"])
+        validate_proposal(self.orbit(revolutions=0.25))
+        validate_proposal(self.orbit(revolutions=3.0))
+        for revolutions in (0.0, -1.0, 3.1, 100.0):
+            with self.subTest(revolutions=revolutions), self.assertRaises(ValueError):
+                validate_proposal(self.orbit(revolutions=revolutions))
+
+    def test_orbit_reach_stays_inside_the_geofence(self):
+        # Worst case is the corner of the centre range plus the largest
+        # radius: sqrt(40^2 + 40^2) + 15 = 71.6 m, inside the 100 m policy.
+        import math as _math
+        worst = _math.hypot(40.0, 40.0) + 15.0
+        self.assertLess(worst, 100.0)
+        validate_proposal(self.orbit(center_north_m=40.0, center_east_m=40.0,
+                                     radius_m=15.0))
+        for centre in (40.1, -40.1):
+            with self.subTest(centre=centre), self.assertRaises(ValueError):
+                validate_proposal(self.orbit(center_north_m=centre))
+
+    def test_navigation_actions_appear_in_the_generated_vocabulary(self):
+        vocabulary = render_vocabulary()
+        self.assertIn('"goto"', vocabulary)
+        self.assertIn('"orbit"', vocabulary)
+        self.assertIn("north_m", vocabulary)
+        self.assertIn("radius_m", vocabulary)
 
 
 class StaleDataTests(unittest.TestCase):

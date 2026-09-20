@@ -39,7 +39,9 @@ PROMPT_VERSION = "dcm-prompt-v1"
 # rather than neutral, so any improvement it produces must be read as "the
 # model follows an instruction it was given", not as a latent capability.
 PROMPT_VERSION_ENDING = "dcm-prompt-v2-ending"
-VOCABULARY_VERSION = "dcm-actions-v1"
+# v2 adds goto and orbit. The version changes because a report scored
+# against a different action set is not comparable.
+VOCABULARY_VERSION = "dcm-actions-v2-nav"
 
 # The deliberately narrow first vocabulary. It is much smaller than the Drone
 # API on purpose: a model may only ask for what has been explicitly modelled
@@ -59,6 +61,39 @@ ACTIONS = {
     },
     "return_home": {},
     "land": {},
+    # Navigation actions. Bounds are deliberately tighter than the safety
+    # policy in config/safety/v1.yaml (30 m ceiling, 100 m from home, 2.5 m
+    # minimum clearance) so the contract refuses before the guardrails have
+    # to. The furthest reachable point is sqrt(50^2 + 50^2) = 70.7 m from
+    # home, and an orbit at the corner of its range reaches 71.6 m.
+    "goto": {
+        "north_m": {
+            "kind": "number", "required": True, "minimum": -50.0, "maximum": 50.0,
+        },
+        "east_m": {
+            "kind": "number", "required": True, "minimum": -50.0, "maximum": 50.0,
+        },
+        "altitude_agl_m": {
+            "kind": "number", "required": True, "minimum": 0.5, "maximum": 25.0,
+        },
+    },
+    "orbit": {
+        "center_north_m": {
+            "kind": "number", "required": True, "minimum": -40.0, "maximum": 40.0,
+        },
+        "center_east_m": {
+            "kind": "number", "required": True, "minimum": -40.0, "maximum": 40.0,
+        },
+        "radius_m": {
+            "kind": "number", "required": True, "minimum": 3.0, "maximum": 15.0,
+        },
+        "altitude_agl_m": {
+            "kind": "number", "required": True, "minimum": 0.5, "maximum": 25.0,
+        },
+        "revolutions": {
+            "kind": "number", "required": False, "minimum": 0.25, "maximum": 3.0,
+        },
+    },
 }
 
 ALLOWED_ACTIONS = tuple(ACTIONS)

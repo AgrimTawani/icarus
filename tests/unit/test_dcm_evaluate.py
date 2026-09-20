@@ -34,19 +34,20 @@ class ScoringTests(unittest.TestCase):
         scored = score_decisions([
             decision("arm", "arm"),
             decision("land", "takeoff"),
-            # goto is outside the vocabulary: the model could not have agreed,
-            # so this point is unscoreable rather than a miss.
-            decision("goto", "hold"),
+            # execute_route is a Drone API action the contract does not
+            # expose, so the model could not have agreed and this point
+            # is unscoreable rather than a miss.
+            decision("execute_route", "hold"),
         ])
         self.assertEqual(scored["comparable_points"], 2)
         self.assertEqual(scored["agreed_points"], 1)
         self.assertEqual(scored["agreement_rate"], 0.5)
         self.assertEqual(scored["unscoreable_points"], 1)
-        self.assertEqual(scored["unscoreable_actions"], ["goto"])
+        self.assertEqual(scored["unscoreable_actions"], ["execute_route"])
 
     def test_unscoreable_points_do_not_reduce_agreement(self):
         agreeing = [decision("arm", "arm"), decision("land", "land")]
-        with_mismatch = [*agreeing, decision("goto", "hold")]
+        with_mismatch = [*agreeing, decision("execute_route", "hold")]
         self.assertEqual(score_decisions(agreeing)["agreement_rate"], 1.0)
         self.assertEqual(score_decisions(with_mismatch)["agreement_rate"], 1.0)
 
@@ -210,11 +211,11 @@ class PerActionBreakdownTests(unittest.TestCase):
         self.assertEqual(wobbly["coverage"]["land"]["always_agreed"], 0)
 
     def test_unscoreable_and_invalid_points_are_excluded(self):
-        runs = [[self.proposal("goto", "hold"),
+        runs = [[self.proposal("execute_route", "hold"),
                  self.proposal("arm", None, status="invalid"),
                  self.proposal("arm", "arm")]]
         breakdown = per_action_breakdown([self.episode("e1", *runs)])
-        self.assertNotIn("goto", breakdown["coverage"])
+        self.assertNotIn("execute_route", breakdown["coverage"])
         self.assertEqual(breakdown["coverage"]["arm"]["situations"], 1)
 
     def test_distinct_situations_are_keyed_by_episode_and_position(self):
