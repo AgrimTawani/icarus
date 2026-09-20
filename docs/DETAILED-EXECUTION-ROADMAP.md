@@ -958,11 +958,14 @@ evaluations/<evaluation-id>/
 
 ### 12.3 Regression policy
 
-- [ ] Fixed test seeds for regression.
-- [ ] Separate randomized seeds for robustness.
-- [ ] Pass thresholds established before model tuning.
-- [ ] Failed episodes automatically retained.
-- [ ] No fine-tuning data appears in held-out evaluation scenarios.
+- [x] Fixed test seeds for regression are documented.
+- [x] Separate randomized-seed policy for robustness is documented.
+- [x] Pass thresholds are established before further model tuning.
+- [x] Failed episodes are retained and sealed by the live DCM client.
+- [x] Held-out evaluation episodes are refused by the training-candidate exporter.
+
+See `docs/architecture/PHASE-12-REGRESSION-POLICY.md`. The defined thresholds
+are not currently met by either evaluated language model.
 
 ### Phase 12 exit gate
 

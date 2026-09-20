@@ -114,3 +114,7 @@ compare against, at least two models, and the closed-loop simulator runs that
 measure the consequences of a sequence of decisions rather than each decision
 in isolation. Offline agreement says nothing about that, and no model has yet
 been given control of anything.
+
+The frozen-seed, randomized-robustness and promotion rules are defined in
+[`PHASE-12-REGRESSION-POLICY.md`](PHASE-12-REGRESSION-POLICY.md). They prevent
+model/prompt tuning from moving the pass conditions after results are known.
