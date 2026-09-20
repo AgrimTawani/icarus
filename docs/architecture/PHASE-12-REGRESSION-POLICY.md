@@ -84,5 +84,12 @@ attempted command was rejected as stale, four model requests were refused
 before execution because state freshness exceeded its limit, telemetry
 recovered, and the final land action succeeded and disarmed the aircraft. The
 episode outcome remains `failed` intentionally: it is a retained fault case,
-not a nominal mission success. The matching `mavlink_delay` live evidence is
-still required before the combined delay/loss matrix item can be checked off.
+not a nominal mission success.
+
+`mavlink_delay` was then re-run after the gateway latency queue was corrected.
+Episode `20260921T044434_fea809a7bf97` retained 504 records, completed arm,
+takeoff, hold and land without a stale-state rejection, and replayed
+successfully. This is a 250 ms, three-second bidirectional gateway-path delay
+test—not a claim about radio-link or cellular-link performance. Together the
+two retained episodes satisfy the narrow Phase 12 scenario-matrix delay/loss
+exercise; they do not satisfy the broader autonomous-model promotion gate.

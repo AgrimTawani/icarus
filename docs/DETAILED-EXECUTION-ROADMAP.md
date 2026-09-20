@@ -951,7 +951,8 @@ evaluations/<evaluation-id>/
 - [ ] Narrow route.
 - [ ] GPS degradation.
 - [ ] Sensor dropout.
-- [ ] MAVLink delay and loss.
+- [x] MAVLink delay and loss (simulator-only gateway-path fault episodes are
+      retained and replay-verified; see `PHASE-12-REGRESSION-POLICY.md`).
 - [ ] Low battery.
 - [ ] Rejected unsafe mission.
 - [ ] DCM timeout or crash.
