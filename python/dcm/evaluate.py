@@ -26,7 +26,11 @@ import time
 from pathlib import Path
 
 from python.dataset_tools.replay import ReplayError
-from python.dcm.contract import ALLOWED_ACTIONS
+from python.dcm.contract import (
+    ALLOWED_ACTIONS,
+    CONTRACT_VERSION,
+    CONTRACT_VERSION_HISTORY,
+)
 from python.dcm.observe import observe_episode
 
 SCHEMA = "icarus.dcm.evaluation.v1"
@@ -112,7 +116,8 @@ def _aggregate(runs, key):
 
 
 def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
-             descriptor=None, check_guardrails=True, progress=None):
+             descriptor=None, check_guardrails=True, progress=None,
+             include_history=False):
     """Replay every episode `repeats` times and score the result.
 
     Returns (output_directory, report). Proposals are recorded, never executed.
@@ -138,7 +143,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             try:
                 report_dir, _ = observe_episode(
                     episode, runtime, output / "observe", timeout_ms=timeout_ms,
-                    check_guardrails=check_guardrails, descriptor=descriptor)
+                    check_guardrails=check_guardrails, descriptor=descriptor,
+                    include_history=include_history)
             except (ReplayError, OSError, KeyError) as unusable:
                 # A corpus accumulates episodes that predate a schema change or
                 # were sealed mid-failure. Losing the whole campaign to one of
@@ -198,6 +204,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
         "mode": "observe",
         "executed_actions": 0,
         "runtime": runtime.name,
+        "contract_version": (CONTRACT_VERSION_HISTORY if include_history
+                             else CONTRACT_VERSION),
         "model": descriptor.as_record() if descriptor else None,
         "episodes": len(per_episode),
         "episodes_requested": len(episodes),
@@ -233,6 +241,7 @@ def format_report(report):
     totals = report["totals"]
     lines = [
         f"runtime            {report['runtime']}",
+        f"contract           {report.get('contract_version', '?')}",
         (f"episodes x repeats {report['episodes']} x {report['repeats']}"
          f"  ({totals['decision_points']} decision points)"),
         "",

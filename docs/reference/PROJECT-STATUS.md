@@ -127,17 +127,28 @@ The model produced no malformed output at all: zero invalid proposals, zero
 runtime errors, one timeout, six stale refusals, and nothing executed.
 
 Its 74.8% agreement over comparable points should not be read as a pass. The
-per-action breakdown shows the model never once proposed `land`: at all 27
-land decision points it deterministically proposed climbing (18) or holding
-(9). Agreement on `arm`, `takeoff` and `hold` is total; on `land` it is zero.
-A single aggregate score would have reported a passable result for a model
-that cannot end a flight. The cause is not established and is a hypothesis
-about the prompt and observation rather than a measured property of the model.
+per-action breakdown showed the model never once proposed `land`: at all 27
+land decision points it proposed climbing (18) or holding (9), while agreeing
+perfectly on `arm`, `takeoff` and `hold`.
 
-Latency: a 9370 ms cold start that exceeds the 5 s deadline outright, against
-a 540 ms steady-state median. A deployed loop must make a throwaway decision
-before the mission starts.
+A controlled experiment established the cause as the contract, not the model.
+The v1 observation never said what had already been done. Contract v2 adds the
+sequence of completed actions; on the same episodes, `land -> takeoff` fell
+from 18 to 1, `land -> land` rose from 0 to 9, and every other action was
+untouched. The fix is partial: only 9 of 27 land points are correct and `hold`
+is now the dominant wrong answer at 17, so the failure changed from dangerous
+to conservative rather than disappearing. Aggregate agreement moved 74.8% to
+83.2%, which describes that change far less usefully than the breakdown.
 
-63 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
+Temperature 0 did not guarantee determinism: one land decision flipped between
+repeats on identical input, because prompt-cache reuse changes floating-point
+reduction order enough to flip a near-tied argmax.
+
+Latency: cold starts of 4257, 9370 and 13259 ms across sessions, against a
+507-540 ms steady-state median. The cold start is not a stable quantity and
+cannot be accommodated by choosing a deadline; a deployed loop must warm itself
+before the mission begins.
+
+68 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
 2026-09-19, alongside five consecutive headless corpus flights. Phase 10's full exit gate and all Phase 11 evaluation and flight
 gates remain open. See [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the handoff.

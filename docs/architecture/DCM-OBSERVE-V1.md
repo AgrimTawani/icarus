@@ -224,8 +224,72 @@ Episode-first decisions are *faster* than steady state, because early-mission
 observations are shorter than later ones. That is a property of the prompt,
 not of the runtime.
 
+## The `land` experiment: it was the contract, not the model
+
+The v1 observation showed the mission *name* and only the single most recent
+action result. It never said what had already been done, so a model could not
+tell whether a mission had just begun or was nearly over.
+
+Contract v2 (`dcm-contract-v2-history`) adds `actions_completed`: the bounded
+sequence of actions already finished, with their outcomes. It contains
+completed actions only — a terminal status is recorded after its own guardrail
+validation, so the pending action can never appear — and it is selected by
+configuration, so both variants run under identical conditions.
+
+Same 10 episodes, same 3 repeats, same weights, same seed-free `temperature: 0`:
+
+| Recorded | Proposed | v1 | v2 |
+| --- | --- | --- | --- |
+| arm | arm | 26 | 26 |
+| takeoff | takeoff | 30 | 30 |
+| hold | hold | 24 | 24 |
+| land | **takeoff** | **18** | **1** |
+| land | hold | 9 | 17 |
+| land | **land** | **0** | **9** |
+| goto | hold | 9 | 9 (unscoreable) |
+
+The hypothesis holds. Adding history changed **only** the `land` decisions and
+left every other action untouched, which is what a targeted cause looks like
+rather than a general improvement. The dangerous response — proposing a climb
+while airborne after a safety abort — fell from 18 to 1. The model became able
+to propose `land` at all, from 0 to 9.
+
+**It is a partial fix, and the remaining failure is different in kind.** Only
+9 of 27 land points are now correct, and `hold` has become the dominant wrong
+answer at 17. Holding when a flight should end is conservative and recoverable;
+climbing after a safety abort is neither. The failure mode changed from
+dangerous to merely wrong, which is progress worth having but is not a solved
+problem, and aggregate agreement rising from 74.8% to 83.2% describes that
+change far less usefully than the breakdown does.
+
+What this does not establish: whether a larger model, a differently worded
+prompt, or an explicit mission-progress field would close the remaining gap.
+Those are separate experiments.
+
+### Temperature 0 is not a determinism guarantee
+
+In the v2 run one episode produced `land -> takeoff` on the first repeat and
+`land -> hold` on the second and third, from byte-identical input. The other
+non-deterministic episode was the cold-start timeout, which is a runtime
+artefact rather than a model one.
+
+Greedy decoding is deterministic given identical logits, but `cache_prompt`
+reuse means a request can be computed against a different cached prefix
+between runs, and GPU floating-point reduction order is not associative. On a
+near-tied choice that is enough to flip the argmax. This is a concrete reason
+repeats are mandatory rather than advisory: a single run would have recorded
+either answer as *the* model's behaviour.
+
+### Latency, again
+
+The v2 cold start measured 13259 ms, against 9370 ms in v1 and 4257 ms in an
+earlier session. The cold start is not a stable quantity and cannot be
+accommodated by choosing a deadline; the loop must warm itself before the
+mission begins.
+
 Next: a Phase 12 campaign with frozen scenarios, held-out episodes, a
 deterministic no-LLM baseline and at least two models, reported per action.
-Investigate the `land` result with a controlled prompt change before reading
-anything into it. Only after that should approval mode or closed-loop SITL
-control be considered. Hardware control remains out of scope.
+Test whether an explicit mission-progress field closes the remaining `land`
+gap, and whether the larger quantization or a larger model changes it. Only
+after that should approval mode or closed-loop SITL control be considered.
+Hardware control remains out of scope.

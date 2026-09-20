@@ -24,7 +24,16 @@ import math
 from pathlib import Path
 from typing import Protocol
 
+# Two observation variants, selected by configuration so they can be compared
+# under identical conditions. v1 shows only the most recent action result; v2
+# adds the sequence of actions already completed. The version travels with
+# every report so a result can never be read against the wrong contract.
 CONTRACT_VERSION = "dcm-contract-v1"
+CONTRACT_VERSION_HISTORY = "dcm-contract-v2-history"
+
+# How many completed actions the model may see. Bounded so a long mission
+# cannot crowd out the current state.
+HISTORY_LIMIT = 12
 PROMPT_VERSION = "dcm-prompt-v1"
 VOCABULARY_VERSION = "dcm-actions-v1"
 
@@ -197,14 +206,21 @@ def assess_freshness(observation, limits=FRESHNESS_LIMITS):
     return None
 
 
-def curate(state, perception, previous_result, mission, event, actions=ACTIONS):
+def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
+           history=None):
     """Build the bounded observation a model is allowed to see.
 
     The recorded next action is deliberately not a parameter. It is attached to
     the report by the caller only after the runtime has answered.
+
+    `history` is the sequence of actions already *completed*, never the pending
+    one. Passing None selects the v1 observation, which showed only the most
+    recent result; a model given that cannot tell whether a mission has just
+    begun or is nearly over.
     """
-    return {
-        "contract_version": CONTRACT_VERSION,
+    observation = {
+        "contract_version": (CONTRACT_VERSION_HISTORY if history is not None
+                             else CONTRACT_VERSION),
         "vocabulary_version": VOCABULARY_VERSION,
         "mission": mission,
         "source_event_seq": event["seq"],
@@ -215,6 +231,9 @@ def curate(state, perception, previous_result, mission, event, actions=ACTIONS):
         "previous_result": previous_result,
         "allowed_actions": list(actions),
     }
+    if history is not None:
+        observation["actions_completed"] = list(history)[-HISTORY_LIMIT:]
+    return observation
 
 
 SYSTEM_PROMPT = """\

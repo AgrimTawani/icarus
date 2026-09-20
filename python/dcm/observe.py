@@ -17,6 +17,7 @@ from python.dataset_tools.replay import replay
 from python.dcm.contract import (
     ALLOWED_ACTIONS,
     CONTRACT_VERSION,
+    CONTRACT_VERSION_HISTORY,
     FRESHNESS_LIMITS,
     PROMPT_VERSION,
     VOCABULARY_VERSION,
@@ -52,12 +53,20 @@ class MockRuntime:
         return '{"action":"none","arguments":{}}'
 
 
+def _action_name(action_type):
+    """ACTION_TYPE_ARM -> arm, so history reads in the action vocabulary."""
+    if not isinstance(action_type, str):
+        return None
+    return action_type.replace("ACTION_TYPE_", "").lower()
+
+
 def _sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def observe_episode(episode, runtime, output_root, timeout_ms=5000,
-                    check_guardrails=True, descriptor=None):
+                    check_guardrails=True, descriptor=None,
+                    include_history=False):
     """Replay a sealed episode at its recorded pre-action decision points."""
     episode = Path(episode)
     if not isinstance(timeout_ms, int) or timeout_ms <= 0:
@@ -74,6 +83,9 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
     perception = {}
     previous_result = None
     proposals = 0
+    # Completed actions only. A terminal status is recorded after its own
+    # guardrail validation, so the pending action can never appear here.
+    completed = [] if include_history else None
     with stream_path.open(encoding="utf-8") as source, decisions.open("x", encoding="utf-8") as target:
         for line in source:
             event = json.loads(line)
@@ -86,10 +98,15 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     "type": payload.get("type"), "state": payload["state"],
                     "reason_code": payload.get("reason_code"),
                 }
+                if completed is not None:
+                    completed.append({
+                        "action": _action_name(payload.get("type")),
+                        "outcome": payload["state"].replace("ACTION_STATE_", ""),
+                    })
             elif kind == "guardrail_validation":
                 observation = curate(
                     payload["state"], perception, previous_result,
-                    manifest["mission"], event)
+                    manifest["mission"], event, history=completed)
                 raw = None
                 proposal = None
                 error = None
@@ -142,7 +159,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
         "runtime": runtime.name, "timeout_ms": timeout_ms,
         "decision_points": proposals, "counts": counts,
         "contract": {
-            "contract_version": CONTRACT_VERSION,
+            "contract_version": (CONTRACT_VERSION_HISTORY if include_history
+                                 else CONTRACT_VERSION),
             "vocabulary_version": VOCABULARY_VERSION,
             "prompt_version": PROMPT_VERSION,
             "allowed_actions": list(ALLOWED_ACTIONS),

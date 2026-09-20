@@ -13,7 +13,9 @@ from python.dcm.contract import (
     ACTIONS,
     ALLOWED_ACTIONS,
     CONTRACT_VERSION,
+    CONTRACT_VERSION_HISTORY,
     FRESHNESS_LIMITS,
+    HISTORY_LIMIT,
     RuntimeDescriptor,
     assess_freshness,
     curate,
@@ -222,6 +224,47 @@ class CurationTests(unittest.TestCase):
         # The recorded action is comparison data. If it could be curated in,
         # it could leak into the prompt, and every evaluation would be void.
         self.assertNotIn("recorded_action", curate.__code__.co_varnames)
+
+
+class ObservationHistoryTests(unittest.TestCase):
+    def event(self):
+        return {"seq": 1, "unix_ms": 1}
+
+    def test_v1_observation_has_no_history_and_says_so(self):
+        observation = curate({}, {}, None, "m", self.event())
+        self.assertNotIn("actions_completed", observation)
+        self.assertEqual(observation["contract_version"], CONTRACT_VERSION)
+
+    def test_v2_observation_carries_completed_actions(self):
+        history = [{"action": "arm", "outcome": "SUCCEEDED"},
+                   {"action": "takeoff", "outcome": "SUCCEEDED"}]
+        observation = curate({}, {}, None, "m", self.event(), history=history)
+        self.assertEqual(observation["contract_version"],
+                         CONTRACT_VERSION_HISTORY)
+        self.assertEqual([h["action"] for h in observation["actions_completed"]],
+                         ["arm", "takeoff"])
+
+    def test_an_empty_history_still_selects_v2(self):
+        # An empty list means "nothing done yet", which is information. Only
+        # None means "this contract does not show history at all".
+        observation = curate({}, {}, None, "m", self.event(), history=[])
+        self.assertEqual(observation["contract_version"],
+                         CONTRACT_VERSION_HISTORY)
+        self.assertEqual(observation["actions_completed"], [])
+
+    def test_history_is_bounded_so_a_long_mission_cannot_crowd_out_state(self):
+        history = [{"action": "hold", "outcome": "SUCCEEDED"}
+                   for _ in range(HISTORY_LIMIT + 20)]
+        observation = curate({}, {}, None, "m", self.event(), history=history)
+        self.assertEqual(len(observation["actions_completed"]), HISTORY_LIMIT)
+
+    def test_history_is_copied_not_aliased(self):
+        # The observer mutates its running list as the episode replays; a
+        # recorded observation must not change underneath the report.
+        history = [{"action": "arm", "outcome": "SUCCEEDED"}]
+        observation = curate({}, {}, None, "m", self.event(), history=history)
+        history.append({"action": "land", "outcome": "SUCCEEDED"})
+        self.assertEqual(len(observation["actions_completed"]), 1)
 
 
 class PromptTests(unittest.TestCase):

@@ -83,12 +83,17 @@ with the documented simulation mission workflow. Observe reports are under
    baseline without treating that baseline as a perfect label. Report invalid
    actions, timeouts, model errors, safety-rule outcomes and latency. Keep eval
    episodes excluded from training exports.
-5. **Investigate the `land` result before anything else.** Across 123 decision
-   points the model never proposed `land`, deterministically choosing takeoff
-   or hold at all 27 land points, while agreeing perfectly on arm, takeoff and
-   hold. Test whether adding mission-progress information to the observation,
-   or guidance about ending a flight to the prompt, changes it. Treat the
-   current explanation as a hypothesis, not a finding.
+5. ~~**Investigate the `land` result.**~~ **Done 2026-09-20.** The cause was
+   the contract, not the model: the v1 observation never said what had already
+   been done. Contract v2 (`--history`) adds the completed-action sequence and
+   cut `land -> takeoff` from 18 to 1 while raising `land -> land` from 0 to 9,
+   touching no other action.
+
+   **Still open:** only 9 of 27 land points are correct and `hold` now
+   dominates at 17. Try an explicit mission-progress or objective-complete
+   field, a prompt that states when a flight should end, and the Q4 artifact
+   and a larger model, each as separate controlled runs. Decide whether v2
+   becomes the default contract; it currently is not.
 
 6. **Only then add mission orchestration and controlled SITL modes.** Add
    persistent mission state, bounded reusable sequences and recovery logic.

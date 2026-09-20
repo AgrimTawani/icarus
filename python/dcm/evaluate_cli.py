@@ -27,6 +27,9 @@ def main():
     parser.add_argument("--repeats", type=int, default=3,
                         help="runs per episode; one run is not a measurement")
     parser.add_argument("--timeout-ms", type=int, default=5000)
+    parser.add_argument("--history", action="store_true",
+                        help="show the model the actions already completed"
+                             " (contract v2) instead of only the last result")
     parser.add_argument("--limit", type=int, default=0,
                         help="evaluate at most this many episodes")
     args = parser.parse_args()
@@ -56,7 +59,8 @@ def main():
         output, report = evaluate(
             episodes, runtime, root / "logs/dcm/evaluation",
             repeats=args.repeats, timeout_ms=args.timeout_ms,
-            descriptor=descriptor, progress=progress)
+            descriptor=descriptor, progress=progress,
+            include_history=args.history)
     finally:
         stop = getattr(runtime, "stop", None)
         if stop:
