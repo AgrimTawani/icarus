@@ -89,16 +89,6 @@ int main(int argc, char** argv) {
       std::cerr << "Timed out waiting for ArduPilot heartbeat and position\n";
       return 1;
     }
-    const bool test_fault_requested = !test_mavlink_fault_mode.empty();
-    if (test_fault_requested && test_mavlink_fault_duration_ms == 0) {
-      std::cerr << "A simulator MAVLink test fault needs a duration\n";
-      return 2;
-    }
-    if (test_fault_requested) {
-      gateway.ConfigureTestLinkFault(
-          test_mavlink_fault_mode, test_mavlink_fault_after_ms,
-          test_mavlink_fault_duration_ms, test_mavlink_fault_latency_ms);
-    }
 
     icarus::perception::PerceptionEngine perception(
         clock, state_engine, safety_policy.maximum_perception_age_ms);
@@ -151,6 +141,19 @@ int main(int argc, char** argv) {
     if (!server) {
       std::cerr << "Unable to start Drone API at " << listen << '\n';
       return 1;
+    }
+    // Start a simulator fault window only after the full API is ready. Starting
+    // it after the MAVLink handshake would let CMake/protobuf/perception setup
+    // consume the entire configured interval before a flight client connects.
+    const bool test_fault_requested = !test_mavlink_fault_mode.empty();
+    if (test_fault_requested && test_mavlink_fault_duration_ms == 0) {
+      std::cerr << "A simulator MAVLink test fault needs a duration\n";
+      return 2;
+    }
+    if (test_fault_requested) {
+      gateway.ConfigureTestLinkFault(
+          test_mavlink_fault_mode, test_mavlink_fault_after_ms,
+          test_mavlink_fault_duration_ms, test_mavlink_fault_latency_ms);
     }
     std::signal(SIGINT, RequestStop);
     std::signal(SIGTERM, RequestStop);
