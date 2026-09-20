@@ -798,7 +798,8 @@ Never train directly from raw logs.
 ### 10.4 Protect real-flight data
 
 - [x] Remove session/lease and operator-identifying fields from the compact record.
-- [ ] Define retention and backup policy.
+- [x] Define retention and backup policy (simulation-only; physical collection
+      remains separately gated in `DATA-AND-EVALUATION.md`).
 - [x] Record whether an action was proposed, approved, executed, or overridden.
 - [x] Never label a failed or unsafe action as preferred automatically.
 

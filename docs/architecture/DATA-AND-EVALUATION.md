@@ -84,6 +84,25 @@ exports. Near-duplicate environments are grouped before splitting. Simulator
 ground truth may label data but must not be presented to the runtime model as a
 sensor observation. Physical-flight evaluation remains a separate final set.
 
+## Retention and backup policy
+
+This policy applies to the current simulation-only repository. It deliberately
+does not authorize physical-flight collection.
+
+| Material | Local retention | Backup / deletion rule |
+| --- | --- | --- |
+| Sealed passing regression episodes and their manifests | Keep while their committed regression policy is active. | Copy the full episode directory—including `raw_sensors/` hashes—to the project backup before deleting the local copy. |
+| Sealed failed or safety-intervention episodes | Keep for at least 90 days and through the next two successful regression campaigns. | Never overwrite; mark unsuitable for training until an explicit review. |
+| Ordinary exploratory simulation episodes | Retain for 30 days, subject to a 20 GiB local `logs/episodes` budget. | Delete whole, sealed episode directories oldest-first; never edit an episode in place. |
+| Derived evaluation reports and comparison manifests | Retain with their episode IDs and model checksums. | They are small; version them or back them up with the campaign record. |
+| Camera/depth data | Metadata only in the current episode format. | No pixels are retained. Introducing pixels requires a separate privacy and storage policy. |
+| Physical-flight data | Not collected by this phase. | Define consent, access control, encryption, geographic/legal retention, and incident-preservation rules before any capture. |
+
+The simulator recorder itself has a 512 MiB cap per source run. Episode sensor
+snapshots are copies, not links, so a cleanup tool must account for their full
+size. The operator must verify that a backup completed before deleting a
+regression or failure artifact.
+
 ## Offline Decision Evaluation (implemented)
 
 `python/dcm/evaluate.py` scores a runtime across an episode corpus without a
