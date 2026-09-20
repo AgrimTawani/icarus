@@ -103,19 +103,28 @@ with the documented simulation mission workflow. Observe reports are under
    established, and only because its effect is large: dangerous climbs fell
    from 18 to 1.
 
-6. **Grow the corpus before deciding anything else.** Nine distinct
+6. **Re-fly the corpus with real instructions.** The mission field in ten of
+   eleven episodes is a name (`takeoff_hover_land`), not something an operator
+   typed. The scripted baseline beats Qwen 9/10 to 1/10 on landing, but Qwen
+   lands correctly on the single episode that actually contains an
+   instruction. The corpus cannot currently separate an incapable model from
+   an uninstructed one. `./scripts/dcm-fly --mission "<text>"` produces
+   episodes with real instructions; fly a varied set, then repeat the
+   comparison.
+
+7. **Grow the corpus before deciding anything else.** Nine distinct
    mission-ending decision situations cannot separate a 3/9 from a 5/9. This
    is now the binding constraint on every open question — default contract,
    quantization, prompt wording. `./scripts/fly-episode-corpus --repeat N`
    already does the work; it needs more varied missions and more failure
    cases, not new code.
 
-7. **Only then add mission orchestration and controlled SITL modes.** Add
+8. **Only then add mission orchestration and controlled SITL modes.** Add
    persistent mission state, bounded reusable sequences and recovery logic.
    Progress from observe mode to explicit operator approval, then autonomous
    simulation behind the same Drone API, guardrails and safety supervisor. The
    model must never receive shell, raw MAVLink, motor or safety-policy access.
-8. **Run the Phase 12 scenario campaign.** Freeze seeds, prompts, model and
+9. **Run the Phase 12 scenario campaign.** Freeze seeds, prompts, model and
    policy versions; compare models against the deterministic baseline across
    wind, obstacles, sensor dropouts, link faults and recovery. Hardware work
    remains a separate later gate.

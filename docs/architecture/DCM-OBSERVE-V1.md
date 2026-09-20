@@ -349,7 +349,64 @@ That is a flying problem, not a modelling one, and `fly-episode-corpus`
 already does it; it simply needs to be run for longer and with more varied
 missions.
 
-Next: grow the corpus, then a Phase 12 campaign with frozen scenarios,
-held-out episodes and a deterministic no-LLM baseline, reported per action.
-Only after that should approval mode or closed-loop SITL control be
-considered. Hardware control remains out of scope.
+## The deterministic baseline, and what it exposed
+
+`python/dcm/baseline.py` is a rule engine of roughly thirty if-statements. It
+reads the same curated observation, obeys the same contract and emits the same
+JSON, so the only difference between it and a model is the thing being
+measured. It never reads the recorded action: a baseline that peeked would
+score perfectly by construction and mean nothing.
+
+Same 11 episodes, same contract, one repeat:
+
+| Runtime | Agreement | Invalid | Correct landings | Steady latency | Cold start |
+| --- | --- | --- | --- | --- | --- |
+| scripted baseline | 86.0% | 0 | **9/10** | 0 ms | 0 ms |
+| Qwen3-4B Q5 + history | 72.1% | 0 | **1/10** | 721 ms | 4421 ms |
+
+Thirty lines of if-statements beat a four-billion-parameter model on the
+decision that ends a flight, at zero latency and zero cost. That is the
+finding the exit gate exists to surface, and it should be read before any
+further work assumes the model earns its place.
+
+### Except the comparison is confounded, and the confound is the corpus
+
+Ten of the eleven episodes carry a mission **name** rather than an
+instruction: `takeoff_hover_land`, `phase9_stress_acceptance`. Only one, the
+live flight flown through `dcm-fly`, carries text an operator actually typed.
+
+Split by that, the result inverts:
+
+| Mission field | Qwen landings |
+| --- | --- |
+| name only, 10 episodes | 0 correct: 8 hold, 1 goto, 1 none |
+| real instruction, 1 episode | 1 correct |
+
+The model lands when it is told to land, and does not when it is handed a
+slug. The baseline is unaffected because it does not read language at all; it
+matches a fixed sequence it was written to match, on a corpus consisting
+almost entirely of that sequence.
+
+So the earlier finding, that the model "never proposes land", is better stated
+as: **it never proposes land when it is never asked to.** The corpus cannot
+distinguish an incapable model from an uninstructed one, and every number in
+the table above inherits that limitation.
+
+This is not a defence of the model. The baseline still wins on this corpus,
+still costs nothing, and still has no cold start. But it wins on missions
+written for it, and a comparison that cannot separate capability from
+instruction is not yet a model comparison.
+
+### What the baseline genuinely cannot do
+
+It scored 0 of 3 on `goto`, because it cannot navigate: it extracts an
+altitude with a regular expression and otherwise follows a fixed order. Asked
+to fly to a coordinate, orbit a structure or respond to anything not in its
+sequence, it has no answer. Qwen scored 0 of 3 there too, but for the opposite
+reason, and the gap closes as missions stop being fixed sequences.
+
+Next: fly a corpus through `dcm-fly` with varied natural-language missions, so
+the mission field contains instructions rather than names, and repeat this
+comparison. Until then treat the baseline as the floor it was built to be and
+not as a verdict. Then the Phase 12 campaign with frozen scenarios and
+held-out episodes. Hardware control remains out of scope.

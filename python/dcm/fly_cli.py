@@ -50,6 +50,9 @@ def build_runtime(args):
     if args.runtime == "mock":
         from python.dcm.observe import MockRuntime
         return MockRuntime(), None
+    if args.runtime == "scripted":
+        from python.dcm.baseline import ScriptedRuntime
+        return ScriptedRuntime(), None
     from python.dcm.llama_runtime import LlamaCppRuntime
     descriptor = RuntimeDescriptor.from_manifest(
         args.manifest, role=args.role, deadline_ms=args.timeout_ms,
@@ -63,7 +66,7 @@ def build_runtime(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", default="127.0.0.1:50051")
-    parser.add_argument("--runtime", choices=("llama", "mock"), default="llama")
+    parser.add_argument("--runtime", choices=("llama", "mock", "scripted"), default="llama")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--role", default="primary",
                         choices=("primary", "secondary"))

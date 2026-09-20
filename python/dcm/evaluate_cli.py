@@ -23,7 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("episodes", type=Path, nargs="*",
                         help="episode directories; defaults to all of logs/episodes")
-    parser.add_argument("--runtime", choices=("mock", "llama"), default="llama")
+    parser.add_argument("--runtime", choices=("mock", "llama", "scripted"), default="llama")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--role", default="primary",
                         choices=("primary", "secondary"),
@@ -54,6 +54,9 @@ def main():
     descriptor = None
     if args.runtime == "mock":
         runtime = MockRuntime()
+    elif args.runtime == "scripted":
+        from python.dcm.baseline import ScriptedRuntime
+        runtime = ScriptedRuntime()
     else:
         from python.dcm.llama_runtime import LlamaCppRuntime
         descriptor = RuntimeDescriptor.from_manifest(
