@@ -151,7 +151,26 @@ clearance, searches a bounded grid, simplifies only line-of-sight-safe segments
 and sends those targets through the normal executor. The safety supervisor
 commands BRAKE if perception becomes stale or a frontal obstacle enters the
 emergency envelope. LiDAR is the V1 avoidance source; camera metadata is
-normalized but semantic vision is not claimed.
+normalized but semantic vision is not flight-critical.
+
+The first semantic-vision boundary is intentionally separate: the Gazebo
+adapter captures an RGB frame to a standard image, and the pinned
+Grounding-DINO detector receives that image plus an explicit class list and
+returns boxes/counts. It cannot call MAVLink or issue actions. A future DCM
+tool may request `detect(classes=[...])`, but detection output remains advisory
+until a dedicated perception/mission policy validates its use.
+
+For the current simulator-only inspection path:
+
+```bash
+./scripts/start-sim --scenario wind_light
+./scripts/capture-camera-frame --output logs/vision/frame.ppm
+./scripts/detect-image logs/vision/frame.ppm --classes 'person,tree,building'
+```
+
+The capture command uses Gazebo transport only; the detector launcher uses the
+project virtual environment and the pinned local model. Neither command starts
+the Drone API or can arm the vehicle.
 
 ## Model Runtime and Evaluation
 

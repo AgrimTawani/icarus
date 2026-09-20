@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Capture one native Gazebo RGB camera frame as a PPM image.
+
+This is a simulator adapter, not the production camera driver. Its output is a
+normal image file so the detector and future VLM interfaces do not depend on
+Gazebo transport details.
+"""
+
+import argparse
+import json
+import os
+import threading
+import time
+from pathlib import Path
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--timeout", type=float, default=10.0)
+    args = parser.parse_args()
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
+    from gz.msgs10.image_pb2 import Image
+    from gz.transport13 import Node
+
+    session_path = Path(__file__).resolve().parent.parent / "logs/simulation/active_session.json"
+    if session_path.is_file():
+        session = json.loads(session_path.read_text())
+        try:
+            os.kill(int(session["launcher_pid"]), 0)
+            os.environ["GZ_PARTITION"] = session["partition"]
+        except (KeyError, ValueError, ProcessLookupError):
+            raise SystemExit("Active simulator session is stale")
+    else:
+        raise SystemExit("No active simulator; run ./scripts/start-sim first")
+
+    received = threading.Event()
+    result = {}
+
+    def callback(message):
+        if received.is_set():
+            return
+        width, height, step = int(message.width), int(message.height), int(message.step)
+        payload = bytes(message.data)
+        if width <= 0 or height <= 0 or step != width * 3 or len(payload) != height * step:
+            result["error"] = "camera frame is not packed RGB"
+        else:
+            result.update(width=width, height=height, payload=payload)
+        received.set()
+
+    node = Node()
+    if not node.subscribe(Image, "/icarus/sensors/rgbd/image", callback):
+        raise RuntimeError("Could not subscribe to normalized RGB camera")
+    if not received.wait(args.timeout):
+        raise TimeoutError("Timed out waiting for a camera frame")
+    if "error" in result:
+        raise RuntimeError(result["error"])
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_bytes(
+        f"P6\n{result['width']} {result['height']}\n255\n".encode() + result["payload"])
+    metadata = {
+        "schema": "icarus.camera.frame.v1",
+        "captured_at_unix_ms": int(time.time() * 1000),
+        "width": result["width"], "height": result["height"],
+        "encoding": "rgb8", "source": "gazebo:/icarus/sensors/rgbd/image",
+        "image": str(args.output.resolve()),
+    }
+    args.output.with_suffix(args.output.suffix + ".json").write_text(
+        json.dumps(metadata, indent=2) + "\n")
+    print(json.dumps(metadata, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
