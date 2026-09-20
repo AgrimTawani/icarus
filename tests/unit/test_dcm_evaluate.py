@@ -144,6 +144,9 @@ class ReportFormattingTests(unittest.TestCase):
                 "timeout_rate": 1 / 11, "error_rate": 0.0,
                 "stale_refusals": 2, "comparable_points": 8,
                 "agreement_rate": 0.75, "unscoreable_points": 2,
+                "guardrail_checked": 8, "guardrail_rejected": 1,
+                "guardrail_unchecked": 0, "guardrail_rejection_rate": 0.125,
+                "guardrail_rejection_reasons": ["REASON_CODE_NOT_ARMED"],
             },
             "latency": {
                 "cold_start_ms": 7204.0,

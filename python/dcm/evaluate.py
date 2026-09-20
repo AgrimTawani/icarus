@@ -72,9 +72,22 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
     first_latency = None
     steady_latencies = []
     asked = 0
+    guardrail_checked = 0
+    guardrail_rejected = 0
+    guardrail_unchecked = 0
+    rejection_reasons = []
     for decision in decisions:
         status = decision["status"]
         counts[status] = counts.get(status, 0) + 1
+        guardrail = decision.get("guardrail")
+        if guardrail:
+            if guardrail.get("checked"):
+                guardrail_checked += 1
+                if not guardrail.get("would_execute"):
+                    guardrail_rejected += 1
+                    rejection_reasons.append(guardrail.get("reason_code"))
+            else:
+                guardrail_unchecked += 1
         if status != "stale":
             # Stale points never reach the runtime, so their zero latency is
             # not a measurement of the model.
@@ -107,6 +120,17 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
         "unscoreable_actions": sorted(set(unscoreable)),
         "first_decision_latency_ms": first_latency,
         "steady_latency": summarize_latency(steady_latencies),
+        # A valid proposal that the flight safety policy would reject is a
+        # different failure mode than a malformed one, so it is counted
+        # separately rather than folded into invalid_rate.
+        "guardrail_checked": guardrail_checked,
+        "guardrail_rejected": guardrail_rejected,
+        "guardrail_unchecked": guardrail_unchecked,
+        "guardrail_rejection_rate": (
+            guardrail_rejected / guardrail_checked if guardrail_checked
+            else None),
+        "guardrail_rejection_reasons": sorted(
+            r for r in set(rejection_reasons) if r),
     }
 
 
@@ -152,7 +176,8 @@ def _aggregate(runs, key):
 
 def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
              descriptor=None, check_guardrails=True, progress=None,
-             include_history=False, include_elapsed=False):
+             include_history=False, include_elapsed=False,
+             check_proposal_guardrails=True):
     """Replay every episode `repeats` times and score the result.
 
     Returns (output_directory, report). Proposals are recorded, never executed.
@@ -180,7 +205,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
                     episode, runtime, output / "observe", timeout_ms=timeout_ms,
                     check_guardrails=check_guardrails, descriptor=descriptor,
                     include_history=include_history,
-                    include_elapsed=include_elapsed)
+                    include_elapsed=include_elapsed,
+                    check_proposal_guardrails=check_proposal_guardrails)
             except (ReplayError, OSError, KeyError) as unusable:
                 # A corpus accumulates episodes that predate a schema change or
                 # were sealed mid-failure. Losing the whole campaign to one of
@@ -216,6 +242,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
     all_runs = [run for entry in per_episode for run in entry["runs"]]
     totals = dict.fromkeys(STATUSES, 0)
     comparable = agreed = unscoreable = 0
+    guardrail_checked = guardrail_rejected = guardrail_unchecked = 0
+    rejection_reasons = []
     steady = []
     firsts = []
     # The runtime stays up for the whole campaign, so only the very first
@@ -229,6 +257,10 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
         comparable += run["comparable_points"]
         agreed += run["agreed_points"]
         unscoreable += run["unscoreable_points"]
+        guardrail_checked += run["guardrail_checked"]
+        guardrail_rejected += run["guardrail_rejected"]
+        guardrail_unchecked += run["guardrail_unchecked"]
+        rejection_reasons.extend(run["guardrail_rejection_reasons"])
         if run["first_decision_latency_ms"] is not None and run is not all_runs[0]:
             firsts.append(run["first_decision_latency_ms"])
         if run["steady_latency"]:
@@ -262,6 +294,13 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             "comparable_points": comparable,
             "agreement_rate": (agreed / comparable) if comparable else None,
             "unscoreable_points": unscoreable,
+            "guardrail_checked": guardrail_checked,
+            "guardrail_rejected": guardrail_rejected,
+            "guardrail_unchecked": guardrail_unchecked,
+            "guardrail_rejection_rate": (
+                guardrail_rejected / guardrail_checked if guardrail_checked
+                else None),
+            "guardrail_rejection_reasons": sorted(set(rejection_reasons)),
         },
         "latency": {
             "cold_start_ms": cold_start_ms,
@@ -304,6 +343,17 @@ def format_report(report):
     lines.append(f"{'unscoreable':<19}{totals['unscoreable_points']}"
                  " (recorded action outside the vocabulary)")
     lines.append(f"{'stale refusals':<19}{totals['stale_refusals']}")
+    rejection_rate = totals["guardrail_rejection_rate"]
+    lines.append(
+        f"{'guardrail reject':<19}"
+        + (f"{rejection_rate:.1%} of {totals['guardrail_checked']} checked"
+           f" against the real safety policy"
+           if rejection_rate is not None else "n/a")
+        + (f" ({totals['guardrail_unchecked']} unchecked, binary not built)"
+           if totals["guardrail_unchecked"] else ""))
+    if totals["guardrail_rejection_reasons"]:
+        lines.append(f"{'':<19}reasons: "
+                     + ", ".join(totals["guardrail_rejection_reasons"]))
     lines.append("")
     cold = report["latency"].get("cold_start_ms")
     if cold is not None:

@@ -1,8 +1,12 @@
 """Offline, observe-only DCM decision replay.
 
-This module deliberately has no Drone API, MAVLink, or simulator imports. A
-runtime receives only a curated snapshot and returns one JSON proposal. The
-proposal is syntax-checked and recorded; it is never sent to an aircraft.
+This module has no Drone API client, gRPC channel or MAVLink imports, and
+never opens a path to an aircraft. A runtime receives only a curated snapshot
+and returns one JSON proposal, which is syntax-checked and recorded, never
+executed. It does shell out to `icarus-check-guardrail`, a standalone binary
+that answers one offline question, whether a proposal would be accepted by
+the real safety policy; that is a subprocess call to check a hypothesis, not
+a control path.
 
 What a model may see, say and be asked is defined in `contract`, not here.
 """
@@ -29,6 +33,7 @@ from python.dcm.contract import (
     render_prompt,
     validate_proposal,
 )
+from python.dcm.guardrail_check import GuardrailUnavailable, check_proposal
 
 __all__ = [
     "ALLOWED_ACTIONS", "MockRuntime", "ModelRuntime", "RuntimeDescriptor",
@@ -66,8 +71,16 @@ def _sha256(path):
 
 def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     check_guardrails=True, descriptor=None,
-                    include_history=False, include_elapsed=False):
-    """Replay a sealed episode at its recorded pre-action decision points."""
+                    include_history=False, include_elapsed=False,
+                    check_proposal_guardrails=True):
+    """Replay a sealed episode at its recorded pre-action decision points.
+
+    `check_guardrails` (existing) replays the episode's *recorded* actions
+    through the guardrails to confirm the stream is internally consistent.
+    `check_proposal_guardrails` (new) is unrelated: it asks whether the
+    *model's* proposal would itself be accepted by the real safety policy,
+    which the contract's bounds check cannot know. Both can run independently.
+    """
     episode = Path(episode)
     if not isinstance(timeout_ms, int) or timeout_ms <= 0:
         raise ValueError("timeout_ms must be positive")
@@ -80,6 +93,7 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
     output.mkdir()
     decisions = output / "decisions.jsonl"
     counts = {"valid": 0, "invalid": 0, "timeout": 0, "error": 0, "stale": 0}
+    guardrail_counts = {"would_execute": 0, "would_reject": 0, "unchecked": 0}
     perception = {}
     previous_result = None
     proposals = 0
@@ -149,6 +163,31 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                         status, error = "error", type(failure).__name__
                 counts[status] += 1
                 proposals += 1
+
+                guardrail = None
+                # "none" has no Drone API command at all, so it can never be
+                # accepted or rejected by the guardrails; there is nothing to
+                # check, not an unchecked case.
+                if (status == "valid" and check_proposal_guardrails
+                        and proposal["action"] != "none"):
+                    # A proposal can satisfy the contract's shape and bounds
+                    # and still be something the flight safety policy would
+                    # refuse, such as a takeoff while disarmed. Checked
+                    # against the full recorded state, not the curated
+                    # observation: curation deliberately hides fields such as
+                    # position and authority that the guardrails need.
+                    try:
+                        guardrail = check_proposal(
+                            proposal["action"], proposal["arguments"],
+                            payload["state"])
+                        guardrail_counts[
+                            "would_execute" if guardrail["would_execute"]
+                            else "would_reject"] += 1
+                    except GuardrailUnavailable as unavailable:
+                        guardrail = {"checked": False,
+                                    "reason": str(unavailable)}
+                        guardrail_counts["unchecked"] += 1
+
                 recorded_action = next(iter(payload["command"]))
                 target.write(json.dumps({
                     "decision": proposals, "observation": observation,
@@ -157,6 +196,7 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     "raw_response": raw if isinstance(raw, str) else None,
                     "status": status, "error": error,
                     "latency_ms": round(elapsed_ms, 3),
+                    "guardrail": guardrail,
                     "executed": False,
                 }, sort_keys=True) + "\n")
     summary = {
@@ -165,6 +205,7 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
         "source_stream_sha256": _sha256(stream_path),
         "runtime": runtime.name, "timeout_ms": timeout_ms,
         "decision_points": proposals, "counts": counts,
+        "guardrail_counts": guardrail_counts,
         "contract": {
             "contract_version": (CONTRACT_VERSION_HISTORY if include_history
                                  else CONTRACT_VERSION),

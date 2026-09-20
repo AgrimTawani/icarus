@@ -38,6 +38,9 @@ def main():
                         help="show mission elapsed time in the observation")
     parser.add_argument("--ending-guidance", action="store_true",
                         help="prompt v2: state that a flight ends on the ground")
+    parser.add_argument("--skip-guardrail-check", action="store_true",
+                        help="do not check proposals against the real safety "
+                             "policy (icarus-check-guardrail)")
     parser.add_argument("--limit", type=int, default=0,
                         help="evaluate at most this many episodes")
     args = parser.parse_args()
@@ -75,7 +78,8 @@ def main():
             repeats=args.repeats, timeout_ms=args.timeout_ms,
             descriptor=descriptor, progress=progress,
             include_history=args.history,
-            include_elapsed=args.elapsed)
+            include_elapsed=args.elapsed,
+            check_proposal_guardrails=not args.skip_guardrail_check)
     finally:
         stop = getattr(runtime, "stop", None)
         if stop:

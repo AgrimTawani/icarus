@@ -40,6 +40,9 @@ def main():
                         help="show the model the actions already completed")
     parser.add_argument("--skip-verify", action="store_true",
                         help="skip the artifact checksum check (not for evaluation)")
+    parser.add_argument("--skip-guardrail-check", action="store_true",
+                        help="do not check proposals against the real safety "
+                             "policy (icarus-check-guardrail)")
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[2]
@@ -48,7 +51,8 @@ def main():
         output, summary = observe_episode(
             args.episode, runtime, root / "logs/dcm/observe",
             timeout_ms=args.timeout_ms, descriptor=descriptor,
-            include_history=args.history)
+            include_history=args.history,
+            check_proposal_guardrails=not args.skip_guardrail_check)
     finally:
         stop = getattr(runtime, "stop", None)
         if stop:
