@@ -2,10 +2,14 @@
 
 This records *why* the first Phase 11 model artifact was chosen, so the choice
 can be audited and revisited rather than rediscovered. It covers the
-development host in use today and the intended Jetson target. It does not
-claim any model has been evaluated: at the time of writing no model has been
-connected, and the only runtime is the `mock-no-action` stub described in
-[`DCM-OBSERVE-V1.md`](DCM-OBSERVE-V1.md).
+development host in use today and the intended Jetson target.
+
+The originally selected artifacts have since been connected and evaluated via
+both offline replay and the live DCM interface. That changed the status, not
+the need for this selection record: the evaluated Qwen and Llama candidates do
+**not** meet the Phase 12 promotion thresholds, so no model is approved for
+unattended flight. Use `docs/architecture/PHASE-12-REGRESSION-POLICY.md` and
+the versioned comparison reports for the current evaluation result.
 
 Model choice is configuration, not code. Every artifact below is selected
 through the `model:` block in the Phase 11 config and must be pinned by

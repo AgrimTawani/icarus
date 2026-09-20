@@ -1,5 +1,31 @@
 # DCM Observe-Mode Replay (First Phase 11 Slice)
 
+> Historical evaluation record. This document preserves the original offline
+> observe-mode experiment and its findings. It is **not** a description of the
+> current operational surface; see the current-state note below before using
+> any command here.
+
+## Current Phase 11 state
+
+The original offline observer remains useful for evaluating frozen episodes,
+but it is no longer the only DCM path. The current implementation provides:
+
+| Surface | Current behavior | Safety boundary |
+| --- | --- | --- |
+| `./scripts/dcm-fly` | Interactive live DCM loop using a configured local runtime | Observe, explicit operator approval, or simulator-only autonomous mode |
+| `scripts/autonomy/run_mission.py` | Typed mission client used by the live loop | Flight actions go through the Drone API, native C++ guardrails, and executor |
+| `detect` | Bounded semantic inspection over an ephemeral simulator frame | Does not call the Drone API, MAVLink, guardrails, or flight executor |
+| `./scripts/observe-dcm` | Offline replay/evaluation of a sealed episode | Never connects to a vehicle or simulator |
+
+The live path is deliberately not a promotion result. The currently evaluated
+Qwen and Llama candidates fail the Phase 12 held-out safety thresholds; leave
+the live loop in observe or explicit-approval mode. The semantic detector is a
+pinned Grounding-DINO artifact, not a VLM: it can return requested class
+counts/boxes but cannot yet answer qualitative visual questions or select a
+landing area from depth geometry.
+
+The rest of this document records the first, offline observe-mode slice.
+
 This first Phase 11 slice consumes a sealed Phase 10 episode offline. It does
 not connect to the Drone API, Gazebo, SITL, MAVLink, or a vehicle. It verifies
 episode integrity and replays native guardrail decisions before invoking a

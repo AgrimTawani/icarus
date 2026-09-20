@@ -35,8 +35,9 @@ visual-command execution and a VLM are still future work.
 | C++ autonomy services | Phase 8 complete | Drone API, authority, guardrails, executor, state engine, safety supervisor and MAVLink gateway |
 | Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
-| DCM/model integration | Local Qwen connected in observe mode behind a versioned contract and wall-clock deadline; not evaluated | `python/dcm/contract.py`, `python/dcm/llama_runtime.py` |
-| Dataset/evaluation system | Episodes, replay, corpus builder and offline decision evaluation implemented; Phase 12 campaign not run | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
+| DCM/model integration | Live chat, observe, approval and simulator-only autonomous paths exist; evaluated Qwen/Llama candidates fail promotion thresholds | `python/dcm/fly.py`, `python/dcm/llama_runtime.py` |
+| Semantic vision | Pinned Grounding-DINO supports bounded class detection on ephemeral simulator frames; VLM and depth landing geometry remain open | `python/perception/vision.py`, `scripts/detect-image` |
+| Dataset/evaluation system | Episodes, replay, corpus builder, live DCM provenance and offline decision evaluation implemented; Phase 12 promotion campaign remains open | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
 
@@ -74,10 +75,10 @@ reports are versioned as `SIM-*` documents.
   measurements before the simulator can be called a validated digital twin.
 - Gazebo LiDAR is integrated with local avoidance; camera semantics and
   physical sensor fusion remain later work.
-- The DCM has no mission orchestration, approval mode or closed-loop autonomous
-  simulation mode, and no model has been evaluated. A local Qwen proposes in
-  observe mode only, and at one recorded decision point it proposed climbing
-  immediately after a safety abort where the flight landed.
+- The DCM has live mission orchestration, approval mode and simulator-only
+  autonomous mode, but no evaluated model is approved for unattended control.
+  The held-out model gate remains open; a local Qwen previously proposed
+  climbing immediately after a safety abort where the flight landed.
 - No real Pixhawk, Jetson or physical sensor adapter has passed a test.
 
 ## Current Gate
@@ -118,10 +119,13 @@ normalized contracts and frame-parity tests already exist.
 
 Phase 11 has a versioned model contract and a working llama.cpp adapter. The
 contract declares the action table, the generated prompt, freshness limits and
-the runtime descriptor; the adapter runs the pinned Qwen3-4B Q5_K_M behind a
-wall-clock deadline that abandons the request and restarts the server. Local
-Qwen now proposes against sealed episodes in observe mode, and has executed
-nothing.
+the runtime descriptor; the adapter runs pinned local artifacts behind a
+wall-clock deadline that abandons the request and restarts the server. The live
+DCM supports chat, observe, approval and simulator-only autonomous operation;
+flight actions still traverse the typed Drone API, native guardrails and the
+independent executor. A bounded `detect` semantic tool invokes a pinned
+Grounding-DINO artifact on an ephemeral simulator frame and never gains flight
+authority. No language model is approved for unattended flight.
 
 A fresh headless Phase 9 stress flight passed on 2026-09-19 with the corrected
 full-attitude LiDAR transform: zero collisions, 1.804 m minimum clearance,
