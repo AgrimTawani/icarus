@@ -8,7 +8,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from python.dcm.contract import RuntimeDescriptor
+from python.dcm.contract import (
+    PROMPT_VERSION,
+    PROMPT_VERSION_ENDING,
+    RuntimeDescriptor,
+)
 from python.dcm.evaluate import evaluate, format_report
 from python.dcm.observe import MockRuntime
 
@@ -30,6 +34,10 @@ def main():
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed"
                              " (contract v2) instead of only the last result")
+    parser.add_argument("--elapsed", action="store_true",
+                        help="show mission elapsed time in the observation")
+    parser.add_argument("--ending-guidance", action="store_true",
+                        help="prompt v2: state that a flight ends on the ground")
     parser.add_argument("--limit", type=int, default=0,
                         help="evaluate at most this many episodes")
     args = parser.parse_args()
@@ -49,8 +57,11 @@ def main():
     else:
         from python.dcm.llama_runtime import LlamaCppRuntime
         descriptor = RuntimeDescriptor.from_manifest(
-            args.manifest, role=args.role, deadline_ms=args.timeout_ms)
-        runtime = LlamaCppRuntime(descriptor)
+            args.manifest, role=args.role, deadline_ms=args.timeout_ms,
+            prompt_version=(PROMPT_VERSION_ENDING if args.ending_guidance
+                            else PROMPT_VERSION))
+        runtime = LlamaCppRuntime(descriptor,
+                                  ending_guidance=args.ending_guidance)
 
     def progress(episode, attempt, total):
         print(f"  {episode}  run {attempt}/{total}", file=sys.stderr, flush=True)
@@ -60,7 +71,8 @@ def main():
             episodes, runtime, root / "logs/dcm/evaluation",
             repeats=args.repeats, timeout_ms=args.timeout_ms,
             descriptor=descriptor, progress=progress,
-            include_history=args.history)
+            include_history=args.history,
+            include_elapsed=args.elapsed)
     finally:
         stop = getattr(runtime, "stop", None)
         if stop:

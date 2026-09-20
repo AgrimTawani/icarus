@@ -66,7 +66,7 @@ def _sha256(path):
 
 def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     check_guardrails=True, descriptor=None,
-                    include_history=False):
+                    include_history=False, include_elapsed=False):
     """Replay a sealed episode at its recorded pre-action decision points."""
     episode = Path(episode)
     if not isinstance(timeout_ms, int) or timeout_ms <= 0:
@@ -86,12 +86,15 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
     # Completed actions only. A terminal status is recorded after its own
     # guardrail validation, so the pending action can never appear here.
     completed = [] if include_history else None
+    episode_started_ms = None
     with stream_path.open(encoding="utf-8") as source, decisions.open("x", encoding="utf-8") as target:
         for line in source:
             event = json.loads(line)
             kind = event["kind"]
             payload = event["payload"]
-            if kind == "perception":
+            if kind == "episode_start":
+                episode_started_ms = event["unix_ms"]
+            elif kind == "perception":
                 perception = payload
             elif kind == "action_status" and payload.get("state") in TERMINAL:
                 previous_result = {
@@ -104,9 +107,13 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                         "outcome": payload["state"].replace("ACTION_STATE_", ""),
                     })
             elif kind == "guardrail_validation":
+                elapsed = None
+                if include_elapsed and episode_started_ms is not None:
+                    elapsed = event["unix_ms"] - episode_started_ms
                 observation = curate(
                     payload["state"], perception, previous_result,
-                    manifest["mission"], event, history=completed)
+                    manifest["mission"], event, history=completed,
+                    elapsed_ms=elapsed)
                 raw = None
                 proposal = None
                 error = None
@@ -162,7 +169,10 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
             "contract_version": (CONTRACT_VERSION_HISTORY if include_history
                                  else CONTRACT_VERSION),
             "vocabulary_version": VOCABULARY_VERSION,
-            "prompt_version": PROMPT_VERSION,
+            # The runtime renders the prompt, so its descriptor is the
+            # authority on which variant was actually used.
+            "prompt_version": (descriptor.prompt_version if descriptor
+                               else PROMPT_VERSION),
             "allowed_actions": list(ALLOWED_ACTIONS),
             "freshness_limits": dict(FRESHNESS_LIMITS),
         },

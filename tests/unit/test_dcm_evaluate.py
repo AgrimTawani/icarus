@@ -13,6 +13,7 @@ from pathlib import Path
 from python.dcm.evaluate import (
     evaluate,
     format_report,
+    per_action_breakdown,
     score_decisions,
     summarize_latency,
 )
@@ -168,6 +169,59 @@ class ReportFormattingTests(unittest.TestCase):
         report["latency"]["steady_state_medians"] = None
         text = format_report(report)
         self.assertIn("n/a", text)
+
+
+class PerActionBreakdownTests(unittest.TestCase):
+    def episode(self, name, *runs):
+        return {"episode": name,
+                "runs": [{"proposals": proposals} for proposals in runs]}
+
+    def proposal(self, recorded, proposed, status="valid"):
+        return {"recorded": recorded, "proposed": proposed, "status": status}
+
+    def test_pairs_expose_a_failure_the_aggregate_hides(self):
+        # Three land points answered takeoff still yields a high aggregate
+        # agreement when arm and takeoff are perfect. The breakdown is the
+        # only place that failure is visible.
+        runs = [[self.proposal("arm", "arm"),
+                 self.proposal("takeoff", "takeoff"),
+                 self.proposal("land", "takeoff")]]
+        breakdown = per_action_breakdown([self.episode("e1", *runs)])
+        pairs = {(r["recorded"], r["proposed"]): r["count"]
+                 for r in breakdown["pairs"]}
+        self.assertEqual(pairs[("land", "takeoff")], 1)
+        self.assertFalse(next(r["agrees"] for r in breakdown["pairs"]
+                              if r["recorded"] == "land"))
+
+    def test_situations_count_decision_points_not_repeats(self):
+        # Three repeats of one situation are not three pieces of evidence.
+        same = [self.proposal("land", "hold")]
+        breakdown = per_action_breakdown(
+            [self.episode("e1", same, same, same)])
+        self.assertEqual(breakdown["coverage"]["land"]["situations"], 1)
+        self.assertEqual(breakdown["coverage"]["land"]["always_agreed"], 0)
+
+    def test_always_agreed_requires_every_repeat_to_agree(self):
+        agree = [self.proposal("land", "land")]
+        flip = [self.proposal("land", "hold")]
+        steady = per_action_breakdown([self.episode("e1", agree, agree)])
+        wobbly = per_action_breakdown([self.episode("e1", agree, flip)])
+        self.assertEqual(steady["coverage"]["land"]["always_agreed"], 1)
+        self.assertEqual(wobbly["coverage"]["land"]["always_agreed"], 0)
+
+    def test_unscoreable_and_invalid_points_are_excluded(self):
+        runs = [[self.proposal("goto", "hold"),
+                 self.proposal("arm", None, status="invalid"),
+                 self.proposal("arm", "arm")]]
+        breakdown = per_action_breakdown([self.episode("e1", *runs)])
+        self.assertNotIn("goto", breakdown["coverage"])
+        self.assertEqual(breakdown["coverage"]["arm"]["situations"], 1)
+
+    def test_distinct_situations_are_keyed_by_episode_and_position(self):
+        runs = [[self.proposal("land", "land")]]
+        breakdown = per_action_breakdown(
+            [self.episode("e1", *runs), self.episode("e2", *runs)])
+        self.assertEqual(breakdown["coverage"]["land"]["situations"], 2)
 
 
 class UnusableEpisodeTests(unittest.TestCase):

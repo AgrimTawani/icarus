@@ -110,6 +110,41 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
     }
 
 
+def per_action_breakdown(per_episode, allowed=ALLOWED_ACTIONS):
+    """Count recorded-vs-proposed pairs, and distinct situations per action.
+
+    The aggregate agreement rate hid a model that never proposed `land`, so
+    this breakdown is produced alongside it rather than left to be derived by
+    hand. `situations` counts distinct decision points rather than runs,
+    because three repeats of one situation are not three pieces of evidence.
+    """
+    pairs = {}
+    situations = {}
+    for entry in per_episode:
+        for run in entry["runs"]:
+            for index, proposal in enumerate(run["proposals"]):
+                recorded = proposal["recorded"]
+                if recorded not in allowed or proposal["status"] != "valid":
+                    continue
+                key = (recorded, proposal["proposed"])
+                pairs[key] = pairs.get(key, 0) + 1
+                situations.setdefault(recorded, {}).setdefault(
+                    (entry["episode"], index), set()).add(proposal["proposed"])
+    rows = [{"recorded": recorded, "proposed": proposed, "count": count,
+             "agrees": recorded == proposed}
+            for (recorded, proposed), count in
+            sorted(pairs.items(), key=lambda item: (item[0][0], -item[1]))]
+    coverage = {
+        recorded: {
+            "situations": len(points),
+            "always_agreed": sum(1 for answers in points.values()
+                                 if answers == {recorded}),
+        }
+        for recorded, points in sorted(situations.items())
+    }
+    return {"pairs": rows, "coverage": coverage}
+
+
 def _aggregate(runs, key):
     values = [run[key] for run in runs if run.get(key) is not None]
     return summarize_latency(values) if values else None
@@ -117,7 +152,7 @@ def _aggregate(runs, key):
 
 def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
              descriptor=None, check_guardrails=True, progress=None,
-             include_history=False):
+             include_history=False, include_elapsed=False):
     """Replay every episode `repeats` times and score the result.
 
     Returns (output_directory, report). Proposals are recorded, never executed.
@@ -144,7 +179,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
                 report_dir, _ = observe_episode(
                     episode, runtime, output / "observe", timeout_ms=timeout_ms,
                     check_guardrails=check_guardrails, descriptor=descriptor,
-                    include_history=include_history)
+                    include_history=include_history,
+                    include_elapsed=include_elapsed)
             except (ReplayError, OSError, KeyError) as unusable:
                 # A corpus accumulates episodes that predate a schema change or
                 # were sealed mid-failure. Losing the whole campaign to one of
@@ -206,6 +242,9 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
         "runtime": runtime.name,
         "contract_version": (CONTRACT_VERSION_HISTORY if include_history
                              else CONTRACT_VERSION),
+        "mission_elapsed_shown": include_elapsed,
+        "prompt_version": (descriptor.prompt_version if descriptor
+                           else None),
         "model": descriptor.as_record() if descriptor else None,
         "episodes": len(per_episode),
         "episodes_requested": len(episodes),
@@ -230,6 +269,7 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             "steady_state_medians": summarize_latency(steady),
         },
         "deterministic_episodes": sum(1 for e in per_episode if e["deterministic"]),
+        "per_action": per_action_breakdown(per_episode),
         "per_episode": per_episode,
     }
     (output / "evaluation.json").write_text(json.dumps(report, indent=2) + "\n")
@@ -241,7 +281,9 @@ def format_report(report):
     totals = report["totals"]
     lines = [
         f"runtime            {report['runtime']}",
-        f"contract           {report.get('contract_version', '?')}",
+        f"contract           {report.get('contract_version', '?')}"
+        + ("  +elapsed" if report.get("mission_elapsed_shown") else ""),
+        f"prompt             {report.get('prompt_version') or '?'}",
         (f"episodes x repeats {report['episodes']} x {report['repeats']}"
          f"  ({totals['decision_points']} decision points)"),
         "",
@@ -273,6 +315,19 @@ def format_report(report):
             lines.append(
                 f"{label:<19}median {stats['median_ms']:.0f} ms, "
                 f"min {stats['min_ms']:.0f}, max {stats['max_ms']:.0f}")
+    breakdown = report.get("per_action")
+    if breakdown:
+        lines.append("")
+        lines.append("per action         recorded -> proposed")
+        for row in breakdown["pairs"]:
+            lines.append(
+                f"{'':<19}{row['recorded']:<12} -> {row['proposed']:<12}"
+                f"{row['count']:>4}{'  OK' if row['agrees'] else ''}")
+        lines.append("")
+        lines.append("coverage           distinct situations (always agreed)")
+        for action, stats in breakdown["coverage"].items():
+            lines.append(f"{'':<19}{action:<12} {stats['situations']:>3}"
+                         f"  ({stats['always_agreed']})")
     lines.append("")
     if report.get("skipped_episodes"):
         lines.append(f"{'skipped episodes':<19}{len(report['skipped_episodes'])}"

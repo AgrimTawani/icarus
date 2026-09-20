@@ -35,6 +35,10 @@ CONTRACT_VERSION_HISTORY = "dcm-contract-v2-history"
 # cannot crowd out the current state.
 HISTORY_LIMIT = 12
 PROMPT_VERSION = "dcm-prompt-v1"
+# v2 adds domain guidance that a flight ends on the ground. This is directive
+# rather than neutral, so any improvement it produces must be read as "the
+# model follows an instruction it was given", not as a latent capability.
+PROMPT_VERSION_ENDING = "dcm-prompt-v2-ending"
 VOCABULARY_VERSION = "dcm-actions-v1"
 
 # The deliberately narrow first vocabulary. It is much smaller than the Drone
@@ -207,7 +211,7 @@ def assess_freshness(observation, limits=FRESHNESS_LIMITS):
 
 
 def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
-           history=None):
+           history=None, elapsed_ms=None):
     """Build the bounded observation a model is allowed to see.
 
     The recorded next action is deliberately not a parameter. It is attached to
@@ -233,6 +237,12 @@ def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
     }
     if history is not None:
         observation["actions_completed"] = list(history)[-HISTORY_LIMIT:]
+    if elapsed_ms is not None:
+        # A weak progress signal: the episode records the mission name but no
+        # target altitude or hover duration, so there is nothing to measure
+        # completion against. Time since the mission began is what the stream
+        # actually supports.
+        observation["mission_elapsed_ms"] = elapsed_ms
     return observation
 
 
@@ -252,8 +262,12 @@ Rules:
 - "arguments" is always an object. Use {{}} when the action takes no arguments.
 - Never invent an action, an argument, or a unit.
 - If no action is appropriate or the situation is unclear, reply with \
-{{"action":"none","arguments":{{}}}}.\
+{{"action":"none","arguments":{{}}}}.{ending}\
 """
+
+ENDING_GUIDANCE = """
+- A flight is not finished until the aircraft is on the ground. Holding keeps \
+the aircraft airborne and is not a way to end a mission."""
 
 
 def render_vocabulary(actions=ACTIONS):
@@ -270,7 +284,7 @@ def render_vocabulary(actions=ACTIONS):
     return "\n".join(lines)
 
 
-def render_prompt(observation, actions=ACTIONS):
+def render_prompt(observation, actions=ACTIONS, ending_guidance=False):
     """Return the versioned system and user text for one decision.
 
     The vocabulary shown to the model is generated from the same table the
@@ -278,8 +292,11 @@ def render_prompt(observation, actions=ACTIONS):
     would then be rejected.
     """
     return {
-        "prompt_version": PROMPT_VERSION,
-        "system": SYSTEM_PROMPT.format(vocabulary=render_vocabulary(actions)),
+        "prompt_version": (PROMPT_VERSION_ENDING if ending_guidance
+                           else PROMPT_VERSION),
+        "system": SYSTEM_PROMPT.format(
+            vocabulary=render_vocabulary(actions),
+            ending=ENDING_GUIDANCE if ending_guidance else ""),
         "user": ("Current situation:\n"
                  + json.dumps(observation, indent=2, sort_keys=True)
                  + "\n\nRespond with one JSON object."),

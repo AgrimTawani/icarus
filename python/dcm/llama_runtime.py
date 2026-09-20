@@ -50,7 +50,8 @@ class LlamaCppRuntime:
     """Run a pinned local GGUF behind the provider-neutral contract."""
 
     def __init__(self, descriptor, binary=None, host="127.0.0.1", port=None,
-                 gpu_layers=99, verify_artifact=True, extra_args=()):
+                 gpu_layers=99, verify_artifact=True, extra_args=(),
+                 ending_guidance=False):
         if not isinstance(descriptor, RuntimeDescriptor):
             raise TypeError("descriptor must be a RuntimeDescriptor")
         self.descriptor = descriptor
@@ -60,6 +61,8 @@ class LlamaCppRuntime:
         self.gpu_layers = gpu_layers
         self.verify_artifact = verify_artifact
         self.extra_args = list(extra_args)
+        # The runtime renders the prompt, so it owns which variant is used.
+        self.ending_guidance = ending_guidance
         self.process = None
         # The model identity belongs in the name so a report cannot be
         # mistaken for one produced by a different artifact.
@@ -109,7 +112,8 @@ class LlamaCppRuntime:
         docs/architecture/DCM-OBSERVE-V1.md for the measured spread and why the
         deadline must be set with it in mind.
         """
-        prompt = render_prompt({"warmup": True})
+        prompt = render_prompt({"warmup": True},
+                               ending_guidance=self.ending_guidance)
         body = json.dumps({
             "messages": [
                 {"role": "system", "content": prompt["system"]},
@@ -176,7 +180,8 @@ class LlamaCppRuntime:
         """
         if self.process is None:
             self.start()
-        prompt = render_prompt(observation)
+        prompt = render_prompt(observation,
+                               ending_guidance=self.ending_guidance)
         body = json.dumps({
             "messages": [
                 {"role": "system", "content": prompt["system"]},
