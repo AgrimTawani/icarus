@@ -790,14 +790,14 @@ Never train directly from raw logs.
 
 - [x] Replay state and action sequences without Gazebo.
 - [x] Re-run guardrails against recorded actions.
-- [ ] Re-run DCM decisions against frozen state snapshots.
-- [ ] Compare controller or model versions on identical episodes.
+- [x] Re-run DCM decisions against frozen state snapshots.
+- [x] Compare controller or model versions on identical episodes.
 
 ### 10.4 Protect real-flight data
 
 - [x] Remove session/lease and operator-identifying fields from the compact record.
 - [ ] Define retention and backup policy.
-- [ ] Record whether an action was proposed, approved, executed, or overridden.
+- [x] Record whether an action was proposed, approved, executed, or overridden.
 - [x] Never label a failed or unsafe action as preferred automatically.
 
 ### Phase 10 exit gate
@@ -820,10 +820,10 @@ current timeout only rejects a response after it returns. See
 
 ### 11.1 Model runtime abstraction
 
-- [ ] Define a provider-independent `ModelRuntime` interface.
+- [x] Define a provider-independent `ModelRuntime` interface.
 - [ ] Support small local Qwen and Llama-family models first.
-- [ ] Keep model loading separate from mission logic.
-- [ ] Record model name, quantization, prompt version, and sampling settings.
+- [x] Keep model loading separate from mission logic.
+- [x] Record model name, quantization, prompt version, and sampling settings.
 - [ ] Add runtime adapters without changing the DCM controller.
 - [ ] Support local Transformers, llama.cpp, or another selected runtime behind
       the same interface.
@@ -844,18 +844,18 @@ model:
 
 ### 11.2 DCM controller loop
 
-- [ ] Receive mission, state, previous result, and allowed actions.
-- [ ] Produce exactly one structured action.
-- [ ] Reject prose or malformed output.
-- [ ] Apply a decision timeout.
-- [ ] Prevent shell, direct MAVLink, and unrestricted file/network access.
+- [x] Receive mission, state, previous result, and allowed actions.
+- [x] Produce exactly one structured action.
+- [x] Reject prose or malformed output.
+- [x] Apply a decision timeout.
+- [x] Prevent shell, direct MAVLink, and unrestricted file/network access.
 
 ### 11.3 Operating modes
 
-- [ ] Observe: proposals are logged but never executed.
-- [ ] Approval: valid proposals require operator approval.
-- [ ] Autonomous simulation: valid proposals execute automatically.
-- [ ] Hardware modes remain locked until later phase gates pass.
+- [x] Observe: proposals are logged but never executed.
+- [x] Approval: valid proposals require operator approval.
+- [x] Autonomous simulation: valid proposals execute automatically.
+- [x] Hardware modes remain locked until later phase gates pass.
 
 ### 11.4 Build the model evaluation harness
 
@@ -876,18 +876,18 @@ measure the consequences of a sequence of decisions.
 ### 11.5 Score models on multiple dimensions
 
 - [ ] Mission success rate.
-- [ ] Invalid-action rate.
+- [x] Invalid-action rate.
 - [ ] Correct API/tool selection rate.
-- [ ] Argument validity and accuracy.
+- [x] Argument validity and accuracy.
 - [ ] Guardrail rejection rate.
 - [ ] Recovery success rate.
 - [ ] Action count and completion time.
 - [ ] Safety interventions.
-- [ ] Decision latency and timeout rate.
+- [x] Decision latency and timeout rate.
 - [ ] Tokens per second.
 - [ ] Peak VRAM and system RAM.
-- [ ] Model crash or runtime failure rate.
-- [ ] Consistency across repeated runs and seeds.
+- [x] Model crash or runtime failure rate.
+- [x] Consistency across repeated runs and seeds.
 
 Do not choose a model from one combined number alone. Produce a weighted project
 score plus the underlying metrics so safety, reliability, speed, and resource
@@ -913,10 +913,10 @@ evaluations/<evaluation-id>/
 `-- report.html
 ```
 
-- [ ] Store exact model artifact revision and checksum.
+- [x] Store exact model artifact revision and checksum.
 - [ ] Store prompt, API schema, code, parameters, and scenario revisions.
-- [ ] Report confidence intervals or run-to-run variation.
-- [ ] Preserve failed traces for diagnosis.
+- [x] Report confidence intervals or run-to-run variation.
+- [x] Preserve failed traces for diagnosis.
 - [ ] Prevent evaluation episodes from entering training data.
 - [ ] Compare fine-tuned models against their own base model and the scripted
       controller.
