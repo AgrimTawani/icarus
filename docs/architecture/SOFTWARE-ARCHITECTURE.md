@@ -121,6 +121,13 @@ the Gazebo adapter and offline analyzer respectively. A downward depth sensor
 and live calibration evidence remain required before this becomes an
 operational landing capability.
 
+The adapter was exercised against a real headless `empty_validation` Gazebo
+session on 2026-09-21: it captured the native `/icarus/sensors/rgbd/depth_image`
+stream as a 640×480 float32-metres frame. Assessing it with the configured
+forward optical axis `[1, 0, 0]` returned `assessable: false` and no quality
+score. This is positive evidence for the transport and refusal paths only; it
+is not evidence that the vehicle can assess or select a landing site.
+
 ## Runtime Topology
 
 The expected process topology after Phase 8 is:
