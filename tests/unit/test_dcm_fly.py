@@ -82,9 +82,13 @@ class FakeClient:
 class FakeEpisode:
     def __init__(self):
         self.records = []
+        self.model = None
 
     def record(self, kind, payload):
         self.records.append((kind, payload))
+
+    def set_model(self, descriptor):
+        self.model = descriptor
 
 
 class ScriptedRuntime:
@@ -288,6 +292,18 @@ class EpisodeRecordingTests(unittest.TestCase):
         payload = next(p for k, p in client.episode.records
                        if k == "dcm_decision" and p["status"] == "executed")
         self.assertIsNone(payload["operator_approval"])
+
+    def test_runtime_descriptor_is_attached_to_the_episode(self):
+        class Descriptor:
+            def as_record(self):
+                return {"family": "qwen", "sha256": "pinned"}
+
+        client = FakeClient()
+        fly_mission(client, ScriptedRuntime('{"action":"none","arguments":{}}'),
+                    "test", mode="autonomous", descriptor=Descriptor(),
+                    echo=lambda *_: None, max_decisions=1)
+        self.assertEqual(client.episode.model,
+                         {"family": "qwen", "sha256": "pinned"})
 
 
 class MissionMemoryTests(unittest.TestCase):

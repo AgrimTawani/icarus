@@ -119,6 +119,12 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         raise ValueError("mode must be one of " + ", ".join(MODES))
     from icarus.v1 import action_pb2
 
+    episode = getattr(client, "episode", None)
+    if descriptor is not None and episode is not None:
+        set_model = getattr(episode, "set_model", None)
+        if set_model is not None:
+            set_model(descriptor.as_record())
+
     memory = MissionMemory(mission)
     executed = []
     counts = {"proposed": 0, "invalid": 0, "stale": 0, "timeout": 0,

@@ -74,7 +74,8 @@ def _source_fingerprint(root):
     """Fingerprint the actual source bytes, including uncommitted changes."""
     digest = hashlib.sha256()
     roots = [root / name for name in ("cpp", "perception", "proto",
-                                     "python/dataset_tools", "scripts/autonomy")]
+                                     "python/dataset_tools", "python/dcm",
+                                     "scripts/autonomy", "scripts/simulation")]
     files = [root / "CMakeLists.txt", root / "scripts/start-autonomy"]
     for source_root in roots:
         files.extend(source_root.rglob("*.cpp"))
@@ -193,7 +194,15 @@ class Episode:
         self.endpoint = endpoint
         self.session = session
         self.failed_streams = []
+        self.model = None
         self.record("episode_start", {"mission": mission})
+
+    def set_model(self, descriptor):
+        """Attach the immutable runtime descriptor before the episode seals."""
+        if not isinstance(descriptor, dict):
+            raise TypeError("model descriptor must be a dictionary")
+        with self.lock:
+            self.model = json.loads(json.dumps(descriptor, sort_keys=True))
 
     def record(self, kind, payload):
         with self.lock:
@@ -296,7 +305,7 @@ class Episode:
             "vehicle_id": "icarus-01",
             "raw_sensor_payloads": raw_sensor_snapshot is not None,
             "raw_sensor_snapshot": raw_sensor_snapshot,
-            "model": None,
+            "model": self.model,
             "privacy": {"operator_identifiers": "excluded",
                         "training_status": "unreviewed_do_not_train"},
             "config_sha256": config_hashes,

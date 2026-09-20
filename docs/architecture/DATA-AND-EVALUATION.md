@@ -28,6 +28,12 @@ approval, `false` for an explicit decline, and `null` when no operator decision
 was requested. That annotation permits later review without pretending that an
 autonomous action was human-approved.
 
+The manifest also snapshots the DCM runtime descriptor (model family, artifact
+checksum, quantization, prompt/contract settings) before sealing. Its source
+tree fingerprint includes the DCM and simulator code as well as the C++ API,
+perception and protobuf contracts, so replay can identify a code-path change
+rather than silently treating it as the same experiment.
+
 For simulation episodes, the bounded Gazebo sensor recorder is now snapshotted
 into `raw_sensors/` at seal time when available. It contains compressed native
 protobuf streams and an indexed schema for IMU, GPS, LiDAR, range, battery and

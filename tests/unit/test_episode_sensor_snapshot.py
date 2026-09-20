@@ -42,6 +42,18 @@ class EpisodeSensorSnapshotTests(unittest.TestCase):
             self.assertFalse(manifest["raw_sensor_payloads"])
             self.assertIsNone(manifest["raw_sensor_snapshot"])
 
+    def test_model_descriptor_is_copied_into_the_sealed_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            episode = Episode(root, "test", "127.0.0.1:50051", None)
+            descriptor = {"family": "qwen", "sha256": "pinned"}
+            episode.set_model(descriptor)
+            descriptor["sha256"] = "mutated-after-set"
+            episode.seal()
+            manifest = json.loads((episode.directory / "manifest.json").read_text())
+            self.assertEqual(manifest["model"],
+                             {"family": "qwen", "sha256": "pinned"})
+
 
 if __name__ == "__main__":
     unittest.main()
