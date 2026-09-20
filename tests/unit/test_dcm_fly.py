@@ -78,6 +78,10 @@ class FakeClient:
     def wait_action(self, receipt, timeout):
         return FakeTerminal(self.outcome)
 
+    def detect(self, classes):
+        return {"counts": {item: 0 for item in classes},
+                "requested_classes": list(classes)}
+
 
 class FakeEpisode:
     def __init__(self):
@@ -209,6 +213,15 @@ class ExecutionGateTests(unittest.TestCase):
                     {"action": action, "arguments": arguments}))
                 client, _ = self.run_mission(runtime, answers="y\n" * 4)
                 self.assertIn(method, client.action_api.calls)
+
+    def test_detect_is_semantic_and_never_reaches_the_drone_api(self):
+        runtime = ScriptedRuntime(
+            '{"action":"detect","arguments":{"classes":["person","tree"]}}')
+        client, result = self.run_mission(runtime, answers="y\n")
+        self.assertEqual(client.action_api.calls, [])
+        self.assertEqual(result["executed"][0]["outcome"], "SUCCEEDED")
+        self.assertEqual(result["executed"][0]["arguments"],
+                         {"classes": ["person", "tree"]})
 
     def test_each_action_gets_a_distinct_idempotency_name(self):
         # context() derives the idempotency key from this name, so reusing one

@@ -3,6 +3,8 @@
 
 import argparse
 import json
+import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -146,6 +148,33 @@ class MissionClient:
             minimum_state_sequence=state.sequence,
             trace_id=self.trace_id,
         )
+
+    def detect(self, classes):
+        """Run a simulator camera inspection; never sends a flight command."""
+        if self.episode is None or not self.episode.session:
+            raise RuntimeError("semantic detection requires an active simulator episode")
+        from python.perception.vision import detect_image, normalize_classes
+
+        classes = normalize_classes(classes)
+        # Pixels are inspection input, not episode data. Capture into an
+        # ephemeral directory, retain only the image hash and structured
+        # detector output, then remove the frame before returning.
+        with tempfile.TemporaryDirectory(prefix="icarus-vision-") as temporary:
+            output = Path(temporary) / "frame.ppm"
+            subprocess.run(
+                [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output)],
+                cwd=ROOT, check=True, timeout=15)
+            result = detect_image(
+                output, classes, Path.home() / "models/vision/MANIFEST.json")
+        result["image"].pop("path", None)
+        result["image"]["source"] = "simulator_ephemeral_capture"
+        # Keep the model's next observation bounded: it needs count evidence,
+        # not a potentially large box list or image payload.
+        summary = {"counts": result["counts"],
+                   "requested_classes": result["requested_classes"],
+                   "observed_at_unix_ms": result["observed_at_unix_ms"]}
+        self.episode.record("semantic_detection", result)
+        return summary
 
     def wait_action(self, receipt, timeout: int):
         if receipt.disposition == action_pb2.ACTION_STATE_REJECTED:

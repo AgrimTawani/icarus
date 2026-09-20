@@ -172,6 +172,12 @@ The capture command uses Gazebo transport only; the detector launcher uses the
 project virtual environment and the pinned local model. Neither command starts
 the Drone API or can arm the vehicle.
 
+When called through the live DCM contract, `detect` follows the same
+ephemeral-frame rule. A 2026-09-21 headless check stored its `semantic_detection`
+record in episode `20260921T051331_708405511741` with counts, boxes, model hash
+and image hash, but no PPM/JPEG/PNG file. This proves the boundary wiring, not
+detector accuracy or any autonomous visual-flight capability.
+
 ## Model Runtime and Evaluation
 
 All model providers implement the same interface: load a named immutable model

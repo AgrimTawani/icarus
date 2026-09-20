@@ -41,7 +41,7 @@ PROMPT_VERSION = "dcm-prompt-v1"
 PROMPT_VERSION_ENDING = "dcm-prompt-v2-ending"
 # v2 adds goto and orbit. The version changes because a report scored
 # against a different action set is not comparable.
-VOCABULARY_VERSION = "dcm-actions-v2-nav"
+VOCABULARY_VERSION = "dcm-actions-v3-vision"
 
 # The deliberately narrow first vocabulary. It is much smaller than the Drone
 # API on purpose: a model may only ask for what has been explicitly modelled
@@ -94,9 +94,18 @@ ACTIONS = {
             "kind": "number", "required": False, "minimum": 0.25, "maximum": 3.0,
         },
     },
+    # Semantic analysis is not a flight command. It is an explicit request to
+    # the pinned vision boundary and cannot reach MAVLink or the action RPC.
+    "detect": {
+        "classes": {
+            "kind": "class_list", "required": True, "minimum_items": 1,
+            "maximum_items": 16, "maximum_item_length": 64,
+        },
+    },
 }
 
 ALLOWED_ACTIONS = tuple(ACTIONS)
+FLIGHT_ACTIONS = frozenset(ACTIONS) - {"none", "detect"}
 
 # Observation age limits. The perception limit matches the ObstacleMap expiry
 # in perception/obstacle_map/obstacle_map.hpp; if that default changes, this
@@ -149,6 +158,9 @@ class DeadlineExceeded(Exception):
 
 
 def _describe_bounds(spec):
+    if spec["kind"] == "class_list":
+        return (f"array of {spec['minimum_items']}..{spec['maximum_items']} "
+                f"class-name strings (each <= {spec['maximum_item_length']} chars)")
     kind = "integer" if spec["kind"] == "integer" else "number"
     return (f"{kind} in [{spec['minimum']}, {spec['maximum']}]"
             + ("" if spec["required"] else ", optional"))
@@ -156,6 +168,25 @@ def _describe_bounds(spec):
 
 def _check_value(value, spec):
     """Return a problem description, or None when the value is acceptable."""
+    if spec["kind"] == "class_list":
+        if not isinstance(value, list):
+            return "must be an array of class-name strings"
+        if not spec["minimum_items"] <= len(value) <= spec["maximum_items"]:
+            return (f"must contain {spec['minimum_items']}.."
+                    f"{spec['maximum_items']} items")
+        normalized = []
+        for item in value:
+            if not isinstance(item, str):
+                return "must contain only strings"
+            compact = " ".join(item.strip().lower().split())
+            if not compact or len(compact) > spec["maximum_item_length"]:
+                return "contains an empty or oversized class name"
+            if item != compact:
+                return "class names must be normalized lowercase strings"
+            if compact in normalized:
+                return "must not contain duplicate class names"
+            normalized.append(compact)
+        return None
     if spec["kind"] == "integer":
         # `type(...) is not int` rather than isinstance: bool is a subclass of
         # int, and True must not be accepted as a duration.
@@ -166,6 +197,11 @@ def _check_value(value, spec):
     if not spec["minimum"] <= value <= spec["maximum"]:
         return f"must be in [{spec['minimum']}, {spec['maximum']}]"
     return None
+
+
+def is_flight_action(action):
+    """Whether an action needs the C++ flight guardrail/executor path."""
+    return action in FLIGHT_ACTIONS
 
 
 def validate_proposal(raw, actions=ACTIONS):

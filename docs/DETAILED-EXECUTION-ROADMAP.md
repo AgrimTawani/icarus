@@ -860,6 +860,17 @@ model:
 - [x] Autonomous simulation: valid proposals execute automatically.
 - [x] Hardware modes remain locked until later phase gates pass.
 
+### 11.3a Semantic inspection boundary
+
+- [x] The DCM contract includes a bounded `detect` tool with an explicit,
+      normalized class list.
+- [x] A detector request is semantic-only: it captures an ephemeral simulator
+      frame, records structured counts/boxes and an image hash, and never
+      reaches the Drone API, MAVLink, guardrails or flight executor.
+- [x] The pinned Grounding-DINO artifact ran on a live Gazebo frame and its
+      result was retained without retaining camera pixels.
+- [ ] Depth-based landing-zone geometry and VLM qualitative interpretation.
+
 ### 11.4 Build the model evaluation harness
 
 Every candidate model receives the same:

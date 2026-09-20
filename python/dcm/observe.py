@@ -23,6 +23,7 @@ from python.dcm.contract import (
     CONTRACT_VERSION,
     CONTRACT_VERSION_HISTORY,
     FRESHNESS_LIMITS,
+    is_flight_action,
     PROMPT_VERSION,
     VOCABULARY_VERSION,
     DeadlineExceeded,
@@ -165,11 +166,11 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                 proposals += 1
 
                 guardrail = None
-                # "none" has no Drone API command at all, so it can never be
-                # accepted or rejected by the guardrails; there is nothing to
-                # check, not an unchecked case.
+                # Semantic tools and "none" never become flight commands, so
+                # they have no guardrail verdict; this is not an unchecked
+                # flight proposal.
                 if (status == "valid" and check_proposal_guardrails
-                        and proposal["action"] != "none"):
+                        and is_flight_action(proposal["action"])):
                     # A proposal can satisfy the contract's shape and bounds
                     # and still be something the flight safety policy would
                     # refuse, such as a takeoff while disarmed. Checked

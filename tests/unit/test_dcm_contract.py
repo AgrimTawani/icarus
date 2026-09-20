@@ -70,6 +70,7 @@ class UnknownActionTests(unittest.TestCase):
             "goto": {"north_m": 1.0, "east_m": 1.0, "altitude_agl_m": 3.0},
             "orbit": {"center_north_m": 1.0, "center_east_m": 1.0,
                       "radius_m": 5.0, "altitude_agl_m": 3.0},
+            "detect": {"classes": ["person"]},
         }
         for action, specification in ACTIONS.items():
             arguments = minimal.get(action, {})
@@ -83,6 +84,16 @@ class UnknownActionTests(unittest.TestCase):
 
 
 class UnsafeArgumentTests(unittest.TestCase):
+    def test_detect_requires_bounded_normalized_class_list(self):
+        accepted = validate_proposal(
+            '{"action":"detect","arguments":{"classes":["person","tree"]}}')
+        self.assertEqual(accepted["arguments"]["classes"], ["person", "tree"])
+        for classes in ([], ["Person"], ["two  spaces"], [""], ["person", "person"],
+                        list(map(str, range(17)))):
+            raw = json.dumps({"action": "detect", "arguments": {"classes": classes}})
+            with self.subTest(classes=classes), self.assertRaises(ValueError):
+                validate_proposal(raw)
+
     def test_altitude_outside_bounds_is_rejected(self):
         for altitude in (0, 0.49, 10.01, 100, -3, 1e9):
             raw = json.dumps({"action": "takeoff",

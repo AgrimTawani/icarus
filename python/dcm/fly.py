@@ -52,8 +52,11 @@ class MissionMemory:
         self.completed = []
         self.rejected = 0
 
-    def remember(self, action, outcome):
-        self.completed.append({"action": action, "outcome": outcome})
+    def remember(self, action, outcome, result=None):
+        item = {"action": action, "outcome": outcome}
+        if result is not None:
+            item["result"] = result
+        self.completed.append(item)
 
     def as_history(self):
         return list(self.completed)
@@ -192,7 +195,9 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             continue
 
         outcome, detail = _execute(client, action_pb2, proposal, index, echo)
-        memory.remember(proposal["action"], outcome)
+        memory.remember(proposal["action"], outcome,
+                        detail if proposal["action"] == "detect" and outcome == "SUCCEEDED"
+                        else None)
         executed.append({"action": proposal["action"],
                          "arguments": proposal["arguments"],
                          "outcome": outcome})
@@ -240,6 +245,14 @@ def session_episode_summary(results, error=None):
 def _execute(client, action_pb2, proposal, index, echo):
     """Send one approved action and wait for its terminal state."""
     action = proposal["action"]
+    if action == "detect":
+        try:
+            result = client.detect(proposal["arguments"]["classes"])
+        except Exception as failure:  # noqa: BLE001 - semantic failures are data
+            echo(f"      detect failed: {failure}")
+            return "FAILED", str(failure)
+        echo("      -> SUCCEEDED (" + json.dumps(result, sort_keys=True) + ")")
+        return "SUCCEEDED", result
     # A unique name per decision: context() derives the idempotency key from
     # it, so reusing a name would make the second identical action a no-op.
     context = client.context(f"{action}-{index}-{uuid.uuid4().hex[:8]}")
