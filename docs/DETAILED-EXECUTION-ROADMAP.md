@@ -917,7 +917,7 @@ evaluations/<evaluation-id>/
 - [ ] Store prompt, API schema, code, parameters, and scenario revisions.
 - [x] Report confidence intervals or run-to-run variation.
 - [x] Preserve failed traces for diagnosis.
-- [ ] Prevent evaluation episodes from entering training data.
+- [x] Prevent evaluation episodes from entering training data.
 - [ ] Compare fine-tuned models against their own base model and the scripted
       controller.
 
