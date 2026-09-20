@@ -34,6 +34,11 @@ tree fingerprint includes the DCM and simulator code as well as the C++ API,
 perception and protobuf contracts, so replay can identify a code-path change
 rather than silently treating it as the same experiment.
 
+The live golden replay on 2026-09-21 verified this path with episode
+`20260921T045612_616dff83eb0a`: it replayed through `scripts/test-phase10`
+and retained a 4.4 MB `raw_sensors/` snapshot with ten channels. The snapshot
+contains RGB/depth metadata but no image pixels.
+
 For simulation episodes, the bounded Gazebo sensor recorder is now snapshotted
 into `raw_sensors/` at seal time when available. It contains compressed native
 protobuf streams and an indexed schema for IMU, GPS, LiDAR, range, battery and

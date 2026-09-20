@@ -778,11 +778,13 @@ Record:
 
 ### 10.2 Separate data views
 
-- [ ] Raw operational log (compact API event log exists; raw sensors are separate).
+- [x] Raw operational log (sealed simulation episodes snapshot the bounded
+      native sensor protobuf streams; camera pixels remain excluded).
 - [x] Time-aligned replay record.
 - [x] Evaluation summary.
 - [x] Candidate training example (unapproved by default).
-- [ ] Human annotation and approval status.
+- [x] Human annotation and approval status (`operator_approval` distinguishes
+      explicit approval, explicit decline, and autonomous/no-prompt execution).
 
 Never train directly from raw logs.
 
