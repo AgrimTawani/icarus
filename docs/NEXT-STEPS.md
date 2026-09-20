@@ -89,18 +89,33 @@ with the documented simulation mission workflow. Observe reports are under
    cut `land -> takeoff` from 18 to 1 while raising `land -> land` from 0 to 9,
    touching no other action.
 
-   **Still open:** only 9 of 27 land points are correct and `hold` now
-   dominates at 17. Try an explicit mission-progress or objective-complete
-   field, a prompt that states when a flight should end, and the Q4 artifact
-   and a larger model, each as separate controlled runs. Decide whether v2
-   becomes the default contract; it currently is not.
+   Three further variants were then run, each changing one thing. Mission
+   elapsed time made it **worse** (3/9 correct landings down to 1/9) and is
+   not recommended: the episodes record no target altitude or hover duration,
+   so there is nothing for a bare time count to measure against. A directive
+   ending-guidance prompt scored best but produced the only invalid output
+   seen in this work, twice, and increased climbing after a safety abort. Q4
+   scored higher than Q5 on every axis, contradicting the reasoning that
+   selected Q5.
 
-6. **Only then add mission orchestration and controlled SITL modes.** Add
+   **Do not act on any of those three.** They separate by two or three
+   situations out of nine, which is not evidence. Only the history result is
+   established, and only because its effect is large: dangerous climbs fell
+   from 18 to 1.
+
+6. **Grow the corpus before deciding anything else.** Nine distinct
+   mission-ending decision situations cannot separate a 3/9 from a 5/9. This
+   is now the binding constraint on every open question — default contract,
+   quantization, prompt wording. `./scripts/fly-episode-corpus --repeat N`
+   already does the work; it needs more varied missions and more failure
+   cases, not new code.
+
+7. **Only then add mission orchestration and controlled SITL modes.** Add
    persistent mission state, bounded reusable sequences and recovery logic.
    Progress from observe mode to explicit operator approval, then autonomous
    simulation behind the same Drone API, guardrails and safety supervisor. The
    model must never receive shell, raw MAVLink, motor or safety-policy access.
-7. **Run the Phase 12 scenario campaign.** Freeze seeds, prompts, model and
+8. **Run the Phase 12 scenario campaign.** Freeze seeds, prompts, model and
    policy versions; compare models against the deterministic baseline across
    wind, obstacles, sensor dropouts, link faults and recovery. Hardware work
    remains a separate later gate.

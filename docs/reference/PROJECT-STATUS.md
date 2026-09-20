@@ -140,6 +140,15 @@ is now the dominant wrong answer at 17, so the failure changed from dangerous
 to conservative rather than disappearing. Aggregate agreement moved 74.8% to
 83.2%, which describes that change far less usefully than the breakdown.
 
+Three further variants were run, each changing one thing. Mission elapsed time
+made the result worse; a directive ending-guidance prompt scored highest but
+produced the only invalid outputs seen in this work and increased climbing
+after a safety abort; Q4 outscored Q5 on every axis, contradicting the
+reasoning that selected Q5. None of those three is actionable: they separate by
+two or three situations out of the nine mission-ending situations the corpus
+contains. Growing the corpus is now the binding constraint on every open
+question.
+
 Temperature 0 did not guarantee determinism: one land decision flipped between
 repeats on identical input, because prompt-cache reuse changes floating-point
 reduction order enough to flip a near-tied argmax.
@@ -149,6 +158,6 @@ Latency: cold starts of 4257, 9370 and 13259 ms across sessions, against a
 cannot be accommodated by choosing a deadline; a deployed loop must warm itself
 before the mission begins.
 
-68 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
+73 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
 2026-09-19, alongside five consecutive headless corpus flights. Phase 10's full exit gate and all Phase 11 evaluation and flight
 gates remain open. See [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the handoff.

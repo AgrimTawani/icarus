@@ -287,9 +287,69 @@ earlier session. The cold start is not a stable quantity and cannot be
 accommodated by choosing a deadline; the loop must warm itself before the
 mission begins.
 
-Next: a Phase 12 campaign with frozen scenarios, held-out episodes, a
-deterministic no-LLM baseline and at least two models, reported per action.
-Test whether an explicit mission-progress field closes the remaining `land`
-gap, and whether the larger quantization or a larger model changes it. Only
-after that should approval mode or closed-loop SITL control be considered.
-Hardware control remains out of scope.
+## Four variants, and why none of them settles the question
+
+Each run changes exactly one thing against the same 10 episodes, 3 repeats:
+
+| Variant | Agreement | Invalid | land correct | ends flight | climbs after abort |
+| --- | --- | --- | --- | --- | --- |
+| Q5, no history | 74.8% | 0 | 0/9 | 0/9 | 18 |
+| Q5, history | 83.2% | 0 | 3/9 | 3/9 | 1 |
+| Q5, history + elapsed time | 77.6% | 0 | 1/9 | 2/9 | 0 |
+| Q5, history + ending prompt | 93.3% | **2** | 6/9 | 7/9 | 3 |
+| Q4, history | 88.8% | 0 | 5/9 | 7/9 | 0 |
+
+"land correct" and "ends flight" count **distinct decision situations** where
+every repeat agreed, not raw proposals. There are only nine such situations in
+the whole corpus.
+
+**Mission elapsed time made it worse.** Agreement fell from 83.2% to 77.6% and
+correct landings from 3 to 1. Elapsed time is a weak proxy: the episodes record
+a mission name but no target altitude or hover duration, so there is nothing to
+measure completion against, and a bare millisecond count appears to have added
+noise rather than progress. The variant is kept for reproducibility and is not
+recommended.
+
+**The ending-guidance prompt scores best and is the least trustworthy result.**
+It produced the highest agreement and the most correct landings, but it is
+directive: it tells the model that a flight ends on the ground, so it
+demonstrates instruction-following rather than judgement. It also produced the
+only invalid output seen anywhere in this work — twice, the same truncated
+`{"action":"return_home","arguments":{"}}`. The contract rejected both, which
+is the validator earning its place, but a prompt change that improves a metric
+while breaking schema compliance is a trade, not a win. It also *increased*
+climbing after a safety abort, from 1 to 3.
+
+**Q4 versus Q5 is not a model comparison.** Q4 scored higher on every axis,
+which contradicts the reasoning that selected Q5 in
+[`DCM-MODEL-SELECTION.md`](DCM-MODEL-SELECTION.md). That reasoning was to keep
+quantization damage from confounding capability; the measurement says
+quantization was never the limiting factor here, the missing information was.
+But the difference is two situations out of nine. That is not evidence, and
+the selection document should not be rewritten on it.
+
+### What is actually established
+
+Only one thing, and it is the one that matters most. Adding completed-action
+history removed the dangerous failure: proposing a climb while airborne after
+a safety abort fell from 18 occurrences to 1, and to 0 under Q4. That result
+is consistent across every variant that includes history, and the effect is
+large relative to the sample.
+
+Everything else — which quantization, whether the prompt should be directive,
+whether elapsed time helps — rests on nine decision situations and cannot be
+decided from this corpus.
+
+### The binding constraint is the corpus, not the model
+
+Nine distinct land situations is too few to separate a 3/9 from a 5/9. Before
+any of these choices is made on evidence, the corpus needs many more
+mission-ending decision points, across more scenarios and more failure modes.
+That is a flying problem, not a modelling one, and `fly-episode-corpus`
+already does it; it simply needs to be run for longer and with more varied
+missions.
+
+Next: grow the corpus, then a Phase 12 campaign with frozen scenarios,
+held-out episodes and a deterministic no-LLM baseline, reported per action.
+Only after that should approval mode or closed-loop SITL control be
+considered. Hardware control remains out of scope.
