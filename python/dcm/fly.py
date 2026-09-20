@@ -182,7 +182,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             memory.rejected += 1
             echo("      declined")
             _record(client, index, observation, prompt, raw, "declined", None,
-                    latency_ms)
+                    latency_ms, proposal, operator_approval=False)
             continue
 
         outcome, detail = _execute(client, action_pb2, proposal, index, echo)
@@ -194,7 +194,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         if outcome not in ("SUCCEEDED",):
             counts["failed"] += 1
         _record(client, index, observation, prompt, raw, "executed", detail,
-                latency_ms, proposal, outcome)
+                latency_ms, proposal, outcome,
+                operator_approval=(True if mode == "approval" else None))
 
         # A faulted command path can recover a fraction of a second later.
         # Without a backoff an autonomous client repeatedly submits the same
@@ -258,7 +259,8 @@ def _state_name(value):
 
 
 def _record(client, index, observation, prompt, raw, status, error,
-            latency_ms=0.0, proposal=None, outcome=None):
+            latency_ms=0.0, proposal=None, outcome=None,
+            operator_approval=None):
     """Write the decision into the episode.
 
     Phase 10 requires model prompts and responses to be replayable alongside
@@ -280,6 +282,10 @@ def _record(client, index, observation, prompt, raw, status, error,
         "latency_ms": round(latency_ms, 3),
         "outcome": outcome,
         "executed": status == "executed",
+        # True/False means an approval-mode operator made an explicit decision;
+        # null means no operator approval was requested (autonomous mode or a
+        # pre-execution refusal). This is annotation data, not authority.
+        "operator_approval": operator_approval,
         "allowed_actions": list(ALLOWED_ACTIONS),
     })
 

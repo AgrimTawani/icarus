@@ -266,6 +266,7 @@ class EpisodeRecordingTests(unittest.TestCase):
         self.assertEqual(payload["raw_response"],
                          '{"action":"arm","arguments":{}}')
         self.assertTrue(payload["executed"])
+        self.assertTrue(payload["operator_approval"])
 
     def test_declined_decisions_are_recorded_as_not_executed(self):
         runtime = ScriptedRuntime('{"action":"arm","arguments":{}}')
@@ -277,6 +278,16 @@ class EpisodeRecordingTests(unittest.TestCase):
                        if k == "dcm_decision")
         self.assertEqual(payload["status"], "declined")
         self.assertFalse(payload["executed"])
+        self.assertFalse(payload["operator_approval"])
+
+    def test_autonomous_execution_does_not_fabricate_operator_approval(self):
+        runtime = ScriptedRuntime('{"action":"arm","arguments":{}}')
+        client = FakeClient()
+        fly_mission(client, runtime, "test", mode="autonomous",
+                    echo=lambda *_: None, max_decisions=2)
+        payload = next(p for k, p in client.episode.records
+                       if k == "dcm_decision" and p["status"] == "executed")
+        self.assertIsNone(payload["operator_approval"])
 
 
 class MissionMemoryTests(unittest.TestCase):

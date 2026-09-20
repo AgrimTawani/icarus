@@ -23,6 +23,11 @@ outputs, requested and approved actions, execution feedback, safety decisions,
 MAVLink events and simulator ground truth. Raw video/lidar is optional and kept
 separate with explicit retention and privacy rules.
 
+Each live DCM decision records `operator_approval`: `true` for an explicit
+approval, `false` for an explicit decline, and `null` when no operator decision
+was requested. That annotation permits later review without pretending that an
+autonomous action was human-approved.
+
 For simulation episodes, the bounded Gazebo sensor recorder is now snapshotted
 into `raw_sensors/` at seal time when available. It contains compressed native
 protobuf streams and an indexed schema for IMU, GPS, LiDAR, range, battery and
