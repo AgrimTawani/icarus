@@ -105,13 +105,11 @@ invalid.
 | IQ4_XS, IQ4_NL and other imatrix quants | Quality depends on an undocumented calibration corpus chosen by the uploader. Not a quality objection — a reproducibility one. A pinned checksum should identify an artifact derived deterministically from published weights |
 | Ollama as the runtime | Manages a tag-keyed blob store rather than a pinned file, and interposes a daemon between the controller and the model process, preventing the hard decision deadline Phase 11 requires |
 
-## Jetson target (not yet selected)
+## Jetson target: AGX Orin 64GB
 
-> **Open item.** The target was described as a "Jetson Orin Nano 64GB". No such
-> module exists: the Orin Nano ships in 4 GB and 8 GB configurations only, and
-> 64 GB indicates the AGX Orin 64GB, a substantially larger and more expensive
-> module. Both are covered below. The owner must confirm which is intended
-> before an on-target artifact is pinned.
+**Confirmed 2026-09-20: Jetson AGX Orin 64GB.** The Orin Nano section below is
+retained only as a contrast, since it was considered earlier; it is not the
+target.
 
 Two properties change the analysis relative to the development host.
 
@@ -133,7 +131,7 @@ poor predictor of decision latency.
 
 Confirm these against the datasheet for the module actually purchased.
 
-### If the target is Orin Nano 8GB
+### Not the target: Orin Nano 8GB, for contrast
 
 Use **Qwen3-4B-Instruct-2507-Q4_K_M** (2.33 GiB). After the OS and the resident
 autonomy stack, roughly 4–4.5 GB is realistically available; Q4_K_M plus a
@@ -144,7 +142,7 @@ the weight quantization further. At ~68 GB/s the theoretical generation ceiling
 is around 25–27 tok/s, so realistically 15–20 tok/s. Decision latency must be
 budgeted against that, not against development-host timings.
 
-### If the target is AGX Orin 64GB
+### The target: AGX Orin 64GB
 
 Memory stops being the constraint and the choice becomes a latency-versus-
 capability trade-off worth measuring rather than assuming.
@@ -165,6 +163,42 @@ faster. A 14B model is roughly 3.6x the weights of a 4B at the same
 quantization and should be expected to generate roughly 3.6x slower. Whether
 that latency is acceptable inside a control loop is a Phase 12 measurement, not
 an assumption to make here.
+
+### Storage
+
+The official NVIDIA AGX Orin 64GB Developer Kit ships with **64 GB of eMMC 5.1
+and no SSD**. NVIDIA sells no SSD variants; the bundles that include one are
+third-party, and they generally fit a 1 TB drive. The carrier board has one
+M.2 Key M slot, PCIe Gen4 x4, 2280 form factor, so a drive can be added later.
+
+An SSD is required, but a large one is not, and the reason is worth recording
+because it is counter-intuitive. Episodes are small: the corpus on the
+development host measures **5.3 MB for 11 episodes**, about 600 KB each, so ten
+thousand flights would occupy roughly 6 GB. Flight data is not the storage
+driver.
+
+What consumes space is the toolchain and the model artifacts:
+
+| Item | Size |
+| --- | --- |
+| JetPack and CUDA | ~25-30 GB (reported, not measured here) |
+| llama.cpp build | 0.75 GB (measured) |
+| Qwen3-4B Q4_K_M | 2.33 GB |
+| Qwen3-14B Q6_K | 11.29 GB |
+| Icarus build and runtime | ~0.2 GB |
+| 10,000 episodes | ~6 GB |
+
+On 64 GB eMMC, JetPack alone leaves roughly 34 GB. A single 4B model fits. A
+14B model is tight. **Holding several model artifacts at once does not fit**,
+and Phase 12 requires comparing at least two models plus a deterministic
+baseline, so the eMMC cannot serve the evaluation work even though it could
+serve a single deployed model.
+
+Recommendation: buy the plain official developer kit without a bundled SSD, and
+add a **512 GB M.2 2280 NVMe Gen4 x4** drive. That is ample for several model
+artifacts, the toolchain and a corpus far larger than anything this project has
+produced. The commonly recommended 1 TB is sized for datasets and video, which
+this project keeps elsewhere.
 
 ## Required provenance
 

@@ -122,11 +122,12 @@ with the documented simulation mission workflow. Observe reports are under
 
 ## Needed from the owner
 
-The Qwen artifacts are downloaded and pinned, so nothing blocks the adapter.
-Confirm the intended Jetson module: the stated "Orin Nano 64GB" does not exist,
-as the Orin Nano ships in 4 GB and 8 GB only and 64 GB indicates the AGX Orin
-64GB. The two lead to different model choices; see
-`docs/architecture/DCM-MODEL-SELECTION.md`.
+Nothing blocks the current work. The Jetson module is confirmed as **AGX Orin
+64GB** (2026-09-20). Its developer kit ships with 64 GB eMMC and no SSD, which
+is enough for one deployed model but not for holding several artifacts during a
+comparison, so a 512 GB M.2 2280 NVMe Gen4 x4 drive is recommended alongside
+the plain kit; see `docs/architecture/DCM-MODEL-SELECTION.md`. Hardware work
+remains gated behind Phase 13 and none of it is needed yet.
 No Claw framework installation or hardware-flight approval is needed now.
 
 ## Boundaries and caveats
