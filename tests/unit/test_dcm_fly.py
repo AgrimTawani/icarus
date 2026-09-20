@@ -12,6 +12,7 @@ import io
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 # fly_mission builds typed Drone API requests, so it needs the generated
 # protobuf bindings. No earlier unit test has, and there is no conftest, so
@@ -311,6 +312,46 @@ class EpisodeSealSummaryTests(unittest.TestCase):
         status, score = session_episode_summary([], RuntimeError("server died"))
         self.assertEqual(status, "failed")
         self.assertEqual(score["error"]["type"], "RuntimeError")
+
+    def test_cli_sets_outcome_before_client_close_seals_the_episode(self):
+        """The live wrapper, not only the summary helper, owns the seal path."""
+        from python.dcm import fly_cli
+
+        instances = []
+
+        class ClosingClient:
+            def __init__(self, *_):
+                self.episode_outcome = "completed"
+                self.episode_score = None
+                self.closed = False
+                instances.append(self)
+
+            def connect(self):
+                pass
+
+            def acquire(self):
+                pass
+
+            def close(self):
+                # This represents MissionClient.close(), which seals using
+                # these two fields.
+                self.closed = True
+
+        result = {
+            "mission": "m", "mode": "approval",
+            "counts": {"failed": 1}, "executed": [], "model": None,
+        }
+        with patch.object(fly_cli, "_load_mission_client", return_value=ClosingClient), \
+             patch.object(fly_cli, "build_runtime", return_value=(object(), None)), \
+             patch.object(fly_cli, "fly_mission", return_value=result), \
+             patch.object(sys, "argv", ["dcm-fly", "--runtime", "mock", "--mission", "m"]):
+            self.assertEqual(fly_cli.main(), 0)
+
+        self.assertEqual(len(instances), 1)
+        client = instances[0]
+        self.assertTrue(client.closed)
+        self.assertEqual(client.episode_outcome, "failed")
+        self.assertEqual(client.episode_score["missions"], [result])
 
 
 class ModeValidationTests(unittest.TestCase):
