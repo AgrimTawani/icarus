@@ -937,10 +937,10 @@ evaluations/<evaluation-id>/
 
 ### 12.1 Golden test run
 
-- [ ] Empty world.
-- [ ] Fixed seed.
-- [ ] Takeoff, route, return, and land.
-- [ ] Complete logs and replay.
+- [x] Empty world.
+- [x] Fixed seed.
+- [x] Takeoff, route, return, and land.
+- [x] Complete logs and replay.
 - [ ] Scripted and DCM controllers compared on the same scenario.
 
 ### 12.2 Scenario matrix
@@ -954,7 +954,8 @@ evaluations/<evaluation-id>/
 - [x] MAVLink delay and loss (simulator-only gateway-path fault episodes are
       retained and replay-verified; see `PHASE-12-REGRESSION-POLICY.md`).
 - [ ] Low battery.
-- [ ] Rejected unsafe mission.
+- [x] Rejected unsafe mission (V1 Drone API acceptance rejects the out-of-
+      geofence destination with the machine-readable geofence reason).
 - [ ] DCM timeout or crash.
 
 ### 12.3 Regression policy
