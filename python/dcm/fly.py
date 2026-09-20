@@ -35,6 +35,7 @@ from python.dcm.contract import (
 
 MODES = ("approval", "autonomous")
 MAX_DECISIONS = 40
+FAILED_ACTION_RECOVERY_BACKOFF_S = 0.5
 
 
 class MissionMemory:
@@ -194,6 +195,13 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             counts["failed"] += 1
         _record(client, index, observation, prompt, raw, "executed", detail,
                 latency_ms, proposal, outcome)
+
+        # A faulted command path can recover a fraction of a second later.
+        # Without a backoff an autonomous client repeatedly submits the same
+        # command in one scheduler timeslice, which adds no useful recovery
+        # opportunity and can flood a recovering control link.
+        if outcome != "SUCCEEDED":
+            time.sleep(FAILED_ACTION_RECOVERY_BACKOFF_S)
 
         if proposal["action"] in ("land", "return_home") and outcome == "SUCCEEDED":
             echo("      aircraft is down; mission complete")

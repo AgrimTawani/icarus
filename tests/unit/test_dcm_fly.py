@@ -230,11 +230,13 @@ class ExecutionGateTests(unittest.TestCase):
     def test_a_failed_action_is_recorded_and_does_not_end_the_mission(self):
         runtime = ScriptedRuntime('{"action":"arm","arguments":{}}',
                                   '{"action":"none","arguments":{}}')
-        _, result = self.run_mission(
-            runtime, answers="y\n", outcome="ACTION_STATE_ABORTED_BY_SAFETY")
+        with patch("python.dcm.fly.time.sleep") as sleep:
+            _, result = self.run_mission(
+                runtime, answers="y\n", outcome="ACTION_STATE_ABORTED_BY_SAFETY")
         self.assertEqual(result["counts"]["failed"], 1)
         self.assertEqual(result["executed"][0]["outcome"],
                          "ABORTED_BY_SAFETY")
+        sleep.assert_called_once_with(0.5)
 
 
 class EpisodeRecordingTests(unittest.TestCase):
