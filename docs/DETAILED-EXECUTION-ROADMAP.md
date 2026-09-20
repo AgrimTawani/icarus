@@ -813,22 +813,22 @@ Never train directly from raw logs.
 
 ## Phase 11: Integrate the DCM
 
-The first offline observe-mode wiring slice is implemented in
-`python/dcm/observe.py` and `scripts/observe-dcm`. It passed unit tests and
-produced five non-executed mock proposals on a sealed stress episode on
-2026-09-19. This does **not** complete any model-runtime or DCM exit gate:
-the mock always proposes `none`, no Qwen/Llama adapter is connected, and the
-current timeout only rejects a response after it returns. See
-`docs/architecture/DCM-OBSERVE-V1.md` and `docs/NEXT-STEPS.md`.
+The live DCM path is implemented in `python/dcm/fly.py` and
+`scripts/dcm-fly`: local Qwen/Llama-compatible llama.cpp runtimes propose
+schema-constrained actions, which pass through the typed Drone API, real C++
+guardrails and the independent executor. Observe, explicit approval and
+simulator-only autonomous modes are available. This does **not** complete the
+model-quality exit gate: the evaluated Qwen and Llama artifacts fail the
+promotion thresholds in `PHASE-12-REGRESSION-POLICY.md`.
 
 ### 11.1 Model runtime abstraction
 
 - [x] Define a provider-independent `ModelRuntime` interface.
-- [ ] Support small local Qwen and Llama-family models first.
+- [x] Support small local Qwen and Llama-family models first.
 - [x] Keep model loading separate from mission logic.
 - [x] Record model name, quantization, prompt version, and sampling settings.
-- [ ] Add runtime adapters without changing the DCM controller.
-- [ ] Support local Transformers, llama.cpp, or another selected runtime behind
+- [x] Add runtime adapters without changing the DCM controller.
+- [x] Support local Transformers, llama.cpp, or another selected runtime behind
       the same interface.
 
 Each model is selected by configuration rather than source changes:
@@ -882,13 +882,13 @@ measure the consequences of a sequence of decisions.
 - [x] Invalid-action rate.
 - [ ] Correct API/tool selection rate.
 - [x] Argument validity and accuracy.
-- [ ] Guardrail rejection rate.
+- [x] Guardrail rejection rate.
 - [ ] Recovery success rate.
 - [ ] Action count and completion time.
 - [ ] Safety interventions.
 - [x] Decision latency and timeout rate.
-- [ ] Tokens per second.
-- [ ] Peak VRAM and system RAM.
+- [x] Tokens per second.
+- [x] Peak VRAM and system RAM.
 - [x] Model crash or runtime failure rate.
 - [x] Consistency across repeated runs and seeds.
 
@@ -917,7 +917,7 @@ evaluations/<evaluation-id>/
 ```
 
 - [x] Store exact model artifact revision and checksum.
-- [ ] Store prompt, API schema, code, parameters, and scenario revisions.
+- [x] Store prompt, API schema, code, parameters, and scenario revisions.
 - [x] Report confidence intervals or run-to-run variation.
 - [x] Preserve failed traces for diagnosis.
 - [x] Prevent evaluation episodes from entering training data.
@@ -927,12 +927,12 @@ evaluations/<evaluation-id>/
 ### Phase 11 exit gate
 
 - [ ] DCM passes observe-mode evaluation on unseen missions.
-- [ ] Approval-mode actions remain inside the safety policy.
-- [ ] Autonomous simulation never bypasses the deterministic executor.
-- [ ] Qwen and Llama candidates can be evaluated without changing simulator or
+- [x] Approval-mode actions remain inside the safety policy.
+- [x] Autonomous simulation never bypasses the deterministic executor.
+- [x] Qwen and Llama candidates can be evaluated without changing simulator or
       autonomy-core code.
-- [x] A versioned comparison report identifies the best model for the current
-      constraints and shows why it won.
+- [x] A versioned comparison report records model trade-offs without falsely
+      selecting a winner from insufficient safety evidence.
 
 ---
 
