@@ -34,6 +34,10 @@ int main(int argc, char** argv) {
   std::string mavlink_host = "127.0.0.1";
   std::uint16_t mavlink_port = 5760;
   std::filesystem::path policy = "config/safety/v1.yaml";
+  std::string test_mavlink_fault_mode;
+  std::uint32_t test_mavlink_fault_after_ms = 0;
+  std::uint32_t test_mavlink_fault_duration_ms = 0;
+  std::uint32_t test_mavlink_fault_latency_ms = 0;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     if (argument == "--listen" && index + 1 < argc) {
@@ -44,10 +48,21 @@ int main(int argc, char** argv) {
       mavlink_port = static_cast<std::uint16_t>(std::stoi(argv[++index]));
     } else if (argument == "--safety-policy" && index + 1 < argc) {
       policy = argv[++index];
+    } else if (argument == "--test-mavlink-fault-mode" && index + 1 < argc) {
+      test_mavlink_fault_mode = argv[++index];
+    } else if (argument == "--test-mavlink-fault-after-ms" && index + 1 < argc) {
+      test_mavlink_fault_after_ms = static_cast<std::uint32_t>(std::stoul(argv[++index]));
+    } else if (argument == "--test-mavlink-fault-duration-ms" && index + 1 < argc) {
+      test_mavlink_fault_duration_ms = static_cast<std::uint32_t>(std::stoul(argv[++index]));
+    } else if (argument == "--test-mavlink-fault-latency-ms" && index + 1 < argc) {
+      test_mavlink_fault_latency_ms = static_cast<std::uint32_t>(std::stoul(argv[++index]));
     } else {
       std::cerr << "Usage: icarus-drone-api [--listen address] "
                    "[--mavlink-host host] [--mavlink-port port] "
-                   "[--safety-policy path]\n";
+                   "[--safety-policy path] [--test-mavlink-fault-mode loss|delay] "
+                   "[--test-mavlink-fault-after-ms ms] "
+                   "[--test-mavlink-fault-duration-ms ms] "
+                   "[--test-mavlink-fault-latency-ms ms]\n";
       return 2;
     }
   }
@@ -73,6 +88,16 @@ int main(int argc, char** argv) {
     if (!gateway.WaitForReady(45'000)) {
       std::cerr << "Timed out waiting for ArduPilot heartbeat and position\n";
       return 1;
+    }
+    const bool test_fault_requested = !test_mavlink_fault_mode.empty();
+    if (test_fault_requested && test_mavlink_fault_duration_ms == 0) {
+      std::cerr << "A simulator MAVLink test fault needs a duration\n";
+      return 2;
+    }
+    if (test_fault_requested) {
+      gateway.ConfigureTestLinkFault(
+          test_mavlink_fault_mode, test_mavlink_fault_after_ms,
+          test_mavlink_fault_duration_ms, test_mavlink_fault_latency_ms);
     }
 
     icarus::perception::PerceptionEngine perception(

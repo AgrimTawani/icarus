@@ -89,7 +89,12 @@ def main():
     parser.add_argument("--integrated-run-directory", type=Path)
     args = parser.parse_args()
     scenario_paths = sorted(SCENARIO_DIR.glob("*.json"))
-    assert len(scenario_paths) == 8
+    scenario_names = {path.stem for path in scenario_paths}
+    assert {
+        "empty_validation", "wind_light", "wind_strong", "wind_gusting",
+        "wind_direction_change", "wind_limit_reject", "obstacle_course",
+        "adverse_combined",
+    } <= scenario_names
     canonical_sources = [
         ROOT / "simulation/models/akshu_compact_sitl/model.sdf",
         ROOT / "simulation/worlds/compact_flight.sdf",

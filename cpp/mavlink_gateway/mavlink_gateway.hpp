@@ -56,6 +56,12 @@ class ArdupilotGateway final : public MavlinkGateway {
   bool GotoGlobal(const v1::GeoPosition& position) override;
   bool GotoLocal(const v1::LocalPositionNed& position) override;
 
+  // Simulator-test only. This emulates a bidirectional MAVLink control-path
+  // loss or latency window; production launchers never pass these options.
+  void ConfigureTestLinkFault(std::string mode, std::uint32_t start_after_ms,
+                              std::uint32_t duration_ms,
+                              std::uint32_t latency_ms = 0);
+
  private:
   void ReaderLoop();
   void HeartbeatLoop();
@@ -67,6 +73,8 @@ class ArdupilotGateway final : public MavlinkGateway {
   void PublishEvent(v1::EventSeverity severity, std::string code,
                     std::string message);
   [[nodiscard]] static std::int64_t NowUnixMs();
+  [[nodiscard]] bool TestLinkLossActive() const;
+  [[nodiscard]] std::uint32_t TestLinkDelayMs() const;
 
   std::string vehicle_id_;
   std::atomic<int> socket_{-1};
@@ -87,6 +95,10 @@ class ArdupilotGateway final : public MavlinkGateway {
   std::mutex ack_mutex_;
   std::condition_variable ack_received_;
   std::optional<std::pair<std::uint16_t, std::uint8_t>> latest_ack_;
+  std::atomic<std::int64_t> test_fault_start_unix_ms_{-1};
+  std::atomic<std::uint32_t> test_fault_duration_ms_{0};
+  std::atomic<std::uint32_t> test_fault_latency_ms_{0};
+  std::atomic<bool> test_fault_is_loss_{false};
 };
 
 }  // namespace icarus::mavlink_gateway

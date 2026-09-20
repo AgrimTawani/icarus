@@ -17,6 +17,8 @@ Available scenarios:
   explicit canopy collisions, and open/narrow ground-truth routes.
 - `adverse_combined`: obstacles, gusting/directional wind, native sensor noise,
   degraded public GPS, public-sensor link delay/dropout and low battery.
+- `mavlink_loss`, `mavlink_delay`: simulator-only gateway control-link fault
+  cases. They are distinct from public sensor delay/dropout.
 
 Generate an SDF plus its ground-truth sidecar:
 
@@ -45,6 +47,12 @@ Fault schedules use simulation-relative time. Delay/dropout acts at the public
 sensor-consumer boundary, not the MAVLink control link or ArduPilot EKF. Generated
 worlds/models are deterministic build artifacts under `simulation/worlds/generated`
 and `simulation/models/phase5_*`; edit scenario JSON, not generated files.
+
+`mavlink_fault_schedule`, when present, is passed by `scripts/start-autonomy`
+only to the local simulator gateway. A `loss` event drops both telemetry and
+outbound commands for its interval; a `delay` event adds the declared latency
+to both directions. It exists solely to exercise recovery behavior and is never
+used in a physical-vehicle launch.
 
 The mixed-village preset is stored in `config/simulation/environment_presets.json`.
 It keeps a five-metre clear launch area surrounded by three two-storey buildings,

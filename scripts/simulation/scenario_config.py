@@ -29,6 +29,7 @@ REQUIRED = {
     "success",
     "ground_truth",
 }
+OPTIONAL = {"mavlink_fault_schedule"}
 
 
 def resolve_scenario(value):
@@ -52,7 +53,7 @@ def load_scenario(value):
     if path.parent != SCENARIO_DIR.resolve() or path.suffix != ".json":
         raise ValueError("scenario must be a JSON file in simulation/scenarios")
     data = json.loads(path.read_text())
-    missing, extra = REQUIRED - data.keys(), data.keys() - REQUIRED
+    missing, extra = REQUIRED - data.keys(), data.keys() - REQUIRED - OPTIONAL
     if missing or extra:
         raise ValueError(f"scenario keys missing={sorted(missing)} extra={sorted(extra)}")
     if data["version"] != 1 or data["name"] != path.stem:
@@ -122,6 +123,19 @@ def load_scenario(value):
             raise ValueError("invalid fault mode")
         _number(event["start_s"], "fault start", 0)
         _number(event["duration_s"], "fault duration", 0.001)
+    mavlink_faults = data.get("mavlink_fault_schedule", [])
+    if not isinstance(mavlink_faults, list) or len(mavlink_faults) > 1:
+        raise ValueError("mavlink_fault_schedule must contain at most one event")
+    for event in mavlink_faults:
+        expected = {"mode", "start_s", "duration_s"}
+        if event.get("mode") == "delay":
+            expected.add("latency_ms")
+        if set(event) != expected or event.get("mode") not in ("loss", "delay"):
+            raise ValueError("invalid MAVLink fault event")
+        _number(event["start_s"], "MAVLink fault start", 0)
+        _number(event["duration_s"], "MAVLink fault duration", 0.001)
+        if event["mode"] == "delay":
+            _number(event["latency_ms"], "MAVLink delay latency", 1)
     for section in ("gps_degradation", "communication", "battery", "mission", "success", "ground_truth"):
         if not isinstance(data[section], dict):
             raise TypeError(section + " must be an object")

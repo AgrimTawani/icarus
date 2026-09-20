@@ -89,7 +89,40 @@ void ArdupilotGateway::Disconnect() {
   PublishState();
 }
 
-bool ArdupilotGateway::IsConnected() const { return running_ && socket_ >= 0; }
+bool ArdupilotGateway::IsConnected() const {
+  return running_ && socket_ >= 0 && !TestLinkLossActive();
+}
+
+void ArdupilotGateway::ConfigureTestLinkFault(std::string mode,
+                                              std::uint32_t start_after_ms,
+                                              std::uint32_t duration_ms,
+                                              std::uint32_t latency_ms) {
+  if ((mode != "loss" && mode != "delay") || duration_ms == 0 ||
+      (mode == "delay" && latency_ms == 0)) {
+    throw std::invalid_argument("invalid simulator MAVLink fault configuration");
+  }
+  test_fault_is_loss_ = mode == "loss";
+  test_fault_latency_ms_ = mode == "delay" ? latency_ms : 0;
+  test_fault_duration_ms_ = duration_ms;
+  test_fault_start_unix_ms_ = NowUnixMs() + start_after_ms;
+}
+
+bool ArdupilotGateway::TestLinkLossActive() const {
+  if (!test_fault_is_loss_) return false;
+  const auto start = test_fault_start_unix_ms_.load();
+  const auto duration = test_fault_duration_ms_.load();
+  const auto now = NowUnixMs();
+  return start >= 0 && now >= start && now < start + duration;
+}
+
+std::uint32_t ArdupilotGateway::TestLinkDelayMs() const {
+  if (test_fault_is_loss_) return 0;
+  const auto start = test_fault_start_unix_ms_.load();
+  const auto duration = test_fault_duration_ms_.load();
+  const auto now = NowUnixMs();
+  if (start < 0 || now < start || now >= start + duration) return 0;
+  return test_fault_latency_ms_.load();
+}
 
 bool ArdupilotGateway::WaitForReady(std::uint32_t timeout_ms) {
   std::unique_lock<std::mutex> lock(state_mutex_);
@@ -190,6 +223,10 @@ void ArdupilotGateway::ReaderLoop() {
     for (ssize_t index = 0; index < count; ++index) {
       if (mavlink_parse_char(MAVLINK_COMM_0, buffer[index], &message,
                              &parser_status)) {
+        if (TestLinkLossActive()) continue;
+        if (const auto delay_ms = TestLinkDelayMs(); delay_ms > 0) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+        }
         HandleMessage(&message);
       }
     }
@@ -411,6 +448,9 @@ void ArdupilotGateway::HandleMessage(const void* opaque) {
 
 bool ArdupilotGateway::SendMessage(const void* opaque) {
   if (!IsConnected()) return false;
+  if (const auto delay_ms = TestLinkDelayMs(); delay_ms > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+  }
   const auto& message = *static_cast<const mavlink_message_t*>(opaque);
   std::array<std::uint8_t, MAVLINK_MAX_PACKET_LEN> bytes{};
   const auto length = mavlink_msg_to_send_buffer(bytes.data(), &message);

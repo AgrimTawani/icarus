@@ -41,11 +41,29 @@ partition = session.get("partition")
 if not partition:
     raise SystemExit("Active simulator did not publish its Gazebo partition")
 os.environ["GZ_PARTITION"] = partition
+scenario_name = session.get("scenario")
+if not isinstance(scenario_name, str):
+    raise SystemExit("Active simulator did not publish its scenario")
+scenario_path = root / "simulation/scenarios" / (scenario_name + ".json")
+scenario = json.loads(scenario_path.read_text())
+faults = scenario.get("mavlink_fault_schedule", [])
+if len(faults) > 1:
+    raise SystemExit("Only one simulator MAVLink fault event is supported")
+arguments = [
+    str(binary), "--listen", "127.0.0.1:50051", "--mavlink-host",
+    "127.0.0.1", "--mavlink-port", "5760", "--safety-policy",
+    str(root / "config/safety/v1.yaml"),
+]
+if faults:
+    fault = faults[0]
+    arguments.extend([
+        "--test-mavlink-fault-mode", fault["mode"],
+        "--test-mavlink-fault-after-ms", str(round(float(fault["start_s"]) * 1000)),
+        "--test-mavlink-fault-duration-ms", str(round(float(fault["duration_s"]) * 1000)),
+    ])
+    if fault["mode"] == "delay":
+        arguments.extend(["--test-mavlink-fault-latency-ms", str(round(float(fault["latency_ms"])))])
 os.execv(
     str(binary),
-    [
-        str(binary), "--listen", "127.0.0.1:50051", "--mavlink-host",
-        "127.0.0.1", "--mavlink-port", "5760", "--safety-policy",
-        str(root / "config/safety/v1.yaml"),
-    ],
+    arguments,
 )

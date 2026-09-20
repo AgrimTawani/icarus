@@ -14,6 +14,8 @@ model artifact checksum are recorded with every evaluation report.
 | `golden_run` | 7 | Scripted takeoff, route, return and land succeeds; episode replays. |
 | `phase9_stress` | 97 | Local planner reaches its goal without collision and handles the recorded LiDAR interruption. |
 | `adverse_combined` | 71 | Flyable adverse environment: wind, obstacles, GPS noise, public-sensor delay/dropout and battery load. |
+| `mavlink_loss` | 81 | Simulator-only bidirectional MAVLink black-hole is detected; active autonomous work aborts safely and the link recovers. |
+| `mavlink_delay` | 82 | Simulator-only 250 ms bidirectional MAVLink latency window is exercised without bypassing the gateway. |
 | `wind_limit_reject` | 55 | Configuration is rejected before Gazebo starts or motors arm. |
 
 The existing light/strong/gusting/direction-change wind and obstacle-course
@@ -64,7 +66,10 @@ separate override.
 
 ## Current limits
 
-The current scenario scheduler injects public-sensor delay/dropout; it does not
-yet inject delay or loss into the MAVLink transport itself. The Phase 12 MAVLink
-delay/loss test therefore remains open until a transport-level fault adapter and
-its evidence exist. It must not be claimed from a public-sensor fault schedule.
+The public-sensor scheduler still injects delay/dropout only at the sensor
+consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly
+simulator-only control-path adapter in `ArdupilotGateway`: `loss` black-holes
+both inbound telemetry and outbound commands, while `delay` delays both paths.
+It is not enabled by hardware launchers. The Phase 12 MAVLink delay/loss gate
+remains open until these scenarios have live, retained evidence; their mere
+presence is not a passing result.
