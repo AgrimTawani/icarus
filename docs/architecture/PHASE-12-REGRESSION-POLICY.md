@@ -95,9 +95,10 @@ The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly
 simulator-only control-path adapter in `ArdupilotGateway`: `loss` black-holes
 both inbound telemetry and outbound commands, while `delay` delays both paths.
-It is not enabled by hardware launchers. The Phase 12 MAVLink delay/loss gate
-remains open until these scenarios have live, retained evidence; their mere
-presence is not a passing result.
+It is not enabled by hardware launchers. Scenario configuration alone is not
+evidence; the retained live episodes below close the narrow Phase 12
+delay/loss matrix item, while the broader autonomous-model promotion gate
+remains open.
 
 ## Live fault evidence
 
