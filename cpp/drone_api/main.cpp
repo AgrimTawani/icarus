@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
   std::uint32_t test_mavlink_fault_after_ms = 0;
   std::uint32_t test_mavlink_fault_duration_ms = 0;
   std::uint32_t test_mavlink_fault_latency_ms = 0;
+  double simulation_battery_percent = -1.0;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     if (argument == "--listen" && index + 1 < argc) {
@@ -56,13 +57,16 @@ int main(int argc, char** argv) {
       test_mavlink_fault_duration_ms = static_cast<std::uint32_t>(std::stoul(argv[++index]));
     } else if (argument == "--test-mavlink-fault-latency-ms" && index + 1 < argc) {
       test_mavlink_fault_latency_ms = static_cast<std::uint32_t>(std::stoul(argv[++index]));
+    } else if (argument == "--simulation-battery-percent" && index + 1 < argc) {
+      simulation_battery_percent = std::stod(argv[++index]);
     } else {
       std::cerr << "Usage: icarus-drone-api [--listen address] "
                    "[--mavlink-host host] [--mavlink-port port] "
                    "[--safety-policy path] [--test-mavlink-fault-mode loss|delay] "
                    "[--test-mavlink-fault-after-ms ms] "
                    "[--test-mavlink-fault-duration-ms ms] "
-                   "[--test-mavlink-fault-latency-ms ms]\n";
+                   "[--test-mavlink-fault-latency-ms ms] "
+                   "[--simulation-battery-percent 0..100]\n";
       return 2;
     }
   }
@@ -76,6 +80,9 @@ int main(int argc, char** argv) {
     icarus::drone_api::AuthorityManager authority(clock, 30'000);
     icarus::mission_executor::ActionStore actions(clock);
     icarus::mavlink_gateway::ArdupilotGateway gateway;
+    if (simulation_battery_percent >= 0.0) {
+      gateway.ConfigureSimulationBatteryPercent(simulation_battery_percent);
+    }
 
     gateway.SetStateCallback([&state_engine](const icarus::v1::DroneState& state) {
       state_engine.Publish(state);

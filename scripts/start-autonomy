@@ -54,6 +54,12 @@ arguments = [
     "127.0.0.1", "--mavlink-port", "5760", "--safety-policy",
     str(root / "config/safety/v1.yaml"),
 ]
+# The generic ArduPilot JSON aircraft does not ingest Gazebo's battery plugin
+# state. Carry the scenario's authoritative initial SOC into the simulator-only
+# API bridge so safety/guardrail state agrees with the generated world.
+battery = scenario.get("battery", {})
+if isinstance(battery.get("initial_soc"), (int, float)):
+    arguments.extend(["--simulation-battery-percent", str(float(battery["initial_soc"]) * 100.0)])
 if faults:
     fault = faults[0]
     arguments.extend([

@@ -108,6 +108,13 @@ void ArdupilotGateway::ConfigureTestLinkFault(std::string mode,
   test_fault_start_unix_ms_ = NowUnixMs() + start_after_ms;
 }
 
+void ArdupilotGateway::ConfigureSimulationBatteryPercent(double percent) {
+  if (!std::isfinite(percent) || percent < 0.0 || percent > 100.0) {
+    throw std::invalid_argument("invalid simulator battery percentage");
+  }
+  simulation_battery_percent_ = percent;
+}
+
 bool ArdupilotGateway::TestLinkLossActive() const {
   if (!test_fault_is_loss_) return false;
   const auto start = test_fault_start_unix_ms_.load();
@@ -346,10 +353,14 @@ void ArdupilotGateway::HandleMessage(const void* opaque) {
         auto* battery = state_.mutable_battery();
         battery->set_voltage_v(status.voltage_battery / 1000.0);
         battery->set_current_a(status.current_battery / 100.0);
-        if (status.battery_remaining >= 0) {
-          battery->set_remaining_percent(status.battery_remaining);
+        const double simulated = simulation_battery_percent_.load();
+        const double remaining = simulated >= 0.0
+                                     ? simulated
+                                     : static_cast<double>(status.battery_remaining);
+        if (remaining >= 0.0) {
+          battery->set_remaining_percent(remaining);
         }
-        battery->set_level(status.battery_remaining >= 20
+        battery->set_level(remaining >= 20.0
                                ? v1::HEALTH_LEVEL_HEALTHY
                                : v1::HEALTH_LEVEL_DEGRADED);
         publish = true;

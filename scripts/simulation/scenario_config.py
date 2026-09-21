@@ -173,23 +173,3 @@ def load_scenario(value):
 
 def canonical_bytes(data):
     return (json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n").encode()
-
-
-def sitl_battery_parameters(scenario):
-    """Return the ArduPilot SITL battery overlay for one scenario.
-
-    Gazebo's LinearBatteryPlugin models physical load, but it does not publish
-    its state into the JSON ArduPilot bridge. SITL must therefore receive the
-    same initial charge explicitly or the Drone API would see a fictitious
-    100% battery. The canonical 6S pack spans 21.0--25.2 V here; these are
-    scenario initialization values, not a battery calibration claim.
-    """
-    soc = scenario["battery"]["initial_soc"]
-    voltage = 21.0 + (25.2 - 21.0) * soc
-    # The Gazebo model's configured capacity is 10 Ah. Giving SITL the same
-    # capacity lets its native monitor derive remaining percent from SOC.
-    return {
-        "SIM_BATT_VOLTAGE": round(voltage, 3),
-        "SIM_BATT_CAP_AH": 10.0,
-        "BATT_CAPACITY": 10_000,
-    }

@@ -16,7 +16,7 @@ import uuid
 
 from build_akshu_candidate import ROOT
 from launch_profiles import load_profiles, resolve_profile
-from scenario_config import load_scenario, sitl_battery_parameters
+from scenario_config import load_scenario
 from test_mark4_motors import stop
 
 
@@ -143,14 +143,6 @@ def main():
     directory.mkdir()
     state_dir = directory / "sitl_state"
     state_dir.mkdir()
-    sitl_battery_overlay = None
-    if scenario:
-        sitl_battery_overlay = state_dir / "scenario_battery.parm"
-        parameters = sitl_battery_parameters(scenario)
-        sitl_battery_overlay.write_text(
-            "# Generated from the versioned scenario battery initial SOC.\n"
-            + "\n".join(f"{key} {value}" for key, value in parameters.items())
-            + "\n")
     env = os.environ.copy()
     env["GZ_PARTITION"] = "icarus_compact_" + run_id
     env["GZ_SIM_RESOURCE_PATH"] = str(ROOT / "simulation/models")
@@ -370,8 +362,7 @@ def main():
                     / "third_party/ardupilot/Tools/autotest/default_params/copter.parm"
                 )
                 + ","
-                + str(ROOT / "simulation/parameters/mark4_v2_base.parm")
-                + ("," + str(sitl_battery_overlay) if sitl_battery_overlay else ""),
+                + str(ROOT / "simulation/parameters/mark4_v2_base.parm"),
             ],
         )
         recorder = start(

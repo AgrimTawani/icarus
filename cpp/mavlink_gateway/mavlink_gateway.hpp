@@ -61,6 +61,11 @@ class ArdupilotGateway final : public MavlinkGateway {
   void ConfigureTestLinkFault(std::string mode, std::uint32_t start_after_ms,
                               std::uint32_t duration_ms,
                               std::uint32_t latency_ms = 0);
+  // Simulator-only bridge for the scenario battery model. ArduPilot's JSON
+  // aircraft backend does not consume Gazebo LinearBatteryPlugin state, so the
+  // configured scenario SOC is applied to the API-visible state here. Hardware
+  // launchers do not expose or pass this option.
+  void ConfigureSimulationBatteryPercent(double percent);
 
  private:
   void ReaderLoop();
@@ -99,6 +104,7 @@ class ArdupilotGateway final : public MavlinkGateway {
   std::atomic<std::uint32_t> test_fault_duration_ms_{0};
   std::atomic<std::uint32_t> test_fault_latency_ms_{0};
   std::atomic<bool> test_fault_is_loss_{false};
+  std::atomic<double> simulation_battery_percent_{-1.0};
 };
 
 }  // namespace icarus::mavlink_gateway
