@@ -972,8 +972,9 @@ evaluations/<evaluation-id>/
 - [ ] Sensor dropout.
 - [x] MAVLink delay and loss (simulator-only gateway-path fault episodes are
       retained and replay-verified; see `PHASE-12-REGRESSION-POLICY.md`).
-- [ ] Low battery (live typed-API acceptance client added; retained simulator
-      evidence is still required before closing this campaign item).
+- [x] Low battery. `adverse_combined` initial SOC reaches the simulator-only
+      API battery bridge; live Arm was rejected with
+      `REASON_CODE_BATTERY_BELOW_THRESHOLD` and replayed successfully.
 - [x] Rejected unsafe mission (V1 Drone API acceptance rejects the out-of-
       geofence destination with the machine-readable geofence reason).
 - [ ] DCM timeout or crash.

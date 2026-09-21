@@ -93,3 +93,20 @@ successfully. This is a 250 ms, three-second bidirectional gateway-path delay
 test—not a claim about radio-link or cellular-link performance. Together the
 two retained episodes satisfy the narrow Phase 12 scenario-matrix delay/loss
 exercise; they do not satisfy the broader autonomous-model promotion gate.
+
+## Live low-battery evidence
+
+`adverse_combined` was executed headlessly on 2026-09-21 with its committed
+35% initial SOC. The generic ArduPilot JSON aircraft backend does not ingest
+Gazebo's `LinearBatteryPlugin` state, so the simulator launcher passes the same
+scenario SOC to an explicitly simulator-only gateway bridge; physical launchers
+do not have this option. This keeps the state evaluated by the Drone API,
+guardrails and safety supervisor aligned with the versioned scenario while the
+underlying SITL limitation remains visible.
+
+Episode `20260921T055137_d19df6984f3a` recorded API state at 35%, an `Arm`
+request, and `ACTION_STATE_REJECTED` with
+`REASON_CODE_BATTERY_BELOW_THRESHOLD`; it replayed successfully through
+`scripts/test-phase10`. This proves preflight low-battery rejection in the
+simulation API path. It does not prove battery discharge dynamics, ArduPilot's
+native battery failsafe, or hardware battery-monitor integration.
