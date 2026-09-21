@@ -110,3 +110,13 @@ request, and `ACTION_STATE_REJECTED` with
 `scripts/test-phase10`. This proves preflight low-battery rejection in the
 simulation API path. It does not prove battery discharge dynamics, ArduPilot's
 native battery failsafe, or hardware battery-monitor integration.
+
+## Live DCM-timeout evidence
+
+Episode `20260921T055604_9db7eed2ac90` was run headlessly on 2026-09-21 using
+the live DCM loop and a runtime that raises `DeadlineExceeded` once. The loop
+recorded exactly one timeout, then a safe `none` response; it made zero Drone
+API action requests and replayed successfully through `scripts/test-phase10`.
+This verifies timeout containment and episode retention at the live boundary.
+It is not an evaluation result for Qwen or Llama and does not alter their
+unattended-flight promotion status.
