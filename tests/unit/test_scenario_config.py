@@ -7,10 +7,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/simulation"))
 
-from scenario_config import load_scenario  # noqa: E402
+from scenario_config import load_scenario, sitl_battery_parameters  # noqa: E402
 
 
 class ScenarioConfigTests(unittest.TestCase):
+    def test_sitl_battery_overlay_uses_the_same_scenario_soc(self):
+        _, scenario = load_scenario("adverse_combined")
+        parameters = sitl_battery_parameters(scenario)
+        self.assertEqual(parameters["SIM_BATT_CAP_AH"], 10.0)
+        self.assertEqual(parameters["BATT_CAPACITY"], 10_000)
+        self.assertAlmostEqual(parameters["SIM_BATT_VOLTAGE"], 22.47)
+
     def test_mavlink_loss_schedule_is_accepted(self):
         _, scenario = load_scenario("mavlink_loss")
         self.assertEqual(
