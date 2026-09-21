@@ -8,15 +8,17 @@ Icarus has a verified custom Gazebo/ArduPilot simulation foundation. Its
 canonical vehicle derives mass, centre of gravity and inertia from a versioned
 20-component manifest. Its single physical-noise sensor model and seeded
 three-axis turbulent atmosphere run in populated worlds, including shear,
-aerodynamic forces/moments and obstacle wakes. It is not yet an autonomous
-LLM-controlled drone stack.
+aerodynamic forces/moments and obstacle wakes. It has a simulator-only DCM
+control path, but it is not an LLM-controlled drone approved for unattended
+operation.
 
 Update: the typed live DCM path now exists (chat, approval mode and
 simulator-only autonomous mode), but the evaluated language models do **not**
 meet the defined unattended-flight threshold. Phase 12 now has replay-verified
 simulator MAVLink loss and latency evidence; the full scenario campaign and
-model-promotion gate are still open. Vision model weights are pinned, while
-visual-command execution and a VLM are still future work.
+model-promotion gate are still open. Bounded semantic detection and a
+conservative depth landing assessment are implemented; a VLM and a calibrated
+downward depth source remain open.
 
 | Capability | State | Evidence or source |
 | --- | --- | --- |
@@ -115,9 +117,11 @@ inputs/results, terminal statuses and configuration snapshots. Offline replay
 verifies integrity and re-runs the exact C++ guardrails; see
 `simulation/PHASE-10-EPISODES.md`. A fresh Phase 9 stress flight and its 677
 record episode passed after the LiDAR map was corrected to use full vehicle
-attitude, not yaw alone. Phase 11 can begin in observe mode. Real-flight
-privacy/retention review and physical sensor drivers remain later work; their
-normalized contracts and frame-parity tests already exist.
+attitude, not yaw alone. The live DCM console now seals successful, failed,
+interrupted and operator-declined sessions truthfully; low-battery and timeout
+episodes have also replayed. Real-flight privacy/retention review and physical
+sensor drivers remain later work; their normalized contracts and frame-parity
+tests already exist.
 
 Phase 11 has a versioned model contract and a working llama.cpp adapter. The
 contract declares the action table, the generated prompt, freshness limits and
@@ -171,6 +175,7 @@ Latency: cold starts of 4257, 9370 and 13259 ms across sessions, against a
 cannot be accommodated by choosing a deadline; a deployed loop must warm itself
 before the mission begins.
 
-73 Python unit tests, both C++ suites and the Phase 10 replay gate passed on
-2026-09-19, alongside five consecutive headless corpus flights. Phase 10's full exit gate and all Phase 11 evaluation and flight
-gates remain open. See [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the handoff.
+The Python unit suite, both C++ suites and the Phase 10 replay gate have passed
+against the current codebase. Phase 10's full physical-data exit gate and the
+Phase 11/12 model-promotion gates remain open. See
+[`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the current handoff.
