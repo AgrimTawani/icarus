@@ -56,6 +56,7 @@ def build_runtime(args):
     from python.dcm.llama_runtime import LlamaCppRuntime
     descriptor = RuntimeDescriptor.from_manifest(
         args.manifest, role=args.role, deadline_ms=args.timeout_ms,
+        context_length=args.context_length,
         prompt_version=(PROMPT_VERSION_ENDING if args.ending_guidance
                         else PROMPT_VERSION))
     runtime = LlamaCppRuntime(descriptor,
@@ -77,6 +78,9 @@ def main():
     parser.add_argument("--timeout-ms", type=int, default=15000,
                         help="per-decision deadline; the first decision of a "
                              "session is far slower than the rest")
+    parser.add_argument("--context-length", type=int, default=4096,
+                        help="llama.cpp context for interactive flight; 4096 "
+                             "fits alongside Gazebo on the 6 GB GPU")
     parser.add_argument("--ending-guidance", action="store_true",
                         help="prompt v2: state that a flight ends on the ground")
     parser.add_argument("--max-decisions", type=int, default=40)
