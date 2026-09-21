@@ -176,6 +176,35 @@ class MissionClient:
         self.episode.record("semantic_detection", result)
         return summary
 
+    def assess_landing_zone(self):
+        """Run the non-flight depth boundary on the active simulator source.
+
+        The present vehicle config declares this RGB-D camera forward-facing.
+        The geometric analyzer must therefore report it unassessable; retaining
+        that result makes a later downward-sensor change auditable without ever
+        granting this semantic tool flight authority.
+        """
+        if self.episode is None or not self.episode.session:
+            raise RuntimeError("landing assessment requires an active simulator episode")
+        import numpy as np
+        from python.perception.landing_zone import assess_landing_zone
+
+        with tempfile.TemporaryDirectory(prefix="icarus-depth-") as temporary:
+            output = Path(temporary) / "depth.npy"
+            subprocess.run(
+                [str(ROOT / "scripts/capture-depth-frame"), "--output", str(output)],
+                cwd=ROOT, check=True, timeout=15)
+            depth = np.load(output, allow_pickle=False)
+            result = assess_landing_zone(
+                depth, optical_axis_body_frd=(1.0, 0.0, 0.0),
+                horizontal_fov_deg=87.0, vertical_fov_deg=58.0)
+            result["depth"] = {"source": "simulator_ephemeral_capture",
+                               "width": int(depth.shape[1]),
+                               "height": int(depth.shape[0])}
+        self.episode.record("semantic_landing_assessment", result)
+        return {key: result[key] for key in ("assessable", "suitable", "reason",
+                                              "quality", "observed_at_unix_ms")}
+
     def wait_action(self, receipt, timeout: int):
         if receipt.disposition == action_pb2.ACTION_STATE_REJECTED:
             raise RuntimeError(f"Action rejected: {receipt.message}")

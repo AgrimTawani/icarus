@@ -14,7 +14,7 @@ but it is no longer the only DCM path. The current implementation provides:
 | --- | --- | --- |
 | `./scripts/dcm-fly` | Interactive live DCM loop using a configured local runtime | Observe, explicit operator approval, or simulator-only autonomous mode |
 | `scripts/autonomy/run_mission.py` | Typed mission client used by the live loop | Flight actions go through the Drone API, native C++ guardrails, and executor |
-| `detect` | Bounded semantic inspection over an ephemeral simulator frame | Does not call the Drone API, MAVLink, guardrails, or flight executor |
+| `detect` / `assess_landing_zone` | Bounded semantic inspection over ephemeral simulator RGB/depth frames | Does not call the Drone API, MAVLink, guardrails, or flight executor |
 | `./scripts/observe-dcm` | Offline replay/evaluation of a sealed episode | Never connects to a vehicle or simulator |
 
 The live path is deliberately not a promotion result. The currently evaluated

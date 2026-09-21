@@ -102,10 +102,14 @@ ACTIONS = {
             "maximum_items": 16, "maximum_item_length": 64,
         },
     },
+    # This is evidence gathering only. It is deliberately separate from a
+    # land command: a DCM can inspect a calibrated terrain source but cannot
+    # turn that assessment into a flight action or bypass landing guardrails.
+    "assess_landing_zone": {},
 }
 
 ALLOWED_ACTIONS = tuple(ACTIONS)
-FLIGHT_ACTIONS = frozenset(ACTIONS) - {"none", "detect"}
+FLIGHT_ACTIONS = frozenset(ACTIONS) - {"none", "detect", "assess_landing_zone"}
 
 # Observation age limits. The perception limit matches the ObstacleMap expiry
 # in perception/obstacle_map/obstacle_map.hpp; if that default changes, this

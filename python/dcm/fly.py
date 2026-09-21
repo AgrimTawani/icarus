@@ -196,7 +196,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
 
         outcome, detail = _execute(client, action_pb2, proposal, index, echo)
         memory.remember(proposal["action"], outcome,
-                        detail if proposal["action"] == "detect" and outcome == "SUCCEEDED"
+                        detail if proposal["action"] in
+                        ("detect", "assess_landing_zone") and outcome == "SUCCEEDED"
                         else None)
         executed.append({"action": proposal["action"],
                          "arguments": proposal["arguments"],
@@ -250,6 +251,14 @@ def _execute(client, action_pb2, proposal, index, echo):
             result = client.detect(proposal["arguments"]["classes"])
         except Exception as failure:  # noqa: BLE001 - semantic failures are data
             echo(f"      detect failed: {failure}")
+            return "FAILED", str(failure)
+        echo("      -> SUCCEEDED (" + json.dumps(result, sort_keys=True) + ")")
+        return "SUCCEEDED", result
+    if action == "assess_landing_zone":
+        try:
+            result = client.assess_landing_zone()
+        except Exception as failure:  # noqa: BLE001 - semantic failures are data
+            echo(f"      landing assessment failed: {failure}")
             return "FAILED", str(failure)
         echo("      -> SUCCEEDED (" + json.dumps(result, sort_keys=True) + ")")
         return "SUCCEEDED", result

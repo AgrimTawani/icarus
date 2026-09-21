@@ -82,6 +82,11 @@ class FakeClient:
         return {"counts": {item: 0 for item in classes},
                 "requested_classes": list(classes)}
 
+    def assess_landing_zone(self):
+        return {"assessable": False, "suitable": False,
+                "reason": "depth source is not calibrated downward",
+                "quality": 0.0, "observed_at_unix_ms": 1}
+
 
 class FakeEpisode:
     def __init__(self):
@@ -222,6 +227,14 @@ class ExecutionGateTests(unittest.TestCase):
         self.assertEqual(result["executed"][0]["outcome"], "SUCCEEDED")
         self.assertEqual(result["executed"][0]["arguments"],
                          {"classes": ["person", "tree"]})
+
+    def test_landing_assessment_is_semantic_and_never_reaches_drone_api(self):
+        runtime = ScriptedRuntime(
+            '{"action":"assess_landing_zone","arguments":{}}')
+        client, result = self.run_mission(runtime, answers="y\n")
+        self.assertEqual(client.action_api.calls, [])
+        self.assertEqual(result["executed"][0]["outcome"], "SUCCEEDED")
+        self.assertFalse(result["executed"][0]["arguments"])
 
     def test_each_action_gets_a_distinct_idempotency_name(self):
         # context() derives the idempotency key from this name, so reusing one
