@@ -12,11 +12,16 @@ the current implementation state by themselves.
 | Area | Current state | What remains before promotion |
 | --- | --- | --- |
 | Live DCM | Qwen/Llama runtime adapters, terminal chat, explicit approval and simulator-only autonomous modes are implemented behind typed Drone API actions. | Neither evaluated model meets the autonomous promotion threshold. |
-| Episode integrity | Every live DCM session seals an episode truthfully on success, action failure, exception or interruption; replay re-checks recorded guardrails; bounded native sensor streams are snapshotted without RGB/depth pixels. | Physical-flight schema/privacy review remains a later hardware gate. |
+| Episode integrity | Every live DCM session seals an episode truthfully on success, action failure, exception or interruption; strict replay verifies compact sensor/config hashes, native guardrails and deterministic replay output. | Physical-flight privacy review remains a later hardware gate; the schema is already shared and unit-verified. |
 | Model comparison | Qwen3-4B Q5, Llama-3.2-3B Q4 and scripted baseline have versioned comparison reports with checksum, latency, VRAM/RAM, validity and guardrail results. | Grow the held-out mission corpus; do not select a winner from the current inadequate model results. |
 | Phase 12 link faults | Simulator-only bidirectional MAVLink loss and fixed-latency cases ran headlessly and replayed. Loss aborted active work, refused stale commands, recovered and landed; latency completed nominally. | Continue the rest of the fixed/randomized scenario campaign. |
 | Phase 12 battery/timeout | A 35% scenario SOC reaches the simulator-only API battery bridge and rejects Arm; a live DCM deadline records no action and replays. | Battery-discharge dynamics, native ArduPilot battery failsafe, and model-promotion evidence remain open. |
-| Visual semantics | Grounding-DINO Tiny runs through the bounded `detect` tool. The calibrated downward RGB-D source passed a live depth assessment, and Qwen2-VL-2B Q4 plus its f16 projector are checksum-pinned and passed a local llama.cpp image-load test. | Add a bounded qualitative-vision adapter; it must remain separate from flight authority. Physical depth calibration remains a hardware gate. |
+| Visual semantics | Grounding-DINO Tiny runs through the bounded `detect` tool. The calibrated downward RGB-D source passed a live depth assessment, and Qwen2-VL-2B Q4 provides bounded `inspect_scene` qualitative interpretation with no flight authority. | Physical depth calibration remains a hardware gate. |
+
+Phase 11 now has closed-loop scoring for mission outcome, tool annotations,
+recovery, action count/completion time and safety interventions. Phase 12 has
+a reproducible campaign manifest and executable non-relaxable promotion gate.
+They expose the current model failures; they do not hide them.
 
 The authoritative promotion thresholds and exact Phase 12 fault episode IDs are
 in [`architecture/PHASE-12-REGRESSION-POLICY.md`](architecture/PHASE-12-REGRESSION-POLICY.md).

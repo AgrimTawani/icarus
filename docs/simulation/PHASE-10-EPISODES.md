@@ -27,7 +27,7 @@ must never bypass the Drone API.
 ## Replay
 
 ```bash
-./scripts/replay-episode logs/episodes/<episode-id>
+./scripts/replay-episode --complete logs/episodes/<episode-id>
 ```
 
 This checks hashes, sequence/timestamp monotonicity, stream alignment,
@@ -56,8 +56,20 @@ Headless acceptance on 2026-09-19:
 - Unit tests prove a tampered stream and a missing state stream fail replay.
 
 `./scripts/test-phase10` runs the unit gate. Pass an episode directory to it
-to also run native guardrail replay, e.g.
+to require the current complete-artifact contract and run native guardrail
+replay twice deterministically, e.g.
 `./scripts/test-phase10 logs/episodes/<episode-id>`.
+
+For a closed-loop DCM flight, score the outcome after it is sealed; this is
+read-only and never starts Gazebo or contacts the drone:
+
+```bash
+./scripts/evaluate-live-episodes logs/episodes/<episode-id>
+./scripts/phase12-campaign logs/episodes/<episode-id>
+```
+
+The live score reports mission outcome only when the mission wrapper recorded
+one. It will report `null`, not pretend success, for a semantic-only episode.
 
 To make a separate candidate-training view, run
 `./scripts/export-candidates logs/episodes/<episode-id> --output logs/datasets/candidates/<episode-id>.jsonl`.

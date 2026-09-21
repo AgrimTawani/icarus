@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from python.dataset_tools.replay import ReplayError, replay
+from python.dataset_tools.replay import ReplayError, replay, verify_complete
 
 
 class EpisodeReplayTests(unittest.TestCase):
@@ -75,6 +75,45 @@ class EpisodeReplayTests(unittest.TestCase):
             del stream["counts"]["state"]
             manifest_path.write_text(json.dumps(manifest))
             with self.assertRaisesRegex(ReplayError, "stream missing"):
+                replay(folder, check_guardrails=False)
+
+    def test_complete_gate_requires_current_provenance_and_is_deterministic(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = self.make_episode(temporary)
+            manifest_path = folder / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest.update({
+                "started_unix_ms": 1_000,
+                "finished_unix_ms": 2_100,
+                "code_revision": "a" * 40,
+                "source_tree_sha256": "b" * 64,
+                "vehicle_id": "icarus-01",
+                "privacy": {"operator_identifiers": "excluded"},
+            })
+            # The fixture has no compact simulator files, so it represents a
+            # physical episode. Both sources share event/manifest format.
+            manifest["source"] = "physical"
+            manifest_path.write_text(json.dumps(manifest))
+            result = verify_complete(folder, check_guardrails=False)
+            self.assertTrue(result["complete"])
+            self.assertTrue(result["replay_deterministic"])
+            self.assertEqual(len(result["replay_result_sha256"]), 64)
+
+    def test_complete_gate_hash_checks_sensor_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = self.make_episode(temporary)
+            sensor = folder / "raw_sensors" / "lidar.pbstream"
+            sensor.parent.mkdir()
+            sensor.write_bytes(b"compact sensor sample")
+            manifest_path = folder / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["raw_sensor_snapshot"] = {
+                "files": {"raw_sensors/lidar.pbstream": hashlib.sha256(
+                    sensor.read_bytes()).hexdigest()}}
+            manifest_path.write_text(json.dumps(manifest))
+            self.assertEqual(replay(folder, check_guardrails=False)["status"], "passed")
+            sensor.write_bytes(b"tampered")
+            with self.assertRaisesRegex(ReplayError, "sensor snapshot hash mismatch"):
                 replay(folder, check_guardrails=False)
 
 

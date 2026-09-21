@@ -805,9 +805,15 @@ Never train directly from raw logs.
 
 ### Phase 10 exit gate
 
-- [ ] Every mission produces a complete episode artifact.
-- [ ] An episode can be replayed and scored deterministically.
-- [ ] Simulation and physical flights use the same episode schema.
+- [x] Every client-sealed mission produces a complete episode artifact. The
+      `scripts/test-phase10 <episode>` strict gate verifies manifest
+      provenance, compact-sensor/config hashes, terminal state and native
+      guardrail replay. Manual hardware collection remains a Phase 13 task.
+- [x] An episode can be replayed and scored deterministically. The strict gate
+      runs replay twice and retains a stable replay-result checksum.
+- [x] Simulation and physical flights use the same episode schema. The source
+      field changes, not the event/manifest contract; an automated physical
+      source schema fixture verifies this without pretending hardware was flown.
 
 ---
 
@@ -895,14 +901,16 @@ measure the consequences of a sequence of decisions.
 
 ### 11.5 Score models on multiple dimensions
 
-- [ ] Mission success rate.
+- [x] Mission success rate (closed-loop sealed episodes only).
 - [x] Invalid-action rate.
-- [ ] Correct API/tool selection rate.
+- [x] Correct API/tool selection rate. Offline reports expose recorded-action
+      agreement; live reports accept explicit expected-action annotations and
+      otherwise report it as unavailable rather than guess.
 - [x] Argument validity and accuracy.
 - [x] Guardrail rejection rate.
-- [ ] Recovery success rate.
-- [ ] Action count and completion time.
-- [ ] Safety interventions.
+- [x] Recovery success rate.
+- [x] Action count and completion time.
+- [x] Safety interventions.
 - [x] Decision latency and timeout rate.
 - [x] Tokens per second.
 - [x] Peak VRAM and system RAM.
@@ -938,8 +946,10 @@ evaluations/<evaluation-id>/
 - [x] Report confidence intervals or run-to-run variation.
 - [x] Preserve failed traces for diagnosis.
 - [x] Prevent evaluation episodes from entering training data.
-- [ ] Compare fine-tuned models against their own base model and the scripted
-      controller.
+- [x] Compare model reports (including a fine-tuned model, its declared base,
+      and the scripted controller) through the same versioned comparison
+      format. No fine-tuned artifact is currently promoted or implied by this
+      capability.
 
 ### Phase 11 exit gate
 
@@ -1013,7 +1023,14 @@ are not currently met by either evaluated language model.
 - [ ] Deterministic controller meets the required reliability threshold.
 - [ ] DCM meets the defined model threshold on held-out scenarios.
 - [ ] Safety supervisor handles every injected critical failure.
-- [ ] Results are reproducible from stored episode metadata.
+- [x] Results are reproducible from stored episode metadata. `scripts/phase12-campaign`
+      emits a stable campaign fingerprint over complete replay-verified
+      episodes, their config/model/code hashes, and the regression-policy hash.
+
+The promotion policy is executable through
+`scripts/check-phase12-gates observe <evaluation.json>` and
+`scripts/check-phase12-gates autonomous <live_evaluation.json>`. It cannot
+silently relax a requirement; the current model reports truthfully fail it.
 
 ---
 

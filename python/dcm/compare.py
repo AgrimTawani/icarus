@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 DIMENSIONS = (
-    ("agreement_rate", "agreement", "pct"),
+    ("tool_selection_agreement_rate", "tool agreement", "pct"),
     ("invalid_rate", "invalid", "pct"),
     ("timeout_rate", "timeout", "pct"),
     ("guardrail_rejection_rate", "guardrail reject", "pct"),
@@ -58,6 +58,8 @@ def _row(report_path):
         "repeats": report.get("repeats"),
         "decision_points": totals.get("decision_points"),
         "agreement_rate": totals.get("agreement_rate"),
+        "tool_selection_agreement_rate": totals.get(
+            "tool_selection_agreement_rate", totals.get("agreement_rate")),
         "invalid_rate": totals.get("invalid_rate"),
         "timeout_rate": totals.get("timeout_rate"),
         "guardrail_rejection_rate": totals.get("guardrail_rejection_rate"),

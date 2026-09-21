@@ -14,6 +14,16 @@ TERMINAL = {
     "ACTION_STATE_ABORTED_BY_SAFETY",
 }
 
+# ``replay`` intentionally accepts historic v1 episodes so old evidence can
+# still be inspected.  New capture and campaign gates use this stricter list:
+# it is the minimum provenance necessary to call an episode complete rather
+# than merely parseable.
+COMPLETE_MANIFEST_FIELDS = {
+    "schema", "episode_id", "mission", "source", "started_unix_ms",
+    "finished_unix_ms", "outcome", "code_revision", "source_tree_sha256",
+    "vehicle_id", "privacy", "config_sha256", "streams", "stream_errors",
+}
+
 
 class ReplayError(ValueError):
     pass
@@ -39,6 +49,14 @@ def replay(directory, check_guardrails=True):
             raise ReplayError("unsafe config path")
         if digest(directory / name) != expected:
             raise ReplayError("configuration snapshot hash mismatch: " + name)
+    raw_snapshot = manifest.get("raw_sensor_snapshot")
+    if raw_snapshot:
+        for name, expected in raw_snapshot.get("files", {}).items():
+            if name.startswith("/") or ".." in Path(name).parts:
+                raise ReplayError("unsafe sensor snapshot path")
+            sensor_file = directory / name
+            if not sensor_file.is_file() or digest(sensor_file) != expected:
+                raise ReplayError("sensor snapshot hash mismatch: " + name)
     stream = manifest["streams"]["events.jsonl"]
     path = directory / "events.jsonl"
     if digest(path) != stream["sha256"]:
@@ -137,12 +155,60 @@ def replay(directory, check_guardrails=True):
     }
 
 
+def verify_complete(directory, check_guardrails=True):
+    """Prove a sealed episode is complete and replay-deterministic.
+
+    This is deliberately stronger than :func:`replay`.  A file may be a valid
+    historical replay record while lacking provenance fields introduced later;
+    it must not be accepted as a new Phase 10/12 campaign input.  Replaying
+    twice also detects accidental dependence on process state or wall clock in
+    the verifier itself.  No simulator is started by this function.
+    """
+    directory = Path(directory)
+    manifest_path = directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    missing = sorted(COMPLETE_MANIFEST_FIELDS - set(manifest))
+    if missing:
+        raise ReplayError("incomplete episode manifest missing: " + ", ".join(missing))
+    if manifest["source"] not in ("simulation", "physical"):
+        raise ReplayError("unknown episode source")
+    if not isinstance(manifest["privacy"], dict):
+        raise ReplayError("episode privacy declaration is missing")
+    if not isinstance(manifest["finished_unix_ms"], int) or (
+            manifest["finished_unix_ms"] < manifest["started_unix_ms"]):
+        raise ReplayError("invalid episode time range")
+    # Simulation must retain the compact sensor evidence used by the state and
+    # perception streams. Hardware has the same event/manifest schema, but
+    # its raw acquisition source is a Phase 13 physical-data policy concern.
+    if manifest["source"] == "simulation" and not manifest.get("raw_sensor_snapshot"):
+        raise ReplayError("simulation episode lacks raw sensor snapshot")
+
+    first = replay(directory, check_guardrails=check_guardrails)
+    second = replay(directory, check_guardrails=check_guardrails)
+    encoded_first = json.dumps(first, sort_keys=True, separators=(",", ":"))
+    encoded_second = json.dumps(second, sort_keys=True, separators=(",", ":"))
+    if encoded_first != encoded_second:
+        raise ReplayError("replay result is not deterministic")
+    return {
+        **first,
+        "complete": True,
+        "replay_deterministic": True,
+        "replay_result_sha256": hashlib.sha256(encoded_first.encode()).hexdigest(),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("episode", type=Path)
+    parser.add_argument("--complete", action="store_true",
+                        help="require current complete-artifact provenance")
+    parser.add_argument("--skip-guardrails", action="store_true",
+                        help="integrity-only replay; do not invoke native guardrails")
     args = parser.parse_args()
     try:
-        print(json.dumps(replay(args.episode), indent=2))
+        runner = verify_complete if args.complete else replay
+        print(json.dumps(runner(args.episode,
+                                check_guardrails=not args.skip_guardrails), indent=2))
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as error:
         parser.exit(1, f"Replay FAILED: {error}\n")
 

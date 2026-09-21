@@ -157,6 +157,11 @@ def score_decisions(decisions, allowed=ALLOWED_ACTIONS):
         "comparable_points": comparable,
         "agreed_points": agreed,
         "agreement_rate": (agreed / comparable) if comparable else None,
+        # Agreement with a frozen, recorded action is the only offline,
+        # auditable proxy for correct API/tool selection.  Keep the original
+        # field for compatibility and name the meaning explicitly for Phase
+        # 11 reports; it is not a claim of mission-level correctness.
+        "tool_selection_agreement_rate": (agreed / comparable) if comparable else None,
         "unscoreable_points": len(unscoreable),
         "unscoreable_actions": sorted(set(unscoreable)),
         "first_decision_latency_ms": first_latency,
@@ -370,6 +375,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
             "stale_refusals": totals["stale"],
             "comparable_points": comparable,
             "agreement_rate": (agreed / comparable) if comparable else None,
+            "tool_selection_agreement_rate": (
+                agreed / comparable if comparable else None),
             "unscoreable_points": unscoreable,
             "guardrail_checked": guardrail_checked,
             "guardrail_rejected": guardrail_rejected,
