@@ -67,7 +67,7 @@ arbitrary MAVLink messages, shell commands or filesystem/network operations.
 | Mission executor | `cpp/mission_executor` | Deterministic action state machines, deadlines and cancellation |
 | Guardrails | `cpp/guardrails` | Precondition and policy validation before execution |
 | Safety supervisor | `cpp/safety_supervisor` | Independent monitoring and safe recovery authority |
-| Local planner | `cpp/local_planner` | Short-horizon collision-safe motion planning |
+| Local planner | `cpp/local_planner` | Short-horizon collision-safe motion planning; effective clearance is `max(policy minimum, action-request minimum)` |
 | Autonomy core | `cpp/autonomy_core` | Composition root and service lifecycle |
 | Perception | `perception/` | Sensor adapters, calibration, detections and obstacle map |
 | DCM | `python/dcm` | Model-facing reasoning loop and action selection |

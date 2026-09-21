@@ -34,12 +34,14 @@ LocalPlanner::LocalPlanner(double resolution_m, double clearance_m,
 
 bool LocalPlanner::SegmentClear(
     const v1::LocalPositionNed& start, const v1::LocalPositionNed& goal,
-    const std::vector<perception::Point3>& obstacles) const {
+    const std::vector<perception::Point3>& obstacles,
+    double requested_clearance_m) const {
+  const double clearance_m = std::max(clearance_m_, requested_clearance_m);
   for (const auto& point : obstacles) {
     if (std::abs(point.z_m - start.down_m()) > 2.0) continue;
     if (PointSegmentDistance(point.x_m, point.y_m, start.north_m(),
                              start.east_m(), goal.north_m(), goal.east_m()) <
-        clearance_m_) {
+        clearance_m) {
       return false;
     }
   }
@@ -48,9 +50,11 @@ bool LocalPlanner::SegmentClear(
 
 PlanResult LocalPlanner::Plan(
     const v1::LocalPositionNed& start, const v1::LocalPositionNed& goal,
-    const std::vector<perception::Point3>& obstacles) const {
+    const std::vector<perception::Point3>& obstacles,
+    double requested_clearance_m) const {
   PlanResult result;
-  if (SegmentClear(start, goal, obstacles)) {
+  const double clearance_m = std::max(clearance_m_, requested_clearance_m);
+  if (SegmentClear(start, goal, obstacles, clearance_m)) {
     result.success = true;
     result.direct_path = true;
     result.reason = "direct path clear";
@@ -79,7 +83,7 @@ PlanResult LocalPlanner::Plan(
                    height - 1)};
   };
   std::vector<bool> occupied(cell_count, false);
-  const int inflation = static_cast<int>(std::ceil(clearance_m_ / resolution_m_));
+  const int inflation = static_cast<int>(std::ceil(clearance_m / resolution_m_));
   for (const auto& point : obstacles) {
     if (std::abs(point.z_m - start.down_m()) > 2.0 || point.x_m < min_n ||
         point.x_m > max_n || point.y_m < min_e || point.y_m > max_e) continue;
@@ -89,7 +93,7 @@ PlanResult LocalPlanner::Plan(
         const int x = ox + dx;
         const int y = oy + dy;
         if (x >= 0 && x < width && y >= 0 && y < height &&
-            std::hypot(dx * resolution_m_, dy * resolution_m_) <= clearance_m_) {
+            std::hypot(dx * resolution_m_, dy * resolution_m_) <= clearance_m) {
           occupied[index(x, y)] = true;
         }
       }
@@ -162,7 +166,7 @@ PlanResult LocalPlanner::Plan(
   while (cursor < full_path.size()) {
     std::size_t farthest = cursor;
     for (std::size_t candidate = full_path.size(); candidate-- > cursor;) {
-      if (SegmentClear(anchor, full_path[candidate], obstacles)) {
+      if (SegmentClear(anchor, full_path[candidate], obstacles, clearance_m)) {
         farthest = candidate;
         break;
       }

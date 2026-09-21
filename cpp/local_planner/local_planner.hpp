@@ -24,11 +24,13 @@ class LocalPlanner {
   [[nodiscard]] PlanResult Plan(
       const v1::LocalPositionNed& start,
       const v1::LocalPositionNed& goal,
-      const std::vector<perception::Point3>& obstacles) const;
+      const std::vector<perception::Point3>& obstacles,
+      double requested_clearance_m = 0.0) const;
   [[nodiscard]] bool SegmentClear(
       const v1::LocalPositionNed& start,
       const v1::LocalPositionNed& goal,
-      const std::vector<perception::Point3>& obstacles) const;
+      const std::vector<perception::Point3>& obstacles,
+      double requested_clearance_m = 0.0) const;
 
  private:
   double resolution_m_;

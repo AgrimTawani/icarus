@@ -21,6 +21,10 @@ std::uint32_t TimeoutOf(const v1::ActionLimits& limits,
                                             : fallback;
 }
 
+double ClearanceOf(const v1::ActionLimits& limits) {
+  return limits.has_minimum_clearance_m() ? limits.minimum_clearance_m() : 0.0;
+}
+
 v1::ActionReceipt SimpleReceipt(const std::string& action_id,
                                 v1::ActionState state,
                                 v1::ReasonCode reason,
@@ -202,7 +206,8 @@ void ActionExecutor::Execute(const std::string& action_id,
   } else if (command.has_goto_()) {
     ExecuteGoto(action_id, context, command.goto_().destination(),
                 command.goto_().acceptance_radius_m(),
-                TimeoutOf(command.goto_().limits(), 120'000));
+                TimeoutOf(command.goto_().limits(), 120'000),
+                true, ClearanceOf(command.goto_().limits()));
   } else if (command.has_execute_route()) {
     const auto& route = command.execute_route();
     const auto timeout_per_point = 120'000U;
@@ -210,7 +215,7 @@ void ActionExecutor::Execute(const std::string& action_id,
       if (!ExecuteGoto(action_id, context, route.points(index).position(),
                        route.points(index).acceptance_radius_m(),
                        TimeoutOf(route.points(index).limits(), timeout_per_point),
-                       false)) {
+                       false, ClearanceOf(route.points(index).limits()))) {
         return;
       }
     }
@@ -370,7 +375,8 @@ bool ActionExecutor::ExecuteGoto(const std::string& action_id,
                                  const v1::Position& destination,
                                  double acceptance_radius_m,
                                  std::uint32_t timeout_ms,
-                                 bool complete_action) {
+                                 bool complete_action,
+                                 double requested_clearance_m) {
   if (!SetMode(action_id, kModeGuided, "GUIDED")) return false;
   if (destination.has_local_ned() && perception_ != nullptr && planner_ != nullptr) {
     const auto state = state_engine_.Snapshot();
@@ -383,7 +389,8 @@ bool ActionExecutor::ExecuteGoto(const std::string& action_id,
     }
     const auto plan = planner_->Plan(state->local_position_ned(),
                                      destination.local_ned(),
-                                     perception_->Obstacles());
+                                     perception_->Obstacles(),
+                                     requested_clearance_m);
     if (!plan.success) {
       store_.Transition(action_id, v1::ACTION_STATE_ABORTED_BY_SAFETY,
                         v1::REASON_CODE_SAFETY_INTERVENTION,

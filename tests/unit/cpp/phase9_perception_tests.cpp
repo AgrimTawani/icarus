@@ -81,6 +81,13 @@ void TestCollisionFreePlanning() {
   const auto rejected = planner.Plan(start, goal, occupied_goal);
   Require(!rejected.success,
           "planner must reject a destination inside the safety envelope");
+
+  // A caller may request stricter clearance, but can never lower policy.
+  std::vector<icarus::perception::Point3> near_path{{10.0, 2.5, -5.0, 1.0}};
+  Require(planner.Plan(start, goal, near_path).direct_path,
+          "policy-clear path should remain direct");
+  Require(!planner.Plan(start, goal, near_path, 3.0).direct_path,
+          "requested clearance must reach planner occupancy");
 }
 
 void TestGroundReturnsDoNotBecomeFrontalObstacles() {
