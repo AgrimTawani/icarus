@@ -24,6 +24,12 @@ pinned Grounding-DINO artifact, not a VLM: it can return requested class
 counts/boxes but cannot yet answer qualitative visual questions or select a
 landing area from depth geometry.
 
+The `assess_landing_zone` integration was exercised live on 2026-09-21 against
+episode `20260921T053343_8087524484f8`. It captured the native depth stream,
+returned `assessable: false` for the configured forward camera, made zero Drone
+API action calls, and replayed successfully. This verifies the semantic tool
+and audit boundary, not a landing capability.
+
 The rest of this document records the first, offline observe-mode slice.
 
 This first Phase 11 slice consumes a sealed Phase 10 episode offline. It does

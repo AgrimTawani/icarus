@@ -36,7 +36,7 @@ visual-command execution and a VLM are still future work.
 | Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
 | DCM/model integration | Live chat, observe, approval and simulator-only autonomous paths exist; evaluated Qwen/Llama candidates fail promotion thresholds | `python/dcm/fly.py`, `python/dcm/llama_runtime.py` |
-| Semantic vision | Pinned Grounding-DINO supports bounded class detection on ephemeral simulator frames; VLM and depth landing geometry remain open | `python/perception/vision.py`, `scripts/detect-image` |
+| Semantic vision | Pinned Grounding-DINO supports bounded class detection; a footprint-aware depth analyzer safely refuses the current forward camera; VLM and calibrated downward-source landing geometry remain open | `python/perception/vision.py`, `python/perception/landing_zone.py` |
 | Dataset/evaluation system | Episodes, replay, corpus builder, live DCM provenance and offline decision evaluation implemented; Phase 12 promotion campaign remains open | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
