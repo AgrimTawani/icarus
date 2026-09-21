@@ -187,18 +187,23 @@ class MissionClient:
         if self.episode is None or not self.episode.session:
             raise RuntimeError("landing assessment requires an active simulator episode")
         import numpy as np
-        from python.perception.landing_zone import assess_landing_zone
+        from python.perception.landing_zone import assess_landing_zone, load_landing_source
+
+        source = load_landing_source(ROOT / "config/perception/landing_zone.json")
 
         with tempfile.TemporaryDirectory(prefix="icarus-depth-") as temporary:
             output = Path(temporary) / "depth.npy"
             subprocess.run(
-                [str(ROOT / "scripts/capture-depth-frame"), "--output", str(output)],
+                [str(ROOT / "scripts/capture-depth-frame"), "--output", str(output),
+                 "--topic", source["topic"]],
                 cwd=ROOT, check=True, timeout=15)
             depth = np.load(output, allow_pickle=False)
             result = assess_landing_zone(
-                depth, optical_axis_body_frd=(1.0, 0.0, 0.0),
-                horizontal_fov_deg=87.0, vertical_fov_deg=58.0)
+                depth, optical_axis_body_frd=source["optical_axis_body_frd"],
+                horizontal_fov_deg=source["horizontal_fov_deg"],
+                vertical_fov_deg=source["vertical_fov_deg"])
             result["depth"] = {"source": "simulator_ephemeral_capture",
+                               "sensor_id": source["sensor_id"],
                                "width": int(depth.shape[1]),
                                "height": int(depth.shape[0])}
         self.episode.record("semantic_landing_assessment", result)

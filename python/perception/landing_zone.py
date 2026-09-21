@@ -9,13 +9,38 @@ but meaningless quality score.
 
 from __future__ import annotations
 
+import json
 import math
 import time
+from pathlib import Path
 
 import numpy as np
 
 
 SCHEMA = "icarus.perception.landing_zone.v1"
+
+
+def load_landing_source(path):
+    """Load the versioned depth-source calibration used for assessment.
+
+    The source is data rather than a hard-coded simulator assumption so a
+    physical downward camera can replace only this adapter configuration.
+    """
+    source = json.loads(Path(path).read_text())
+    if source.get("version") != 1 or set(source) != {"version", "active_source"}:
+        raise ValueError("invalid landing source configuration")
+    active = source["active_source"]
+    required = {"sensor_id", "topic", "optical_axis_body_frd",
+                "horizontal_fov_deg", "vertical_fov_deg"}
+    if set(active) != required or not isinstance(active["sensor_id"], str):
+        raise ValueError("invalid active landing source")
+    if not isinstance(active["topic"], str) or not active["topic"].startswith("/"):
+        raise ValueError("landing source topic must be absolute")
+    _as_axis(active["optical_axis_body_frd"])
+    for name in ("horizontal_fov_deg", "vertical_fov_deg"):
+        if not isinstance(active[name], (int, float)) or not 1 <= active[name] <= 179:
+            raise ValueError("invalid landing source " + name)
+    return active
 
 
 def _as_axis(values):

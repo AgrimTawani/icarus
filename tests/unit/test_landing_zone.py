@@ -1,9 +1,12 @@
+import json
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
-from python.perception.landing_zone import assess_landing_zone
+from python.perception.landing_zone import assess_landing_zone, load_landing_source
 
 
 def flat_depth(height=80, width=100, distance=4.0):
@@ -11,6 +14,19 @@ def flat_depth(height=80, width=100, distance=4.0):
 
 
 class LandingZoneTests(unittest.TestCase):
+    def test_versioned_source_configuration_is_loaded(self):
+        root = Path(__file__).resolve().parents[2]
+        source = load_landing_source(root / "config/perception/landing_zone.json")
+        self.assertEqual(source["sensor_id"], "forward_rgbd")
+        self.assertEqual(source["optical_axis_body_frd"], [1.0, 0.0, 0.0])
+
+    def test_invalid_source_configuration_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "source.json"
+            path.write_text(json.dumps({"version": 1, "active_source": {}}))
+            with self.assertRaises(ValueError):
+                load_landing_source(path)
+
     def test_flat_downward_frame_is_suitable(self):
         result = assess_landing_zone(flat_depth(), optical_axis_body_frd=(0, 0, 1))
         self.assertTrue(result["assessable"])

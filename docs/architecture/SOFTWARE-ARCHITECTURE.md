@@ -119,7 +119,9 @@ downward; the present forward RGB-D camera therefore cannot certify a landing
 area. `scripts/capture-depth-frame` and `scripts/assess-landing-zone` provide
 the Gazebo adapter and offline analyzer respectively. A downward depth sensor
 and live calibration evidence remain required before this becomes an
-operational landing capability.
+operational landing capability. The active source and optical-axis calibration
+live in `config/perception/landing_zone.json`, so a hardware source replaces
+configuration/adapter data rather than mission or DCM code.
 
 The adapter was exercised against a real headless `empty_validation` Gazebo
 session on 2026-09-21: it captured the native `/icarus/sensors/rgbd/depth_image`

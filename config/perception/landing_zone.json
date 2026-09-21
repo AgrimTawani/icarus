@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "active_source": {
+    "sensor_id": "forward_rgbd",
+    "topic": "/icarus/sensors/rgbd/depth_image",
+    "optical_axis_body_frd": [1.0, 0.0, 0.0],
+    "horizontal_fov_deg": 87.0,
+    "vertical_fov_deg": 58.0
+  }
+}
