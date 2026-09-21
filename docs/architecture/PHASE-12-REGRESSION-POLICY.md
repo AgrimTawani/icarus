@@ -66,6 +66,14 @@ separate override.
 
 ## Current limits
 
+The committed `wind_strong` regression case (seed 52, 5 m/s) is currently a
+known failed deterministic-controller case. Its retained 2026-09-12 flight
+reported 1.398 m maximum drift and 20.411° maximum tilt against the committed
+0.75 m / 18° envelope. Do not widen those limits or lower the scenario's
+operational limit merely to convert this into a pass. A controlled vehicle and
+aerodynamic calibration investigation is required before the strong-wind matrix
+entry or deterministic-controller promotion gate can close.
+
 The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly
 simulator-only control-path adapter in `ArdupilotGateway`: `loss` black-holes
