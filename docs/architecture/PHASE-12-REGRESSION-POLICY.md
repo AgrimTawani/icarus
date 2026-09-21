@@ -88,6 +88,8 @@ clearance policy. The endpoint was corrected while retaining the 1.0 m
 requirement. The route remains deliberately narrower than the fixed 2.5 m
 planner envelope, so its Phase 12 gate asserts `ABORTED_BY_SAFETY` with `no
 collision-free path`; it must not be made traversable by lowering that envelope.
+The corrected gate passed live in episode `20260921T063440_df198585f511`, which
+sealed 386 records and replayed its four guardrail decisions successfully.
 
 The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly
