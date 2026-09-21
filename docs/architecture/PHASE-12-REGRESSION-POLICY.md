@@ -55,6 +55,14 @@ currently has a 1.55% timeout rate and only 3 correct land proposals out of 30
 comparable land decisions; it fails this policy. Llama-3.2-3B Q4 has malformed
 output and guardrail rejections and also fails it.
 
+An exact same-episode comparison on sealed golden-run episode
+`20260921T040434_f1552a8e2272` used contract `dcm-contract-v2-history` for both
+runtimes. The scripted baseline agreed on all nine scoreable decisions. Qwen
+Q5 agreed on two of eight, timed out once, and proposed `goto` at every recorded
+hold/land decision. The retained comparison is
+`logs/dcm/comparison/20260921T064323/comparison.json`; it reinforces, rather
+than changes, the existing non-promotion decision.
+
 ## Episode retention
 
 Every `MissionClient` seals its episode in `close()`. The live DCM console sets

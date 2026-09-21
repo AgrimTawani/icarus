@@ -960,7 +960,12 @@ evaluations/<evaluation-id>/
 - [x] Fixed seed.
 - [x] Takeoff, route, return, and land.
 - [x] Complete logs and replay.
-- [ ] Scripted and DCM controllers compared on the same scenario.
+- [x] Scripted and DCM controllers compared on the same sealed golden-run
+      episode (`20260921T040434_f1552a8e2272`) in offline observe mode. The
+      scripted baseline agreed on all scoreable decisions; Qwen Q5 agreed on
+      25%, timed out once, and did not propose the recorded hold/land actions.
+      See `logs/dcm/comparison/20260921T064323/comparison.json`; this is
+      comparison evidence, not model promotion.
 
 ### 12.2 Scenario matrix
 
