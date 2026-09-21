@@ -85,12 +85,17 @@ Evidence:
 - `logs/simulation/scenario_wind_light_20260912T031113_0bae76/` — populated
   mixed-village flight passed at 0.975× real time, with 0.148 m maximum drift
   and 8.96° maximum tilt.
+- `logs/simulation/scenario_wind_strong_20260921T061452_f0e451/` — the
+  fixed-seed 5 m/s regression passed at 0.953× real time, with 0.097 m maximum
+  drift and 2.84° maximum tilt.
 - `logs/simulation/scenario_rejection_20260912T025149_19fe8c.json`
 
-The 5 m/s `wind_strong` world is intentionally a more severe stress case. The
-current vehicle held altitude but exceeded its declared hover envelope (1.40 m
-drift and 20.41° tilt), so the supervisor stopped that flight. This is a vehicle
-wind-model/control calibration task, not a world-generation failure.
+The 5 m/s `wind_strong` world remains a severe deterministic stress case. A
+previous run showed 1.40 m drift and 20.41° tilt. The follow-up run above used
+the same seed and unchanged 0.75 m / 18° limits after removing stale native
+WindEffects opt-ins; it passed. The canonical atmosphere remains the custom,
+seeded aerodynamic model. As-built mass/inertia and aero coefficients still
+require measurement before this can be called a validated physical twin.
 
 An intentionally disconnected Gazebo-only performance experiment measured about
 0.70× because the ArduPilot lockstep bridge had no controller. It is retained as

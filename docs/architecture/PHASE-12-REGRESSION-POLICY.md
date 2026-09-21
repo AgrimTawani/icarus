@@ -66,13 +66,15 @@ separate override.
 
 ## Current limits
 
-The committed `wind_strong` regression case (seed 52, 5 m/s) is currently a
-known failed deterministic-controller case. Its retained 2026-09-12 flight
-reported 1.398 m maximum drift and 20.411° maximum tilt against the committed
-0.75 m / 18° envelope. Do not widen those limits or lower the scenario's
-operational limit merely to convert this into a pass. A controlled vehicle and
-aerodynamic calibration investigation is required before the strong-wind matrix
-entry or deterministic-controller promotion gate can close.
+The committed `wind_strong` regression case (seed 52, 5 m/s) passed on
+2026-09-21 after stale native-wind opt-ins were removed from the model. The
+unchanged 0.75 m / 18° envelope was met with 0.097 m drift and 2.842° peak
+tilt at 0.953× real-time factor; the retained result is
+`logs/simulation/scenario_wind_strong_20260921T061452_f0e451/`. The older
+2026-09-12 failure (1.398 m / 20.411°) remains diagnostic evidence. Do not
+widen limits or lower the operating limit to turn a future failure into a pass.
+As-built vehicle/aerodynamic calibration remains necessary before digital-twin
+or hardware claims.
 
 The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly

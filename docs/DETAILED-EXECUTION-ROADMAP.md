@@ -964,7 +964,9 @@ evaluations/<evaluation-id>/
 
 ### 12.2 Scenario matrix
 
-- [ ] Light and strong wind.
+- [x] Light and strong wind. The light-wind acceptance and the 2026-09-21
+      fixed-seed 5 m/s `wind_strong` regression both met their unchanged
+      scenario envelopes; see `PHASE-12-REGRESSION-POLICY.md`.
 - [ ] Gusts.
 - [ ] Static obstacles.
 - [ ] Narrow route.
