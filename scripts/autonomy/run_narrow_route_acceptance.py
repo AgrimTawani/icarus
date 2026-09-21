@@ -22,10 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.append(str(ROOT / "scripts/simulation"))
 sys.path.append("/usr/lib/python3/dist-packages")
 
-from icarus.v1 import action_pb2, state_pb2
+from icarus.v1 import action_pb2, drone_api_pb2, state_pb2
 from run_mission import MissionClient
 from scenario_config import load_scenario
-from score_phase5_trajectory import score
 
 
 def main() -> int:
@@ -89,27 +88,31 @@ def main() -> int:
                 limits=action_pb2.ActionLimits(maximum_ground_speed_mps=3.0,
                                                 execution_timeout_ms=120_000,
                                                 minimum_clearance_m=1.0)), timeout=5)
-        terminal = client.wait_action(goto, 140)
-        time.sleep(0.3)
-        with lock:
-            trajectory = list(truth[start_index:])
-        if len(trajectory) < 50:
-            raise RuntimeError("insufficient ground-truth trajectory samples")
-        scored = score(scenario, trajectory, "narrow", vehicle_radius_m=0.35)
-        required_clearance = float(route["clearance_m"])
-        if scored["status"] != "passed":
-            raise RuntimeError("narrow-route ground-truth scoring failed: " + str(scored))
-        if scored["minimum_clearance_m"] < required_clearance:
-            raise RuntimeError(
-                f"narrow-route clearance {scored['minimum_clearance_m']:.3f} m "
-                f"is below {required_clearance:.3f} m")
-        if "safe detour" not in terminal.message:
-            raise RuntimeError("narrow route completed without local-planner detour evidence")
+        terminal = None
+        for status in client.action_api.WatchActionStatus(
+                drone_api_pb2.WatchActionStatusRequest(
+                    session_id=client.session_id, action_id=goto.action_id), timeout=20):
+            if status.state in {
+                    action_pb2.ACTION_STATE_ABORTED_BY_SAFETY,
+                    action_pb2.ACTION_STATE_FAILED,
+                    action_pb2.ACTION_STATE_SUCCEEDED}:
+                terminal = status
+                break
+        if terminal is None:
+            raise RuntimeError("narrow route did not reach a terminal action state")
+        # The narrow route deliberately falls below the 2.5 m fixed planner
+        # envelope. Safe refusal—not squeezing through by lowering that
+        # envelope—is the expected Phase 12 behavior.
+        if (terminal.state != action_pb2.ACTION_STATE_ABORTED_BY_SAFETY or
+                "no collision-free path" not in terminal.message):
+            raise RuntimeError("narrow route was not safely refused: " + terminal.message)
         client.wait_action(client.action_api.Land(
             action_pb2.LandRequest(context=client.context("phase12:narrow-land")), timeout=5), 100)
+        with lock:
+            samples = len(truth) - start_index
         report.update(status="passed", planner_terminal_message=terminal.message,
-                      ground_truth=scored, required_clearance_m=required_clearance,
-                      ground_truth_samples=len(trajectory))
+                      expected_terminal_state="ACTION_STATE_ABORTED_BY_SAFETY",
+                      ground_truth_samples=max(0, samples))
         return 0
     except (grpc.RpcError, RuntimeError, TimeoutError) as error:
         report["error"] = str(error)

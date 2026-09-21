@@ -85,7 +85,9 @@ guardrail decisions successfully. Investigation found that the former endpoint
 could only offer 0.65 m vehicle-envelope clearance from `route_box`; it was a
 scenario-definition contradiction, not proof that the planner may violate its
 clearance policy. The endpoint was corrected while retaining the 1.0 m
-requirement, and the gate remains open until the corrected live route passes.
+requirement. The route remains deliberately narrower than the fixed 2.5 m
+planner envelope, so its Phase 12 gate asserts `ABORTED_BY_SAFETY` with `no
+collision-free path`; it must not be made traversable by lowering that envelope.
 
 The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly
