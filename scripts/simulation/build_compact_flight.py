@@ -35,10 +35,9 @@ def main():
     model.find("static").text = "false"
     ET.SubElement(model, "self_collide").text = "false"
     base = model.find("link")
-    # Native Gazebo WindEffects only applies aerodynamic force to opted-in links.
-    # Keeping this enabled in still air has no effect and lets Phase 5 worlds
-    # select wind without maintaining a second vehicle model.
-    ET.SubElement(base, "enable_wind").text = "true"
+    # IcarusTurbulentAtmosphere below is the sole force-producing wind model.
+    # Do not opt links into Gazebo's native WindEffects: if a future world adds
+    # that system, native and custom aerodynamic forces would otherwise stack.
     original = (
         ET.parse(ROOT / "simulation/models/mark4_v2/model.sdf").getroot().find("model")
     )
@@ -105,7 +104,6 @@ def main():
     for m, prop in zip(layout, [28, 26, 25, 27]):
         n = m["motor"]
         rotor = copy.deepcopy(original.find(f"link[@name='motor_{n:02d}']"))
-        ET.SubElement(rotor, "enable_wind").text = "true"
         rotor.find("pose").text = " ".join(map(str, m["position_m"])) + " 0 0 0"
         propeller = propellers[n]
         rotor_inertial = rotor.find("inertial")

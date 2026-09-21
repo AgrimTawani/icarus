@@ -38,9 +38,11 @@ GPS or battery configuration.
 
 ## Environment behavior
 
-Wind uses Gazebo Harmonic's native `WindEffects` system. The base and rotor links
-explicitly opt into wind. Constant, gust-magnitude and direction-swing profiles
-are encoded in generated SDF. The 8 m/s case is rejected before simulation or
+Wind uses the model-level, seeded `IcarusTurbulentAtmosphere` system. It is the
+sole aerodynamic-force authority: the base and rotor links deliberately do not
+opt into Gazebo's native `WindEffects`, preventing force double-counting if that
+system is ever added to a world. Constant, gust-magnitude and direction-swing
+profiles are encoded in generated SDF. The 8 m/s case is rejected before simulation or
 arming; the rejection record confirms no processes were started.
 
 All flyable wind profiles now use the shared `mixed_village` environment instead

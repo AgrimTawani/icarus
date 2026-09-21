@@ -838,7 +838,6 @@
           </velocity_sensing>
         </navsat>
       </sensor>
-      <enable_wind>true</enable_wind>
       <sensor name="imu_sensor" type="imu">
         <pose>0 0 -0.026 3.141592653589793 0 0</pose>
         <always_on>true</always_on>
@@ -1035,7 +1034,6 @@
         </inertia>
         <pose>0 0 0 0 0 0</pose>
       </inertial>
-      <enable_wind>true</enable_wind>
       <visual name="source_prop_28">
         <geometry>
           <mesh>
@@ -1077,7 +1075,6 @@
         </inertia>
         <pose>0 0 0 0 0 0</pose>
       </inertial>
-      <enable_wind>true</enable_wind>
       <visual name="source_prop_26">
         <geometry>
           <mesh>
@@ -1119,7 +1116,6 @@
         </inertia>
         <pose>0 0 0 0 0 0</pose>
       </inertial>
-      <enable_wind>true</enable_wind>
       <visual name="source_prop_25">
         <geometry>
           <mesh>
@@ -1161,7 +1157,6 @@
         </inertia>
         <pose>0 0 0 0 0 0</pose>
       </inertial>
-      <enable_wind>true</enable_wind>
       <visual name="source_prop_27">
         <geometry>
           <mesh>
