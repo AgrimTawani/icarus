@@ -12,10 +12,11 @@ the current implementation state by themselves.
 | Area | Current state | What remains before promotion |
 | --- | --- | --- |
 | Live DCM | Qwen/Llama runtime adapters, terminal chat, explicit approval and simulator-only autonomous modes are implemented behind typed Drone API actions. | Neither evaluated model meets the autonomous promotion threshold. |
-| Episode integrity | Every live DCM session seals an episode truthfully on success, action failure, exception or interruption; replay re-checks recorded guardrails. | Raw-sensor attachment and physical-flight retention policy remain Phase 10 work. |
+| Episode integrity | Every live DCM session seals an episode truthfully on success, action failure, exception or interruption; replay re-checks recorded guardrails; bounded native sensor streams are snapshotted without RGB/depth pixels. | Physical-flight schema/privacy review remains a later hardware gate. |
 | Model comparison | Qwen3-4B Q5, Llama-3.2-3B Q4 and scripted baseline have versioned comparison reports with checksum, latency, VRAM/RAM, validity and guardrail results. | Grow the held-out mission corpus; do not select a winner from the current inadequate model results. |
 | Phase 12 link faults | Simulator-only bidirectional MAVLink loss and fixed-latency cases ran headlessly and replayed. Loss aborted active work, refused stale commands, recovered and landed; latency completed nominally. | Continue the rest of the fixed/randomized scenario campaign. |
-| Visual semantics | Grounding-DINO Tiny is downloaded and pinned. | Camera ingestion, detector/count action, depth landing-zone assessment and a user-selected VLM remain unimplemented. Do not download a VLM until the owner supplies the intended command/artifact. |
+| Phase 12 battery/timeout | A 35% scenario SOC reaches the simulator-only API battery bridge and rejects Arm; a live DCM deadline records no action and replays. | Battery-discharge dynamics, native ArduPilot battery failsafe, and model-promotion evidence remain open. |
+| Visual semantics | Grounding-DINO Tiny is pinned and runs through the bounded `detect` tool; ephemeral RGB capture is live-tested. A footprint-aware depth analyzer and `assess_landing_zone` tool exist, but correctly refuse the current forward camera. | Add/calibrate a downward depth source for operational landing geometry. Do not download a VLM until the owner supplies the intended command/artifact. |
 
 The authoritative promotion thresholds and exact Phase 12 fault episode IDs are
 in [`architecture/PHASE-12-REGRESSION-POLICY.md`](architecture/PHASE-12-REGRESSION-POLICY.md).
@@ -147,7 +148,9 @@ with the documented simulation mission workflow. Observe reports are under
 
 ## Needed from the owner
 
-Nothing blocks the current work. The Jetson module is confirmed as **AGX Orin
+The user-selected VLM download command/artifact is needed before qualitative
+visual interpretation can be implemented. Do not infer a model or download URL
+on the owner's behalf. The Jetson module is confirmed as **AGX Orin
 64GB** (2026-09-20). Its developer kit ships with 64 GB eMMC and no SSD, which
 is enough for one deployed model but not for holding several artifacts during a
 comparison, so a 512 GB M.2 2280 NVMe Gen4 x4 drive is recommended alongside
