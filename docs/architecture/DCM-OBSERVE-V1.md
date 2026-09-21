@@ -64,8 +64,10 @@ model adapter must enforce that deadline at its process boundary.
 ## The model contract
 
 `python/dcm/contract.py` holds everything a model may see, say, or be refused,
-behind three explicit versions: `dcm-contract-v1`, `dcm-actions-v1` and
-`dcm-prompt-v1`. A provider adapter implements `ModelRuntime` and nothing else.
+behind explicit contract, vocabulary and prompt versions. The current forms
+are `dcm-contract-v1`/`dcm-contract-v2-history`, `dcm-actions-v3-vision` and
+`dcm-prompt-v2`; retained reports preserve their earlier versions. A provider
+adapter implements `ModelRuntime` and nothing else.
 It never decides what is observable, what is allowed, or what counts as fresh.
 
 The action vocabulary is a table, not control flow. Each action declares its
@@ -155,6 +157,22 @@ of why Phase 12 requires repeated runs: a single run would have reported
 either a clean pass or a timeout, and both would have been misleading.
 
 ### What the model actually proposed
+
+### Prompt-v2 grounding experiment
+
+The versioned `dcm-prompt-v2` preamble identifies the model as the decision
+component of a physical multirotor and states that a mission ends only when it
+is safely on the ground. On the same 11 sealed episodes and three repeats as
+the retained prompt-v1 report, correct `land` proposals rose from 3/30 to
+23/30. This is not a promotion: the same experiment proposed `takeoff` at 14
+unarmed `arm` points. The real C++ guardrail rejected every one with
+`REASON_CODE_NOT_ARMED`; two decisions still timed out. The report and
+side-by-side comparison are retained at
+`logs/dcm/evaluation/20260921T114918/evaluation.json` and
+`logs/dcm/comparison/20260921T115121/comparison.json`. The action vocabulary
+also advanced between the older report and this run, so the result is evidence
+for a follow-up isolated prompt study, not proof that the wording alone caused
+the change.
 
 Against a freshly captured stress episode, with the recorded action shown for
 comparison only:

@@ -34,11 +34,13 @@ CONTRACT_VERSION_HISTORY = "dcm-contract-v2-history"
 # How many completed actions the model may see. Bounded so a long mission
 # cannot crowd out the current state.
 HISTORY_LIMIT = 12
-PROMPT_VERSION = "dcm-prompt-v1"
-# v2 adds domain guidance that a flight ends on the ground. This is directive
-# rather than neutral, so any improvement it produces must be read as "the
-# model follows an instruction it was given", not as a latent capability.
-PROMPT_VERSION_ENDING = "dcm-prompt-v2-ending"
+# v2 grounds every decision in the current physical aircraft state rather than
+# presenting the payload as an abstract JSON exercise.  It is a model-visible
+# change and must therefore travel with every report.
+PROMPT_VERSION = "dcm-prompt-v2"
+# The optional ending variant adds extra terminal emphasis above the base v2
+# embodiment guidance. It remains separately versioned for fair comparison.
+PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
 # v2 adds goto and orbit. The version changes because a report scored
 # against a different action set is not comparable.
 VOCABULARY_VERSION = "dcm-actions-v3-vision"
@@ -322,9 +324,13 @@ def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
 
 
 SYSTEM_PROMPT = """\
-You are a flight decision component for an uncrewed aircraft. You do not fly \
-the aircraft; you propose one action, which independent safety software then \
-validates and may reject.
+You are the decision-making component of a real multirotor aircraft in a \
+physical or simulated 3-D environment. The state and perception data that \
+follow describe its actual current situation, not a hypothetical test case. \
+Every proposal has physical consequences for position, altitude, battery and \
+collision risk. A mission is complete only when the aircraft is safely on the \
+ground. You do not fly the aircraft; you propose one action, which independent \
+safety software then validates and may reject.
 
 Reply with exactly one JSON object and nothing else. No prose, no explanation, \
 no code fences. The object has exactly two keys: "action" and "arguments".
@@ -341,8 +347,8 @@ Rules:
 """
 
 ENDING_GUIDANCE = """
-- A flight is not finished until the aircraft is on the ground. Holding keeps \
-the aircraft airborne and is not a way to end a mission."""
+- Terminal reminder: holding keeps the aircraft airborne and is not a way to \
+end a mission."""
 
 
 def render_vocabulary(actions=ACTIONS):

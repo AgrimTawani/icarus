@@ -375,7 +375,10 @@ class PromptTests(unittest.TestCase):
     def test_prompt_carries_its_version_and_the_observation(self):
         observation = {"observed_at_unix_ms": 1, "state": {}}
         prompt = render_prompt(observation)
-        self.assertEqual(prompt["prompt_version"], "dcm-prompt-v1")
+        self.assertEqual(prompt["prompt_version"], "dcm-prompt-v2")
+        self.assertIn("real multirotor aircraft", prompt["system"])
+        self.assertIn("actual current situation", prompt["system"])
+        self.assertIn("safely on the ground", prompt["system"])
         self.assertIn("exactly one JSON object", prompt["system"])
         self.assertIn("observed_at_unix_ms", prompt["user"])
 

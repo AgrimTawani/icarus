@@ -70,7 +70,8 @@ with the documented simulation mission workflow. Observe reports are under
 2. ~~**Make a provider-neutral model contract.**~~ **Done 2026-09-19.**
    `python/dcm/contract.py` holds the curated observation, the action table,
    the generated prompt, freshness limits and `RuntimeDescriptor`, behind
-   versions `dcm-contract-v1`, `dcm-actions-v1` and `dcm-prompt-v1`. `curate`
+   versions `dcm-contract-v1`/`dcm-contract-v2-history`,
+   `dcm-actions-v3-vision` and `dcm-prompt-v2`. `curate`
    cannot receive the recorded next action. 36 unit tests cover invalid JSON,
    unknown actions, unsafe arguments, stale data and runtime failure. See
    `docs/architecture/DCM-OBSERVE-V1.md`.

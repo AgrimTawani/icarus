@@ -50,9 +50,14 @@ intentionally stricter than the current Qwen3-4B results, which are therefore
 
 `agreement_rate` is diagnostic only. It is not a promotion score: the first
 Qwen corpus appeared to agree often while failing to propose `land`, so aggregate
-agreement can conceal unsafe per-action behavior. The Qwen3-4B Q5 comparison
-currently has a 1.55% timeout rate and only 3 correct land proposals out of 30
-comparable land decisions; it fails this policy. Llama-3.2-3B Q4 has malformed
+agreement can conceal unsafe per-action behavior. The original Qwen3-4B Q5
+prompt-v1 corpus had a 1.55% timeout rate and only 3 correct land proposals
+out of 30 comparable land decisions. The prompt-v2 embodiment experiment on
+the same 11 sealed episodes improved that to 23/30, but proposed `takeoff` at
+14 unarmed `arm` points; all 14 were rejected by the real C++ guardrail as
+`REASON_CODE_NOT_ARMED`, with the same 1.55% timeout rate. The retained
+comparison is `logs/dcm/comparison/20260921T115121/comparison.json`. It still
+fails this policy: no threshold was changed. Llama-3.2-3B Q4 has malformed
 output and guardrail rejections and also fails it.
 
 An exact same-episode comparison on sealed golden-run episode
