@@ -38,6 +38,7 @@ def main():
     for name, kind in [
         ("rgbd/image", Image),
         ("rgbd/depth_image", Image),
+        ("rgbd_down/depth_image", Image),
         ("lidar", LaserScan),
         ("range_down", LaserScan),
         ("imu", IMU),
@@ -64,13 +65,16 @@ def main():
         )
         try:
             deadline = time.monotonic() + 50
-            while len(received) < 6 or min(counts.values(), default=0) < 3:
+            while len(received) < 7 or min(counts.values(), default=0) < 3:
                 if time.monotonic() > deadline or process.poll() is not None:
                     raise RuntimeError(f"Sensor timeout: {counts}; see {output}")
                 time.sleep(0.1)
             rgb, depth = received["rgbd/image"], received["rgbd/depth_image"]
             assert (rgb.width, rgb.height) == (640, 480) and len(rgb.data) > 0
             assert (depth.width, depth.height) == (640, 480) and len(depth.data) > 0
+            downward_depth = received["rgbd_down/depth_image"]
+            assert ((downward_depth.width, downward_depth.height) == (640, 480)
+                    and len(downward_depth.data) > 0)
             ranges = received["range_down"].ranges
             assert len(ranges) == 1 and 0.86 < ranges[0] < 0.91, list(ranges)
             lidar = received["lidar"]

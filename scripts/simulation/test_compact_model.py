@@ -56,7 +56,14 @@ class CompactModelTests(unittest.TestCase):
 
     def test_sensor_frames_and_control_mapping(self):
         base = self.model.find("link[@name='base_link']")
-        self.assertEqual(len(base.findall("sensor")), 8)
+        self.assertEqual(len(base.findall("sensor")), 9)
+        down_camera = base.find("sensor[@name='rgbd_down']")
+        self.assertIsNotNone(down_camera)
+        self.assertEqual(down_camera.get("type"), "rgbd_camera")
+        self.assertEqual(down_camera.findtext("topic"), "/icarus/sensors/rgbd_down")
+        self.assertAlmostEqual(
+            float(down_camera.findtext("pose").split()[4]), np.pi / 2
+        )
         self.assertEqual(
             base.find("sensor[@name='imu_sensor']/update_rate").text, "1000"
         )

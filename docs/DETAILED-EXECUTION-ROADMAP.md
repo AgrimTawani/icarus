@@ -870,11 +870,11 @@ model:
 - [x] The pinned Grounding-DINO artifact ran on a live Gazebo frame and its
       result was retained without retaining camera pixels.
 - [ ] Depth-based landing-zone geometry and VLM qualitative interpretation.
-      A deterministic depth-plane analyzer and Gazebo depth-frame adapter now
-      exist, but the current RGB-D camera is forward-facing. The analyzer
-      correctly refuses that source; closing this item requires a calibrated
-      downward depth source and live surface evidence. The VLM remains pending
-      the user-selected download command.
+      The deterministic depth-plane analyzer, calibrated belly RGB-D source and
+      Gazebo adapter are complete: headless evidence at
+      `logs/landing-zone-validation/20260921T112534/assessment.json` accepted
+      a flat simulated footprint. The VLM remains pending installation and
+      load validation; neither visual result has flight authority.
 
 ### 11.4 Build the model evaluation harness
 

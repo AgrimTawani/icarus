@@ -17,8 +17,10 @@ class LandingZoneTests(unittest.TestCase):
     def test_versioned_source_configuration_is_loaded(self):
         root = Path(__file__).resolve().parents[2]
         source = load_landing_source(root / "config/perception/landing_zone.json")
-        self.assertEqual(source["sensor_id"], "forward_rgbd")
-        self.assertEqual(source["optical_axis_body_frd"], [1.0, 0.0, 0.0])
+        self.assertEqual(source["sensor_id"], "downward_rgbd")
+        self.assertEqual(source["topic"], "/icarus/sensors/rgbd_down/depth_image")
+        self.assertEqual(source["optical_axis_body_frd"], [0.0, 0.0, 1.0])
+        self.assertAlmostEqual(source["vertical_fov_deg"], 67.15)
 
     def test_invalid_source_configuration_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

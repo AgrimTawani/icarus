@@ -179,10 +179,9 @@ class MissionClient:
     def assess_landing_zone(self):
         """Run the non-flight depth boundary on the active simulator source.
 
-        The present vehicle config declares this RGB-D camera forward-facing.
-        The geometric analyzer must therefore report it unassessable; retaining
-        that result makes a later downward-sensor change auditable without ever
-        granting this semantic tool flight authority.
+        The active source is a calibrated belly RGB-D camera.  This remains
+        evidence gathering only: even a suitable result cannot issue a land
+        command or bypass landing guardrails.
         """
         if self.episode is None or not self.episode.session:
             raise RuntimeError("landing assessment requires an active simulator episode")

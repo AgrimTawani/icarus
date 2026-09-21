@@ -115,20 +115,21 @@ Landing-surface assessment is a separate deterministic depth boundary. It
 accepts a calibrated float32 depth frame and the camera optical axis in
 body-FRD, then returns coverage, plane slope, residual roughness and a bounded
 ``suitable`` result. It refuses a source that is not calibrated within 15° of
-downward; the present forward RGB-D camera therefore cannot certify a landing
-area. `scripts/capture-depth-frame` and `scripts/assess-landing-zone` provide
-the Gazebo adapter and offline analyzer respectively. A downward depth sensor
-and live calibration evidence remain required before this becomes an
-operational landing capability. The active source and optical-axis calibration
-live in `config/perception/landing_zone.json`, so a hardware source replaces
-configuration/adapter data rather than mission or DCM code.
+downward. The active source is the belly-mounted
+`/icarus/sensors/rgbd_down/depth_image` stream, calibrated to `[0, 0, 1]` in
+body-FRD; `scripts/capture-depth-frame` and `scripts/assess-landing-zone`
+provide the Gazebo adapter and offline analyzer respectively. The active source
+and optical-axis calibration live in `config/perception/landing_zone.json`, so
+a hardware source replaces configuration/adapter data rather than mission or
+DCM code. A suitable result remains inspection evidence, not landing authority.
 
 The adapter was exercised against a real headless `empty_validation` Gazebo
-session on 2026-09-21: it captured the native `/icarus/sensors/rgbd/depth_image`
-stream as a 640×480 float32-metres frame. Assessing it with the configured
-forward optical axis `[1, 0, 0]` returned `assessable: false` and no quality
-score. This is positive evidence for the transport and refusal paths only; it
-is not evidence that the vehicle can assess or select a landing site.
+session on 2026-09-21. It captured the native downward stream as a 640×480
+float32-metres frame and assessed it as `assessable: true`, `suitable: true`,
+with 1.0 footprint coverage, 0.0741° slope and 0.00985 m roughness. Evidence:
+`logs/landing-zone-validation/20260921T112534/assessment.json`. This validates
+the simulated source and geometry boundary only; it is not physical landing
+calibration or permission to select/execute a landing.
 
 ## Runtime Topology
 
