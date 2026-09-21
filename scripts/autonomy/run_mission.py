@@ -209,6 +209,29 @@ class MissionClient:
         return {key: result[key] for key in ("assessable", "suitable", "reason",
                                               "quality", "observed_at_unix_ms")}
 
+    def inspect_scene(self, question):
+        """Run the pinned VLM on one ephemeral simulator camera frame.
+
+        This method intentionally owns neither a command context nor an action
+        RPC. It is a visual evidence boundary only.
+        """
+        if self.episode is None or not self.episode.session:
+            raise RuntimeError("visual inspection requires an active simulator episode")
+        from python.perception.vlm import inspect_image, normalize_question
+
+        question = normalize_question(question)
+        with tempfile.TemporaryDirectory(prefix="icarus-vlm-") as temporary:
+            output = Path(temporary) / "frame.ppm"
+            subprocess.run(
+                [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output)],
+                cwd=ROOT, check=True, timeout=15)
+            result = inspect_image(
+                output, question, Path.home() / "models/vision/MANIFEST.json")
+        result["image"]["source"] = "simulator_ephemeral_capture"
+        self.episode.record("semantic_visual_inspection", result)
+        return {key: result[key] for key in ("question", "answer", "latency_ms",
+                                              "observed_at_unix_ms", "flight_authority")}
+
     def wait_action(self, receipt, timeout: int):
         if receipt.disposition == action_pb2.ACTION_STATE_REJECTED:
             raise RuntimeError(f"Action rejected: {receipt.message}")

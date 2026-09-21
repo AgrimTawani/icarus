@@ -869,13 +869,13 @@ model:
       reaches the Drone API, MAVLink, guardrails or flight executor.
 - [x] The pinned Grounding-DINO artifact ran on a live Gazebo frame and its
       result was retained without retaining camera pixels.
-- [ ] Depth-based landing-zone geometry and VLM qualitative interpretation.
-      The deterministic depth-plane analyzer, calibrated belly RGB-D source and
-      Gazebo adapter are complete: headless evidence at
-      `logs/landing-zone-validation/20260921T112534/assessment.json` accepted
-      a flat simulated footprint. Qwen2-VL-2B Q4 and its visual projector are
-      checksum-pinned and load-tested through llama.cpp, but qualitative VLM
-      interpretation remains unwired; neither visual result has flight authority.
+- [x] Depth-based landing-zone geometry and VLM qualitative interpretation.
+      The deterministic depth-plane analyzer and calibrated belly RGB-D source
+      are live-tested. Qwen2-VL-2B Q4 provides the bounded `inspect_scene`
+      semantic action; a headless Gazebo frame returned an inspection result in
+      episode `20260921T121114_14c05f55b68e`. The VLM receives an ephemeral
+      image and short question only, records a hash/result, and has no Drone
+      API, MAVLink, landing, or flight authority.
 
 ### 11.4 Build the model evaluation harness
 

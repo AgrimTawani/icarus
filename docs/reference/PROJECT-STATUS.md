@@ -41,7 +41,7 @@ is yet exposed to the DCM and physical depth calibration remains open.
 | Low-battery preflight gate | Simulator API path verified | Scenario SOC 35% rejects Arm at the typed C++ guardrail; physical battery integration remains deferred |
 | DCM timeout containment | Simulator API path verified | One live deadline was retained, made zero action calls, and replayed successfully |
 | DCM/model integration | Live chat, observe, approval and simulator-only autonomous paths exist; evaluated Qwen/Llama candidates fail promotion thresholds | `python/dcm/fly.py`, `python/dcm/llama_runtime.py` |
-| Semantic vision | Pinned Grounding-DINO supports bounded class detection; calibrated downward depth assessment is live-tested; Qwen2-VL-2B Q4 is checksum-pinned and load-tested, without DCM flight authority | `python/perception/vision.py`, `python/perception/landing_zone.py`, `scripts/setup-vlm-runtime` |
+| Semantic vision | Grounding-DINO supports bounded detection; calibrated downward depth assessment and Qwen2-VL qualitative `inspect_scene` are live-tested. Neither semantic boundary has flight authority. | `python/perception/vision.py`, `python/perception/landing_zone.py`, `python/perception/vlm.py` |
 | Dataset/evaluation system | Episodes, replay, corpus builder, live DCM provenance and offline decision evaluation implemented; Phase 12 promotion campaign remains open | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |

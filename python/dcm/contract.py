@@ -43,7 +43,7 @@ PROMPT_VERSION = "dcm-prompt-v2"
 PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
 # v2 adds goto and orbit. The version changes because a report scored
 # against a different action set is not comparable.
-VOCABULARY_VERSION = "dcm-actions-v3-vision"
+VOCABULARY_VERSION = "dcm-actions-v4-vision-inspection"
 
 # The deliberately narrow first vocabulary. It is much smaller than the Drone
 # API on purpose: a model may only ask for what has been explicitly modelled
@@ -104,6 +104,15 @@ ACTIONS = {
             "maximum_items": 16, "maximum_item_length": 64,
         },
     },
+    # Qualitative visual interpretation is a separate inspection boundary. It
+    # accepts a short question, never a command, coordinate, or flight target.
+    # Its executor has no Drone API or MAVLink access.
+    "inspect_scene": {
+        "question": {
+            "kind": "text", "required": True, "minimum_length": 1,
+            "maximum_length": 240,
+        },
+    },
     # This is evidence gathering only. It is deliberately separate from a
     # land command: a DCM can inspect a calibrated terrain source but cannot
     # turn that assessment into a flight action or bypass landing guardrails.
@@ -111,7 +120,9 @@ ACTIONS = {
 }
 
 ALLOWED_ACTIONS = tuple(ACTIONS)
-FLIGHT_ACTIONS = frozenset(ACTIONS) - {"none", "detect", "assess_landing_zone"}
+FLIGHT_ACTIONS = frozenset(ACTIONS) - {
+    "none", "detect", "inspect_scene", "assess_landing_zone",
+}
 
 # Observation age limits. The perception limit matches the ObstacleMap expiry
 # in perception/obstacle_map/obstacle_map.hpp; if that default changes, this
@@ -167,6 +178,9 @@ def _describe_bounds(spec):
     if spec["kind"] == "class_list":
         return (f"array of {spec['minimum_items']}..{spec['maximum_items']} "
                 f"class-name strings (each <= {spec['maximum_item_length']} chars)")
+    if spec["kind"] == "text":
+        return (f"text of {spec['minimum_length']}..{spec['maximum_length']} "
+                "characters")
     kind = "integer" if spec["kind"] == "integer" else "number"
     return (f"{kind} in [{spec['minimum']}, {spec['maximum']}]"
             + ("" if spec["required"] else ", optional"))
@@ -192,6 +206,16 @@ def _check_value(value, spec):
             if compact in normalized:
                 return "must not contain duplicate class names"
             normalized.append(compact)
+        return None
+    if spec["kind"] == "text":
+        if not isinstance(value, str):
+            return "must be text"
+        compact = " ".join(value.strip().split())
+        if value != compact:
+            return "must not have leading, trailing, or repeated whitespace"
+        if not spec["minimum_length"] <= len(value) <= spec["maximum_length"]:
+            return (f"must contain {spec['minimum_length']}.."
+                    f"{spec['maximum_length']} characters")
         return None
     if spec["kind"] == "integer":
         # `type(...) is not int` rather than isinstance: bool is a subclass of
