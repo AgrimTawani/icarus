@@ -977,7 +977,8 @@ evaluations/<evaluation-id>/
       `REASON_CODE_BATTERY_BELOW_THRESHOLD` and replayed successfully.
 - [x] Rejected unsafe mission (V1 Drone API acceptance rejects the out-of-
       geofence destination with the machine-readable geofence reason).
-- [ ] DCM timeout or crash.
+- [ ] DCM timeout or crash (live timeout-injection acceptance client added;
+      retained simulator evidence is still required before closing this item).
 
 ### 12.3 Regression policy
 
