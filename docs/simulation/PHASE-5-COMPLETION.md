@@ -88,6 +88,9 @@ Evidence:
 - `logs/simulation/scenario_wind_strong_20260921T061452_f0e451/` — the
   fixed-seed 5 m/s regression passed at 0.953× real time, with 0.097 m maximum
   drift and 2.84° maximum tilt.
+- `logs/simulation/scenario_wind_gusting_20260921T061830_db80c7/` — the
+  fixed-seed 3 m/s, 60% gust case passed at 0.959× real time, with 0.224 m
+  maximum drift and 8.59° maximum tilt.
 - `logs/simulation/scenario_rejection_20260912T025149_19fe8c.json`
 
 The 5 m/s `wind_strong` world remains a severe deterministic stress case. A

@@ -967,11 +967,17 @@ evaluations/<evaluation-id>/
 - [x] Light and strong wind. The light-wind acceptance and the 2026-09-21
       fixed-seed 5 m/s `wind_strong` regression both met their unchanged
       scenario envelopes; see `PHASE-12-REGRESSION-POLICY.md`.
-- [ ] Gusts.
-- [ ] Static obstacles.
+- [x] Gusts. The fixed-seed 3 m/s, 60% `wind_gusting` case passed on
+      2026-09-21 at 0.224 m maximum drift and 8.59° maximum tilt, within its
+      unchanged 0.75 m / 18° envelope.
+- [x] Static obstacles. The headless Phase 9 stress gate reached its planned
+      destination around live walls, buildings and trees with zero ground-truth
+      collisions and 1.606 m minimum clearance.
 - [ ] Narrow route.
-- [ ] GPS degradation.
-- [ ] Sensor dropout.
+- [x] GPS degradation. The same live Phase 9 stress gate used the committed
+      GPS position/velocity-noise profile while completing its safe detour.
+- [x] Sensor dropout. The live Phase 9 LiDAR interruption safety-aborted its
+      active action, commanded BRAKE, recovered perception and then landed.
 - [x] MAVLink delay and loss (simulator-only gateway-path fault episodes are
       retained and replay-verified; see `PHASE-12-REGRESSION-POLICY.md`).
 - [x] Low battery. `adverse_combined` initial SOC reaches the simulator-only
