@@ -81,9 +81,11 @@ The Drone API goal completed through a local-planner safe detour and landed,
 but independent Gazebo truth measured 0.367 m minimum clearance where the
 route requires 1.0 m. Episode `20260921T062649_f055f5e86229` sealed with the
 truthful `failed` outcome, retained 690 records, and replayed all four C++
-guardrail decisions successfully. This is a planner-clearance calibration gap,
-not evidence that the narrow-route gate passed; do not reduce the route's
-clearance requirement to make it green.
+guardrail decisions successfully. Investigation found that the former endpoint
+could only offer 0.65 m vehicle-envelope clearance from `route_box`; it was a
+scenario-definition contradiction, not proof that the planner may violate its
+clearance policy. The endpoint was corrected while retaining the 1.0 m
+requirement, and the gate remains open until the corrected live route passes.
 
 The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly

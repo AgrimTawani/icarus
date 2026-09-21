@@ -1,10 +1,15 @@
 """Structural contract checks for the narrow-route acceptance client."""
 
 from pathlib import Path
+import sys
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts/simulation"))
+
+from scenario_config import load_scenario
+from score_phase5_trajectory import point_obstacle_clearance
 
 
 class NarrowRouteAcceptanceTest(unittest.TestCase):
@@ -17,6 +22,17 @@ class NarrowRouteAcceptanceTest(unittest.TestCase):
         self.assertIn("safe detour", source)
         self.assertIn("client.episode_outcome", source)
         self.assertNotIn("pymavlink", source)
+
+    def test_narrow_route_goal_satisfies_its_declared_vehicle_clearance(self):
+        _, scenario = load_scenario("obstacle_course")
+        route = next(item for item in scenario["ground_truth"]["routes"]
+                     if item["name"] == "narrow")
+        goal = route["waypoints_enu_m"][-1]
+        clearance = min(
+            point_obstacle_clearance(goal, obstacle) - 0.35
+            for obstacle in scenario["obstacles"]
+        )
+        self.assertGreaterEqual(clearance, route["clearance_m"])
 
 
 if __name__ == "__main__":

@@ -975,8 +975,11 @@ evaluations/<evaluation-id>/
       collisions and 1.606 m minimum clearance.
 - [ ] Narrow route. A real fixed-seed traversal reached its endpoint through a
       local-planner detour without collision, but ground truth measured only
-      0.367 m clearance against the 1.0 m route requirement. The failed
-      episode is retained and replay-verified; do not lower this requirement.
+      0.367 m clearance against the 1.0 m route requirement. Investigation
+      found that the former endpoint was itself incompatible with that
+      requirement; the endpoint was corrected without lowering the threshold.
+      The failed episode is retained and replay-verified; rerun the corrected
+      route before checking this item.
 - [x] GPS degradation. The same live Phase 9 stress gate used the committed
       GPS position/velocity-noise profile while completing its safe detour.
 - [x] Sensor dropout. The live Phase 9 LiDAR interruption safety-aborted its
