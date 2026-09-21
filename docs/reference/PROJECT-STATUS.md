@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 ## Executive Summary
 
@@ -47,6 +47,35 @@ is yet exposed to the DCM and physical depth calibration remains open.
 | Real hardware integration | Not started | deferred Phase 13 |
 
 ## Latest Verified Simulation Results
+
+### Operator-run end-to-end DCM checks — 2026-09-21/22
+
+- The Phase 12 scripted golden run passed in the empty `golden_run` world:
+  takeoff to 5 m, fly the fixed route, return home, land, seal and replay. Its
+  episode is `20260921T232645_de3f2d70ae89`.
+- The local Qwen approval-mode path completed a small live mission after each
+  proposed action was explicitly approved: arm, take off to 3 m, hold five
+  seconds, then land. Episode `20260921T233123_dd67d27a57f8` completed and
+  passed the strict Phase 10 replay gate. This verifies the complete
+  simulator -> DCM -> typed Drone API -> guardrails -> executor -> SITL loop
+  in approval mode; it is not evidence for unattended promotion.
+- A prior attempt (`20260921T232955_63f9ed79c86a`) recorded an inconsistency:
+  Arm returned `SUCCEEDED`, but the immediately following Takeoff was rejected
+  as unarmed. The episode is sealed and replays deterministically. It is a
+  retained simulator/API state-synchronization observation, not a passed flight
+  result and has deliberately not been masked or fixed during this test review.
+- In an obstacle-world approval test, Qwen requested an orbit whose target
+  intersected the clearance-inflated obstacle map. The safety layer aborted
+  that orbit; Qwen then requested a safe-detour `goto` and landed. Episode
+  `20260921T233529_6654203b2abc` passed integrity and guardrail replay, but its
+  mission outcome is correctly **failed** because the requested orbit was not
+  completed. This is safety/recovery evidence, not orbit-mission success.
+- Interactive semantic inspection is integrated into the DCM contract, but the
+  laptop's 6 GB GPU could not host Gazebo, the Qwen flight runtime and either
+  Grounding-DINO or Qwen2-VL together. Both semantic calls failed safely with
+  CUDA out-of-memory and no flight action. The current laptop requires a
+  CPU/offload scheduling policy for combined interactive vision tests, or a
+  larger cloud/onboard GPU.
 
 - The component-derived/single-sensor-model regression passed five consecutive
   flights with 0.967–0.984 real-time factor and clean teardown.
