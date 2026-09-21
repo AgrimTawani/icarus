@@ -81,8 +81,10 @@ def main() -> int:
         goto = client.action_api.Goto(
             action_pb2.GotoRequest(
                 context=client.context("phase12:narrow-goto"),
+                # Route ground truth is Gazebo ENU (east, north, up); the
+                # Drone API destination is local NED (north, east, down).
                 destination=state_pb2.Position(local_ned=state_pb2.LocalPositionNed(
-                    origin_id="home", north_m=target[0], east_m=target[1], down_m=-target[2])),
+                    origin_id="home", north_m=target[1], east_m=target[0], down_m=-target[2])),
                 acceptance_radius_m=1.0,
                 limits=action_pb2.ActionLimits(maximum_ground_speed_mps=3.0,
                                                 execution_timeout_ms=120_000,

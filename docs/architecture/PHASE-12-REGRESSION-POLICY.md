@@ -76,6 +76,15 @@ widen limits or lower the operating limit to turn a future failure into a pass.
 As-built vehicle/aerodynamic calibration remains necessary before digital-twin
 or hardware claims.
 
+The committed `obstacle_course` narrow route was exercised live on 2026-09-21.
+The Drone API goal completed through a local-planner safe detour and landed,
+but independent Gazebo truth measured 0.367 m minimum clearance where the
+route requires 1.0 m. Episode `20260921T062649_f055f5e86229` sealed with the
+truthful `failed` outcome, retained 690 records, and replayed all four C++
+guardrail decisions successfully. This is a planner-clearance calibration gap,
+not evidence that the narrow-route gate passed; do not reduce the route's
+clearance requirement to make it green.
+
 The public-sensor scheduler still injects delay/dropout only at the sensor
 consumer boundary. Separately, `mavlink_fault_schedule` drives an explicitly
 simulator-only control-path adapter in `ArdupilotGateway`: `loss` black-holes

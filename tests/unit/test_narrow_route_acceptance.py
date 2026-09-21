@@ -12,6 +12,7 @@ class NarrowRouteAcceptanceTest(unittest.TestCase):
         source = (ROOT / "scripts/autonomy/run_narrow_route_acceptance.py").read_text()
         self.assertIn('session.get("scenario") != "obstacle_course"', source)
         self.assertIn('score(scenario, trajectory, "narrow"', source)
+        self.assertIn('north_m=target[1], east_m=target[0], down_m=-target[2]', source)
         self.assertIn("client.action_api.Goto", source)
         self.assertIn("safe detour", source)
         self.assertIn("client.episode_outcome", source)

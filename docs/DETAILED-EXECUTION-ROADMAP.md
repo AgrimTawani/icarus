@@ -973,7 +973,10 @@ evaluations/<evaluation-id>/
 - [x] Static obstacles. The headless Phase 9 stress gate reached its planned
       destination around live walls, buildings and trees with zero ground-truth
       collisions and 1.606 m minimum clearance.
-- [ ] Narrow route.
+- [ ] Narrow route. A real fixed-seed traversal reached its endpoint through a
+      local-planner detour without collision, but ground truth measured only
+      0.367 m clearance against the 1.0 m route requirement. The failed
+      episode is retained and replay-verified; do not lower this requirement.
 - [x] GPS degradation. The same live Phase 9 stress gate used the committed
       GPS position/velocity-noise profile while completing its safe detour.
 - [x] Sensor dropout. The live Phase 9 LiDAR interruption safety-aborted its
