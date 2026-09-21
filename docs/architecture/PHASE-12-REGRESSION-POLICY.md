@@ -68,6 +68,15 @@ hold/land decision. The retained comparison is
 `logs/dcm/comparison/20260921T064323/comparison.json`; it reinforces, rather
 than changes, the existing non-promotion decision.
 
+The subsequent `dcm-prompt-v4-state-sequence` experiment used the same 11
+sealed episodes, three repeats, Qwen3-4B Q5 artifact and unchanged 5 s
+deadline. It removed both observed timeouts and all 14 unarmed-takeoff
+guardrail rejections, and made every recorded arm situation agree. It still
+landed correctly in only 7 of 10 distinct terminal situations, so promotion
+remains failed. Q4 under the same prompt reintroduced a timeout and lower
+agreement. The retained reports are `logs/dcm/evaluation/20260921T123223/`
+(Q5) and `logs/dcm/evaluation/20260921T123756/` (Q4). No threshold changed.
+
 ## Episode retention
 
 Every `MissionClient` seals its episode in `close()`. The live DCM console sets

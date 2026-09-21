@@ -37,7 +37,7 @@ HISTORY_LIMIT = 12
 # v2 grounds every decision in the current physical aircraft state rather than
 # presenting the payload as an abstract JSON exercise.  It is a model-visible
 # change and must therefore travel with every report.
-PROMPT_VERSION = "dcm-prompt-v2"
+PROMPT_VERSION = "dcm-prompt-v4-state-sequence"
 # The optional ending variant adds extra terminal emphasis above the base v2
 # embodiment guidance. It remains separately versioned for fair comparison.
 PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
@@ -366,6 +366,15 @@ Rules:
 - Choose exactly one action from the list above.
 - "arguments" is always an object. Use {{}} when the action takes no arguments.
 - Never invent an action, an argument, or a unit.
+- Respect the present physical flight state, even if the mission text asks for
+  something else: a disarmed aircraft on the ground must arm before takeoff;
+  takeoff is only appropriate when it is armed and on the ground; an airborne
+  aircraft must never arm or take off again. Navigation and landing are only
+  appropriate after takeoff. Do not use a prohibited action merely because it
+  appears in the allowed vocabulary.
+- If the aircraft is airborne and safety/perception is uncertain, choose hold
+  or return_home rather than another takeoff. If it is landed and a completed
+  mission has no further safe task, choose none.
 - If no action is appropriate or the situation is unclear, reply with \
 {{"action":"none","arguments":{{}}}}.{ending}\
 """
