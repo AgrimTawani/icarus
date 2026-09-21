@@ -32,6 +32,20 @@ class LandingZoneTests(unittest.TestCase):
         self.assertFalse(result["suitable"])
         self.assertGreater(result["roughness_m"], 0.04)
 
+    def test_footprint_radius_changes_the_samples_considered(self):
+        depth = flat_depth()
+        # A rough feature is away from the centre. A small airframe footprint
+        # does not include it; a larger required footprint does.
+        depth[35:45, 61:69] += 0.35
+        small = assess_landing_zone(
+            depth, optical_axis_body_frd=(0, 0, 1), vehicle_radius_m=0.5,
+            required_clearance_m=0.0)
+        large = assess_landing_zone(
+            depth, optical_axis_body_frd=(0, 0, 1), vehicle_radius_m=1.5,
+            required_clearance_m=0.0)
+        self.assertTrue(small["suitable"])
+        self.assertFalse(large["suitable"])
+
     def test_invalid_depth_does_not_become_suitable(self):
         depth = flat_depth()
         depth[:] = math.nan

@@ -93,20 +93,29 @@ def assess_landing_zone(
         }
 
     depth = np.asarray(depth_m, dtype=np.float64)
-    points, valid = _camera_points(depth, horizontal_fov_deg, vertical_fov_deg)
-    coverage = float(valid.mean())
-    # The central image region is the initial touchdown footprint.  Using all
-    # pixels makes a nearby wall or a horizon dominate a local ground estimate.
+    _, valid = _camera_points(depth, horizontal_fov_deg, vertical_fov_deg)
+    # Select the physical touchdown footprint, not a fixed fraction of the
+    # image.  Its radius includes vehicle body and obstacle clearance, so a
+    # result cannot silently assess a surface too small for the airframe.
+    footprint_radius_m = vehicle_radius_m + required_clearance_m
     height, width = depth.shape
-    central = np.zeros_like(valid)
-    central[height // 4:3 * height // 4, width // 4:3 * width // 4] = True
-    points, _ = _camera_points(np.where(central, depth, np.nan),
+    reference_range_m = float(np.median(depth[valid])) if valid.any() else 1.0
+    fx = width / (2.0 * math.tan(math.radians(horizontal_fov_deg) / 2.0))
+    fy = height / (2.0 * math.tan(math.radians(vertical_fov_deg) / 2.0))
+    rows, cols = np.indices(depth.shape, dtype=np.float64)
+    nominal_x = (cols - (width - 1) / 2.0) * reference_range_m / fx
+    nominal_y = (rows - (height - 1) / 2.0) * reference_range_m / fy
+    footprint_pixels = np.hypot(nominal_x, nominal_y) <= footprint_radius_m
+    footprint_valid = valid & footprint_pixels
+    coverage = float(footprint_valid.sum()) / max(1, int(footprint_pixels.sum()))
+    points, _ = _camera_points(np.where(footprint_valid, depth, np.nan),
                                horizontal_fov_deg, vertical_fov_deg)
     if len(points) < 128:
         return base | {
             "assessable": True, "suitable": False,
             "reason": "insufficient valid depth in touchdown footprint",
-            "quality": 0.0, "valid_coverage": round(coverage, 5),
+            "quality": 0.0, "footprint_coverage": round(coverage, 5),
+            "footprint_radius_m": round(footprint_radius_m, 5),
         }
 
     # Plane z = ax + by + c in optical coordinates.  For a downward camera,
@@ -132,7 +141,8 @@ def assess_landing_zone(
         "suitable": suitable,
         "reason": reason,
         "quality": quality,
-        "valid_coverage": round(coverage, 5),
+        "footprint_coverage": round(coverage, 5),
+        "footprint_radius_m": round(footprint_radius_m, 5),
         "slope_deg": round(slope_deg, 5),
         "roughness_m": round(roughness, 5),
         "sample_count": int(len(points)),
