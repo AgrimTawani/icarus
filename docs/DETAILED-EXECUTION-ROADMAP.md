@@ -953,7 +953,10 @@ evaluations/<evaluation-id>/
 
 ### Phase 11 exit gate
 
-- [ ] DCM passes observe-mode evaluation on unseen missions.
+- [ ] DCM passes observe-mode evaluation on unseen missions. The frozen
+      `config/evaluation/dcm-v1-held-out.json` split is implemented and
+      enforced at training export; current Qwen evaluation still fails its
+      landing criterion.
 - [x] Approval-mode actions remain inside the safety policy.
 - [x] Autonomous simulation never bypasses the deterministic executor.
 - [x] Qwen and Llama candidates can be evaluated without changing simulator or
@@ -1092,7 +1095,9 @@ format, and held-out evaluation suite are stable.
 - [ ] Balance ordinary, recovery, and adverse-condition cases.
 - [ ] Deduplicate near-identical trajectories.
 - [ ] Separate by scenario family before train/validation/test splitting.
-- [ ] Freeze the held-out test set before training.
+- [x] Freeze the held-out test set before training. The versioned
+      `config/evaluation/dcm-v1-held-out.json` split is enforced by the
+      candidate exporter in addition to evaluation-report provenance.
 
 ### 14.3 Training progression
 

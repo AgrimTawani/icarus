@@ -5,14 +5,26 @@ import json
 from pathlib import Path
 
 from python.dataset_tools.replay import TERMINAL, replay
-from python.dcm.held_out import known_evaluation_episode_ids
+from python.dcm.held_out import (
+    frozen_held_out_episode_ids,
+    known_evaluation_episode_ids,
+)
+
+
+def protected_evaluation_episode_ids():
+    """Keep both dynamic evaluation provenance and the frozen split protected.
+
+    Kept locally rather than importing the composed helper so existing callers
+    and tests that substitute the dynamic registry retain their narrow seam.
+    """
+    return known_evaluation_episode_ids() | frozen_held_out_episode_ids()
 
 
 def candidates(episode, evaluation_episode_ids=None):
     replay(episode)
     manifest = json.loads((episode / "manifest.json").read_text())
     if evaluation_episode_ids is None:
-        evaluation_episode_ids = known_evaluation_episode_ids()
+        evaluation_episode_ids = protected_evaluation_episode_ids()
     # The substring check is kept as a second, independent signal: a mission
     # explicitly named as an acceptance run is flagged even if it was never
     # actually passed through evaluate(), such as before this registry

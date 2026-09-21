@@ -12,7 +12,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from python.dcm.held_out import known_evaluation_episode_ids
+from python.dcm.held_out import (
+    frozen_held_out_episode_ids,
+    known_evaluation_episode_ids,
+    protected_evaluation_episode_ids,
+)
 
 
 def write_report(root, name, episode_ids):
@@ -57,6 +61,29 @@ class RegistryTests(unittest.TestCase):
             report_dir.mkdir()
             (report_dir / "evaluation.json").write_text(json.dumps({}))
             self.assertEqual(known_evaluation_episode_ids(root), set())
+
+    def test_frozen_split_is_added_even_before_an_evaluation_runs(self):
+        with tempfile.TemporaryDirectory() as root:
+            split = Path(root) / "split.json"
+            split.write_text(json.dumps({
+                "schema": "icarus.dcm.held-out-split.v1",
+                "training_episode_ids": ["train-a"],
+                "held_out_episode_ids": ["held-a"],
+            }))
+            self.assertEqual(frozen_held_out_episode_ids(split), {"held-a"})
+            self.assertEqual(protected_evaluation_episode_ids(
+                Path(root) / "reports", split), {"held-a"})
+
+    def test_overlapping_frozen_split_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            split = Path(root) / "split.json"
+            split.write_text(json.dumps({
+                "schema": "icarus.dcm.held-out-split.v1",
+                "training_episode_ids": ["same"],
+                "held_out_episode_ids": ["same"],
+            }))
+            with self.assertRaisesRegex(ValueError, "both training"):
+                frozen_held_out_episode_ids(split)
 
 
 if __name__ == "__main__":

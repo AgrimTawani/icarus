@@ -25,6 +25,8 @@ They expose the current model failures; they do not hide them.
 
 The authoritative promotion thresholds and exact Phase 12 fault episode IDs are
 in [`architecture/PHASE-12-REGRESSION-POLICY.md`](architecture/PHASE-12-REGRESSION-POLICY.md).
+The ordered operator review is in
+[`guides/PHASE-10-12-MANUAL-REVIEW.md`](guides/PHASE-10-12-MANUAL-REVIEW.md).
 
 ## What is verified now
 

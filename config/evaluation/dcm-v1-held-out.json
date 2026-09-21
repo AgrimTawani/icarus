@@ -1,0 +1,19 @@
+{
+  "schema": "icarus.dcm.held-out-split.v1",
+  "description": "Frozen pre-training DCM evaluation corpus. These episode IDs are evaluation-only and must never enter a training export.",
+  "split_id": "dcm-v1-held-out-20260921",
+  "training_episode_ids": [],
+  "held_out_episode_ids": [
+    "20260919T193415_76ebf668eff0",
+    "20260919T193441_4ea77729b79c",
+    "20260919T193808_5866945e237f",
+    "20260919T194115_6626de1c0e21",
+    "20260919T223524_a9b368570000",
+    "20260919T225820_94e39230e8a2",
+    "20260919T225957_867ff224b795",
+    "20260919T230139_5003ef1ca324",
+    "20260919T230313_0fb7768f14c9",
+    "20260919T230455_ccc72b2fcacd",
+    "20260921T022242_1ca0925b2159"
+  ]
+}
