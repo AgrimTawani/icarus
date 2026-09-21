@@ -29,6 +29,7 @@ LOG_FILE="${LOG_DIR}/vision-setup-$(date +%Y%m%dT%H%M%S).log"
 
 VISION_DIR="${VISION_DIR:-$HOME/models/vision}"
 LLAMA_DIR="${LLAMA_DIR:-$HOME/models/llama}"
+source "${PROJECT_ROOT}/scripts/lib/model_artifacts.sh"
 
 DETECTOR_CHOICE="tiny"
 SKIP_LLAMA=0
@@ -149,7 +150,7 @@ DETECTOR_SHA=$(find "${DETECTOR_PATH}" -type f \( -name '*.safetensors' -o -name
   | sha256sum | cut -d' ' -f1)
 LLAMA_SHA=""
 if [[ -f "${LLAMA_DIR}/${LLAMA_FILE}" ]]; then
-  LLAMA_SHA=$(sha256sum "${LLAMA_DIR}/${LLAMA_FILE}" | cut -d' ' -f1)
+  LLAMA_SHA=$(icarus_sha256 "${LLAMA_DIR}/${LLAMA_FILE}")
 fi
 MANIFEST="${VISION_DIR}/MANIFEST.json"
 LOCK_FILE_PATH="${PROJECT_ROOT}/config/dependencies/third_party.lock.json"
@@ -179,17 +180,11 @@ cat >"${MANIFEST}" <<JSON
     "runtime": "llama_cpp"
   },
   "llama_cpp_revision": "${LLAMA_CPP_REV}",
-  "artifacts": [
-    {
-      "role": "second_family",
-      "family": "llama",
-      "path": "${LLAMA_DIR}/${LLAMA_FILE}",
-      "quantization": "q4_k_m",
-      "sha256": "${LLAMA_SHA}"
-    }
-  ]
+  "artifacts": []
 }
 JSON
+icarus_manifest_upsert "${MANIFEST}" \
+  "{\"role\":\"second_family\",\"family\":\"llama\",\"path\":\"${LLAMA_DIR}/${LLAMA_FILE}\",\"quantization\":\"q4_k_m\",\"sha256\":\"${LLAMA_SHA}\"}"
 note "detector ${DETECTOR_SHA:0:32}..."
 [[ -n "${LLAMA_SHA}" ]] && note "llama    ${LLAMA_SHA:0:32}..."
 ok "manifest written"

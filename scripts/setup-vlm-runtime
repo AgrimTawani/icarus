@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Install and pin the qualitative visual model.  It is deliberately not wired
+# into the DCM action contract: this script only establishes a reproducible
+# local artifact and validates llama.cpp multimodal loading.
+#
+# Usage: ./scripts/setup-vlm-runtime
+
+set -euo pipefail
+
+PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV="${PROJECT_ROOT}/.venv"
+LOG_DIR="${PROJECT_ROOT}/logs/model-runtime"
+LOG_FILE="${LOG_DIR}/vlm-setup-$(date +%Y%m%dT%H%M%S).log"
+VLM_DIR="${VLM_DIR:-$HOME/models/vlm}"
+VISION_MANIFEST="${VISION_MANIFEST:-$HOME/models/vision/MANIFEST.json}"
+LLAMA_CLI="${PROJECT_ROOT}/third_party/llama.cpp/build/bin/llama-cli"
+source "${PROJECT_ROOT}/scripts/lib/model_artifacts.sh"
+
+# Verified from ggml-org/Qwen2-VL-2B-Instruct-GGUF on 2026-09-21. Pinning the
+# source revision and both LFS SHA256 values makes a later upstream change fail
+# closed rather than silently changing evaluation provenance.
+HF_REPO="ggml-org/Qwen2-VL-2B-Instruct-GGUF"
+HF_REVISION="bb307c036e8a1ed7b663bbd0c35b41c4c9294cfd"
+MODEL_FILE="Qwen2-VL-2B-Instruct-Q4_K_M.gguf"
+MMPROJ_FILE="mmproj-Qwen2-VL-2B-Instruct-f16.gguf"
+MODEL_SHA256="5745685d2e607a82a0696c1118e56a2a1ae0901da450fd9cd4f161c6b62867d7"
+MMPROJ_SHA256="ecb20cabcdd8dbc277de06bd6eb980aeb2adfaaba9f199a434e328d205675d03"
+
+TOTAL_STEPS=5
+STEP=0
+declare -a RESULTS=()
+START_ALL=$(date +%s)
+C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'
+C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_YELLOW=$'\033[33m'; C_BLUE=$'\033[34m'
+
+log() { printf '%s\n' "$*" >>"${LOG_FILE}"; }
+note() { printf '      %s%s%s\n' "${C_DIM}" "$*" "${C_RESET}"; log "  $*"; }
+begin_step() {
+  STEP=$((STEP + 1)); STEP_NAME="$1"; STEP_START=$(date +%s)
+  printf '\n%s[%d/%d]%s %s%s%s\n' "${C_BLUE}" "${STEP}" "${TOTAL_STEPS}" \
+    "${C_RESET}" "${C_BOLD}" "${STEP_NAME}" "${C_RESET}"
+  log "=== [${STEP}/${TOTAL_STEPS}] ${STEP_NAME} ==="
+}
+ok() { local elapsed=$(( $(date +%s) - STEP_START ));
+       printf '      %s[ok]%s %s %s(%ss)%s\n' "${C_GREEN}" "${C_RESET}" "$1" "${C_DIM}" "${elapsed}" "${C_RESET}";
+       RESULTS+=("ok|${STEP_NAME}|$1"); log "[ok] $1"; }
+skipped() { printf '      %s[skip]%s %s\n' "${C_YELLOW}" "${C_RESET}" "$1";
+            RESULTS+=("skip|${STEP_NAME}|$1"); log "[skip] $1"; }
+summary() {
+  local total=$(( $(date +%s) - START_ALL )) row status name detail mark colour
+  printf '\n%s=== Summary ===%s\n' "${C_BOLD}" "${C_RESET}"
+  for row in "${RESULTS[@]}"; do
+    IFS='|' read -r status name detail <<<"${row}"
+    case "${status}" in ok) mark='v'; colour="${C_GREEN}";; skip) mark='-'; colour="${C_YELLOW}";; *) mark='x'; colour="${C_RED}";; esac
+    printf '  %s%s%s  %-30s %s%s%s\n' "${colour}" "${mark}" "${C_RESET}" "${name}" "${C_DIM}" "${detail}" "${C_RESET}"
+  done
+  printf '\n  Elapsed: %dm %ds\n  Log: %s\n' $((total / 60)) $((total % 60)) "${LOG_FILE}"
+}
+fail() { printf '      %s[FAIL]%s %s\n' "${C_RED}" "${C_RESET}" "$1"; RESULTS+=("FAIL|${STEP_NAME}|$1"); log "[FAIL] $1"; summary; exit 1; }
+
+mkdir -p "${LOG_DIR}" "${VLM_DIR}"
+: >"${LOG_FILE}"
+printf '%sIcarus qualitative VLM setup%s\n' "${C_BOLD}" "${C_RESET}"
+printf '%smodel: %s@%s%s\n' "${C_DIM}" "${HF_REPO}" "${HF_REVISION:0:12}" "${C_RESET}"
+
+begin_step "Preflight checks"
+[[ -x "${VENV}/bin/hf" ]] || fail "hf CLI missing; run ./scripts/bootstrap --profile ml"
+[[ -x "${LLAMA_CLI}" ]] || fail "llama-cli missing; run ./scripts/setup-model-runtime"
+# Avoid a help|grep pipeline under pipefail: grep can finish before llama-cli
+# emits its full help text, which turns a successful capability check into an
+# unrelated SIGPIPE failure.
+LLAMA_HELP="$("${LLAMA_CLI}" --help 2>&1)"
+[[ "${LLAMA_HELP}" == *"--mmproj"* ]] || fail "pinned llama.cpp lacks multimodal projector support"
+[[ "${LLAMA_HELP}" == *"--image"* ]] || fail "pinned llama.cpp lacks image input support"
+DISK=$(df -BG --output=avail "${VLM_DIR}" | tail -1 | tr -dc '0-9')
+(( DISK >= 4 )) || fail "need >=4 GiB free, found ${DISK} GiB"
+note "disk free: ${DISK} GiB; multimodal flags available"
+ok "environment suitable"
+
+download_one() {
+  local file="$1" expected="$2" label="$3" path
+  path="${VLM_DIR}/${file}"
+  if [[ -f "${path}" ]] && [[ "$(icarus_sha256 "${path}")" == "${expected}" ]]; then
+    skipped "${label} already verified ($(du -h "${path}" | cut -f1))"
+    return
+  fi
+  rm -f -- "${path}"
+  note "downloading ${label}..."
+  "${VENV}/bin/hf" download "${HF_REPO}" "${file}" --revision "${HF_REVISION}" \
+    --local-dir "${VLM_DIR}" >>"${LOG_FILE}" 2>&1 || return 1
+  [[ -f "${path}" ]] && [[ "$(icarus_sha256 "${path}")" == "${expected}" ]]
+}
+
+begin_step "Download Qwen2-VL model (~1.0 GiB)"
+download_one "${MODEL_FILE}" "${MODEL_SHA256}" "Q4_K_M model" || fail "model download/checksum failed; see ${LOG_FILE}"
+ok "model checksum ${MODEL_SHA256:0:16}..."
+
+begin_step "Download multimodal projector (~1.3 GiB)"
+download_one "${MMPROJ_FILE}" "${MMPROJ_SHA256}" "f16 projector" || fail "projector download/checksum failed; see ${LOG_FILE}"
+ok "projector checksum ${MMPROJ_SHA256:0:16}..."
+
+begin_step "Register immutable provenance"
+artifact=$(printf '{"role":"vlm","family":"qwen2-vl","path":"%s","quantization":"q4_k_m","sha256":"%s","mmproj_path":"%s","mmproj_sha256":"%s","repository":"%s","revision":"%s","runtime":"llama_cpp"}' \
+  "${VLM_DIR}/${MODEL_FILE}" "${MODEL_SHA256}" "${VLM_DIR}/${MMPROJ_FILE}" "${MMPROJ_SHA256}" "${HF_REPO}" "${HF_REVISION}")
+metadata=$(printf '{"vlm":{"repository":"%s","revision":"%s","model_path":"%s","model_sha256":"%s","mmproj_path":"%s","mmproj_sha256":"%s","runtime":"llama_cpp"}}' \
+  "${HF_REPO}" "${HF_REVISION}" "${VLM_DIR}/${MODEL_FILE}" "${MODEL_SHA256}" "${VLM_DIR}/${MMPROJ_FILE}" "${MMPROJ_SHA256}")
+icarus_manifest_upsert "${VISION_MANIFEST}" "${artifact}" "${metadata}"
+ok "registered role vlm in ${VISION_MANIFEST}"
+
+begin_step "Load smoke test"
+temporary=$(mktemp -d)
+trap 'rm -rf -- "${temporary}"' EXIT
+# Binary PPM (P6); do not label raw RGB bytes as ASCII P3, which strict image
+# decoders correctly reject.
+printf 'P6\n1 1\n255\n\000\000\000' >"${temporary}/black.ppm"
+timeout 90 "${LLAMA_CLI}" -m "${VLM_DIR}/${MODEL_FILE}" --mmproj "${VLM_DIR}/${MMPROJ_FILE}" \
+  --image "${temporary}/black.ppm" -ngl 99 -c 512 --temp 0 -n 1 --single-turn \
+  -p 'Describe this image in one word.' >>"${LOG_FILE}" 2>&1 \
+  || fail "llama.cpp multimodal load test failed; see ${LOG_FILE}"
+ok "model and projector loaded with image input"
+
+summary
+printf '\n%sNext:%s the VLM is installed but has no DCM tool or flight authority.\n' "${C_BOLD}" "${C_RESET}"

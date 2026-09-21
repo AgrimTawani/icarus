@@ -873,8 +873,9 @@ model:
       The deterministic depth-plane analyzer, calibrated belly RGB-D source and
       Gazebo adapter are complete: headless evidence at
       `logs/landing-zone-validation/20260921T112534/assessment.json` accepted
-      a flat simulated footprint. The VLM remains pending installation and
-      load validation; neither visual result has flight authority.
+      a flat simulated footprint. Qwen2-VL-2B Q4 and its visual projector are
+      checksum-pinned and load-tested through llama.cpp, but qualitative VLM
+      interpretation remains unwired; neither visual result has flight authority.
 
 ### 11.4 Build the model evaluation harness
 

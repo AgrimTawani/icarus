@@ -17,8 +17,9 @@ simulator-only autonomous mode), but the evaluated language models do **not**
 meet the defined unattended-flight threshold. Phase 12 now has replay-verified
 simulator MAVLink loss and latency evidence; the full scenario campaign and
 model-promotion gate are still open. Bounded semantic detection and a
-conservative depth landing assessment are implemented; a VLM and a calibrated
-downward depth source remain open.
+conservative downward depth landing assessment are implemented. Qwen2-VL-2B
+Q4 and its f16 visual projector are installed and load-tested, but no VLM tool
+is yet exposed to the DCM and physical depth calibration remains open.
 
 | Capability | State | Evidence or source |
 | --- | --- | --- |
@@ -40,7 +41,7 @@ downward depth source remain open.
 | Low-battery preflight gate | Simulator API path verified | Scenario SOC 35% rejects Arm at the typed C++ guardrail; physical battery integration remains deferred |
 | DCM timeout containment | Simulator API path verified | One live deadline was retained, made zero action calls, and replayed successfully |
 | DCM/model integration | Live chat, observe, approval and simulator-only autonomous paths exist; evaluated Qwen/Llama candidates fail promotion thresholds | `python/dcm/fly.py`, `python/dcm/llama_runtime.py` |
-| Semantic vision | Pinned Grounding-DINO supports bounded class detection; a footprint-aware depth analyzer safely refuses the current forward camera; VLM and calibrated downward-source landing geometry remain open | `python/perception/vision.py`, `python/perception/landing_zone.py` |
+| Semantic vision | Pinned Grounding-DINO supports bounded class detection; calibrated downward depth assessment is live-tested; Qwen2-VL-2B Q4 is checksum-pinned and load-tested, without DCM flight authority | `python/perception/vision.py`, `python/perception/landing_zone.py`, `scripts/setup-vlm-runtime` |
 | Dataset/evaluation system | Episodes, replay, corpus builder, live DCM provenance and offline decision evaluation implemented; Phase 12 promotion campaign remains open | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |
 | Real hardware integration | Not started | deferred Phase 13 |
