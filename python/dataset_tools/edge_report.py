@@ -1,11 +1,17 @@
 """Summarize a sealed edge-vision simulation episode without reading pixels."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 
 def _mean(values):
     return round(sum(values) / len(values), 3) if values else None
+
+
+def _asks_count_of(text, noun):
+    return bool(re.search(r"\bcount(?:\s+(?:the|a|an))?(?:\s+(?:number|amount))?(?:\s+of)?(?:\s+unique)?\s+"
+                          + re.escape(noun) + r"\b", text.lower()))
 
 
 def report(episode):
@@ -38,21 +44,29 @@ def report(episode):
     mission = missions[-1] if missions else {}
     mission_text = str(mission.get("mission", "")).lower()
     actions = mission.get("executed", [])
-    requested_person_count = ("person" in mission_text or "people" in mission_text) and "count" in mission_text
-    requested_building_count = "building" in mission_text and "count" in mission_text
-    has_person_detect = any(item.get("action") == "detect" and item.get("outcome") == "SUCCEEDED"
-                            and "person" in item.get("arguments", {}).get("classes", [])
-                            for item in actions)
-    semantic = mission.get("semantic_completion") or {"required": [], "satisfied": [], "reasons": []}
-    if requested_person_count and not has_person_detect:
+    requested_person_count = _asks_count_of(mission_text, "people") or _asks_count_of(mission_text, "person")
+    requested_building_count = _asks_count_of(mission_text, "building") or _asks_count_of(mission_text, "buildings")
+    person_detects = [item for item in actions if item.get("action") == "detect"
+                      and item.get("outcome") == "SUCCEEDED"
+                      and "person" in item.get("arguments", {}).get("classes", [])]
+    semantic = {"required": [], "satisfied": [], "reasons": []}
+    if requested_person_count:
         semantic["required"].append("unique_person_count")
-        semantic["reasons"].append("requested person count has no successful detect evidence")
-    if requested_person_count and observed != expected:
-        semantic["reasons"].append(f"person count is {observed!r}; expected {expected}")
+        if not person_detects:
+            semantic["reasons"].append("requested person count has no successful detect evidence")
+        else:
+            action_count = person_detects[-1].get("result", {}).get("unique_person_count")
+            if action_count == expected:
+                semantic["satisfied"].append("unique_person_count")
+            else:
+                semantic["reasons"].append(f"person count is {action_count!r}; expected {expected}")
+            if "orbit" in mission_text and actions.index(person_detects[-1]) < next(
+                    (index for index, item in enumerate(actions)
+                     if item.get("action") == "orbit" and item.get("outcome") == "SUCCEEDED"), len(actions)):
+                semantic["reasons"].append("requested person count was collected before the requested orbit")
     if requested_building_count:
         semantic["required"].append("visual_building_count")
-        semantic["reasons"].append(
-            "stock YOLO11n has no building class; use the committed north_building landmark")
+        semantic["reasons"].append("stock YOLO11n has no building class; use the committed north_building landmark")
     semantic["success"] = not semantic["reasons"]
     flight_success = all(item.get("outcome") == "SUCCEEDED" for item in actions)
     return {

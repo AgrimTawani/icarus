@@ -367,7 +367,10 @@ YOLO11n is capped at 640 px and 5 FPS; SmolVLM is a bounded qualitative
 question, rate-limited to five seconds and load/infer/release by default.
 The YOLO observer round-robins the forward and downward RGB-D feeds within
 that single total 5-FPS budget. Unique-person counting remains tied to the
-downward feed because cross-camera identity re-identification is not claimed.
+20-second observer window: it takes the largest same-frame person observation
+from one camera, never sums feeds, and does not claim cross-camera identity
+re-identification. The four actor targets are deliberately outside the
+building footprint; restart the simulator whenever the scenario changes.
 Neither vision component has flight authority. Stock YOLO11n cannot discover
 arbitrary buildings or safe rooftops, and landing safety remains deterministic
 depth/LiDAR/geometry.

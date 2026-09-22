@@ -14,10 +14,10 @@
     {"name": "north_tree_east", "type": "tree", "center_m": [8, 25, 0], "radius_m": 0.35, "height_m": 5, "canopy_radius_m": 2, "canopy_collision": "enabled"}
   ],
   "targets": [
-    {"id": "person_01", "class": "person", "center_m": [-3, 15, 0], "height_m": 1.8, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
-    {"id": "person_02", "class": "person", "center_m": [3, 17, 0], "height_m": 1.7, "radius_m": 0.28, "animated": true, "visual_asset": "gazebo_actor_v1"},
-    {"id": "person_03", "class": "person", "center_m": [-3, 22, 0], "height_m": 1.75, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
-    {"id": "person_04", "class": "person", "center_m": [3, 22, 0], "height_m": 1.65, "radius_m": 0.28, "animated": true, "visual_asset": "gazebo_actor_v1"}
+    {"id": "person_01", "class": "person", "center_m": [-5, 12, 0], "height_m": 1.8, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
+    {"id": "person_02", "class": "person", "center_m": [-1.7, 12, 0], "height_m": 1.7, "radius_m": 0.28, "animated": true, "visual_asset": "gazebo_actor_v1"},
+    {"id": "person_03", "class": "person", "center_m": [1.7, 12, 0], "height_m": 1.75, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
+    {"id": "person_04", "class": "person", "center_m": [5, 12, 0], "height_m": 1.65, "radius_m": 0.28, "animated": true, "visual_asset": "gazebo_actor_v1"}
   ],
   "edge_profile": {"name": "edge-vision", "yolo_image_size": 640, "yolo_max_fps": 5, "vlm_interval_s": 5, "simulation_only": true},
   "sensor_profile": "physical",

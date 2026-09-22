@@ -379,6 +379,8 @@ Rules:
   true and the mission asks for a person count, call ``detect`` with
   ``["person"]`` before returning home or landing. A known landmark is a
   committed navigation reference, not a visual detector class.
+- Honor the operator's explicit task order. If a mission says to orbit and
+  then count people, complete the orbit before requesting ``detect``.
 - If no action is appropriate or the situation is unclear, reply with \
 {{"action":"none","arguments":{{}}}}.{ending}\
 """

@@ -72,10 +72,12 @@ grid. It sends no vehicle command and retains no recording.
 
 The continuous observer round-robins both feeds at a **combined** maximum of
 5 FPS (2.5 FPS per feed with two cameras). Each feed has its own tracker. The
-downward feed is the sole unique-count source: V1 deliberately does not claim
-cross-camera identity re-identification, so it does not add counts from both
-views. Observer evidence includes camera identity and whether a frame is
-count-eligible; pixels are never written into episode logs.
+forward camera contributes detection coverage but never claims a cross-frame
+unique count because vehicle motion defeats simple image-IoU identity. A DCM
+person-count action collects the declared 20-second observer window and uses
+the largest same-frame person observation from one camera. It never sums feeds
+or claims cross-camera re-identification. Observer evidence includes camera
+identity; pixels are never written into episode logs.
 
 SmolVLM accepts one bounded qualitative question, one image at a time, at most
 once every five seconds. It loads, infers, and releases CUDA memory by default.
@@ -141,6 +143,14 @@ PYTHONPATH="$PWD" ./.venv/bin/python -m pytest -q \
   tests/unit/test_edge_vision.py tests/unit/test_edge_report.py \
   tests/unit/test_edge_scenario_integration.py tests/unit/test_scenario_config.py
 # Result: 13 passed
+
+# Post-run regression checks for task ordering, count-window aggregation, and
+# non-overlapping scenario targets
+PYTHONPATH="$PWD" ./.venv/bin/python -m pytest -q \
+  tests/unit/test_edge_vision.py tests/unit/test_edge_report.py \
+  tests/unit/test_edge_scenario_integration.py tests/unit/test_dcm_contract.py \
+  tests/unit/test_dcm_fly.py
+# Result: 84 passed, 137 subtests passed
 
 # Generated scenario inspection
 PYTHONPATH="$PWD" ./.venv/bin/python scripts/simulation/build_phase5_world.py edge_people_building

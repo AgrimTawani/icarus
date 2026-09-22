@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 import subprocess
 import tempfile
 import sys
@@ -36,6 +37,12 @@ TERMINAL = {
     action_pb2.ACTION_STATE_PREEMPTED,
     action_pb2.ACTION_STATE_ABORTED_BY_SAFETY,
 }
+
+
+def _asks_count_of(text, noun):
+    """Match an explicit count request, not a nearby unrelated noun."""
+    return bool(re.search(r"\bcount(?:\s+(?:the|a|an))?(?:\s+(?:number|amount))?(?:\s+of)?(?:\s+unique)?\s+"
+                          + re.escape(noun) + r"\b", text.lower()))
 
 
 class MissionClient:
@@ -118,8 +125,8 @@ class MissionClient:
         if not self.simulation_session or self.simulation_session.get("profile") != "edge-vision":
             return None
         text = mission.lower()
-        asks_people = ("person" in text or "people" in text) and "count" in text
-        asks_buildings = "building" in text and "count" in text
+        asks_people = _asks_count_of(text, "people") or _asks_count_of(text, "person")
+        asks_buildings = _asks_count_of(text, "building") or _asks_count_of(text, "buildings")
         report = {"required": [], "satisfied": [], "reasons": []}
         person_results = [item.get("result") for item in executed
                           if item["action"] == "detect" and item["outcome"] == "SUCCEEDED"
@@ -137,6 +144,14 @@ class MissionClient:
                 else:
                     report["reasons"].append(
                         f"person count is {observed!r}; expected {expected} in this deterministic scenario")
+            if "orbit" in text:
+                orbit_index = next((index for index, item in enumerate(executed)
+                                    if item["action"] == "orbit" and item["outcome"] == "SUCCEEDED"), None)
+                detect_index = next((index for index, item in enumerate(executed)
+                                     if item["action"] == "detect" and item["outcome"] == "SUCCEEDED"
+                                     and "person" in item.get("arguments", {}).get("classes", [])), None)
+                if orbit_index is None or detect_index is None or detect_index < orbit_index:
+                    report["reasons"].append("requested person count must be collected after the requested orbit")
         if asks_buildings:
             report["required"].append("visual_building_count")
             report["reasons"].append(
@@ -207,6 +222,8 @@ class MissionClient:
         from python.perception.vision import detect_image, normalize_classes
 
         classes = normalize_classes(classes)
+        if self.episode.session.get("profile") == "edge-vision" and "person" in classes:
+            return self._edge_count_window(classes)
         # Pixels are inspection input, not episode data. Capture into an
         # ephemeral directory, retain only the image hash and structured
         # detector output, then remove the frame before returning.
@@ -240,6 +257,37 @@ class MissionClient:
                     "observed_at_unix_ms": result["observed_at_unix_ms"]})
         self.episode.record("semantic_detection", result)
         return summary
+
+    def _edge_count_window(self, classes):
+        """Read the capped observer for the scenario's declared count window."""
+        from python.perception.edge_vision import summarize_observer_window
+
+        scenario_path = ROOT / "simulation/scenarios" / (self.simulation_session["scenario"] + ".json")
+        duration_s = float(json.loads(scenario_path.read_text())["ground_truth"]["count_window_s"])
+        observer_path = Path(self.simulation_session["run_directory"]) / "edge_vision.jsonl"
+        started_ms = int(time.time() * 1000)
+        deadline = time.monotonic() + duration_s
+        while time.monotonic() < deadline:
+            time.sleep(min(.25, deadline - time.monotonic()))
+        finished_ms = int(time.time() * 1000)
+        if not observer_path.is_file():
+            raise RuntimeError("edge observer evidence is unavailable; restart ./scripts/start-autonomy --profile edge-vision")
+        records = []
+        for line in observer_path.read_text().splitlines():
+            item = json.loads(line)
+            observed_at = item.get("observed_at_unix_ms", 0)
+            if started_ms <= observed_at <= finished_ms:
+                records.append(item)
+        result = summarize_observer_window(records, classes)
+        if not result["camera_evidence"]:
+            raise RuntimeError("edge observer produced no usable frames during the count window")
+        result.update({"observed_at_unix_ms": finished_ms, "count_window_s": duration_s,
+                       "window_started_unix_ms": started_ms, "window_finished_unix_ms": finished_ms})
+        self.episode.record("semantic_detection", result)
+        return {"unique_person_count": result["unique_person_count"], "classes": list(classes),
+                "observed_at_unix_ms": finished_ms, "count_window_s": duration_s,
+                "count_method": result["count_method"], "camera_evidence": result["camera_evidence"],
+                "flight_authority": False}
 
     def assess_landing_zone(self):
         """Run the non-flight depth boundary on the active simulator source.

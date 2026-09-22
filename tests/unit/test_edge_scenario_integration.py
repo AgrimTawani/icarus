@@ -24,3 +24,9 @@ def test_edge_people_building_generates_headlessly_with_ground_truth():
     scenario = json.loads((ROOT / "simulation/scenarios/edge_people_building.json").read_text())
     assert scenario["obstacles"][0]["center_m"] == [0, 18, 3]  # Gazebo ENU: north is +Y.
     assert scenario["ground_truth"]["known_landmarks"][0]["local_ned_m"] == [18, 0, -3]
+    building = scenario["obstacles"][0]
+    bx, by, _ = building["center_m"]
+    sx, sy, _ = building["size_m"]
+    assert all(abs(target["center_m"][0] - bx) > sx / 2
+               or abs(target["center_m"][1] - by) > sy / 2
+               for target in scenario["targets"])

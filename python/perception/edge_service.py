@@ -103,6 +103,14 @@ def main():
                           "max_fps": args.max_fps, "flight_authority": False}
             result["camera"] = {"id": feed["id"], "topic": feed["topic"],
                                 "count_eligible": feed["count_eligible"]}
+            if not feed["count_eligible"] and "unique_person_count" in result:
+                # Camera motion invalidates simple image-IoU identity across a
+                # forward-looking sequence. Keep its detections as coverage
+                # evidence, but never mislabel its accumulated tracks as a
+                # cross-frame unique-person count.
+                result["max_concurrent_persons"] = sum(
+                    item.get("class") == "person" for item in result.get("detections", []))
+                result.pop("unique_person_count", None)
         destination = Path(session.get("run_directory", root / "logs/simulation")) / "edge_vision.jsonl"
         with destination.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(result, sort_keys=True) + "\n")

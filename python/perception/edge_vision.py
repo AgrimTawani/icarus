@@ -116,6 +116,30 @@ def select_device(requested="auto", cuda_available=False):
     return "cuda" if requested == "cuda" or (requested == "auto" and cuda_available) else "cpu"
 
 
+def summarize_observer_window(records, classes):
+    """Return a conservative count from structured multi-camera observer data.
+
+    A moving forward camera cannot provide stable cross-frame identity using
+    image IoU alone.  V1 therefore takes the largest same-frame person count
+    from one camera, never adding camera totals or accumulated track IDs.
+    """
+    classes = {str(item).strip().lower() for item in classes}
+    by_camera = {}
+    for record in records:
+        if record.get("schema") != "icarus.edge.yolo.v1":
+            continue
+        camera = record.get("camera", {}).get("id", "unknown")
+        people = sum(item.get("class") == "person" for item in record.get("detections", []))
+        entry = by_camera.setdefault(camera, {"frames": 0, "max_simultaneous_persons": 0})
+        entry["frames"] += 1
+        entry["max_simultaneous_persons"] = max(entry["max_simultaneous_persons"], people)
+    observed = max((item["max_simultaneous_persons"] for item in by_camera.values()), default=0)
+    return {"schema": "icarus.edge.count_window.v1", "requested_classes": sorted(classes),
+            "camera_evidence": by_camera, "unique_person_count": observed,
+            "count_method": "maximum_simultaneous_persons_in_one_camera_frame",
+            "flight_authority": False}
+
+
 def detect_edge_image(image_path, manifest_path, tracker, *, device="auto",
                       max_fps=5.0, confidence=0.35):
     """Run pinned YOLO11n. Importing Ultralytics is deferred until execution."""

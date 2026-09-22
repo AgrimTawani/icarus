@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from python.perception.edge_vision import RateLimiter, UniqueTrackCounter, normalize_yolo_result, select_device, validate_edge_manifest, verify_edge_manifest_files
+from python.perception.edge_vision import RateLimiter, UniqueTrackCounter, normalize_yolo_result, select_device, summarize_observer_window, validate_edge_manifest, verify_edge_manifest_files
 from python.perception.edge_service import CAMERA_FEEDS
 
 
@@ -47,6 +47,17 @@ class EdgeVisionTests(unittest.TestCase):
         self.assertEqual([feed["id"] for feed in CAMERA_FEEDS],
                          ["forward_rgbd", "downward_rgbd"])
         self.assertEqual(sum(feed["count_eligible"] for feed in CAMERA_FEEDS), 1)
+
+    def test_count_window_never_sums_camera_totals(self):
+        records = [
+            {"schema": "icarus.edge.yolo.v1", "camera": {"id": "forward_rgbd"},
+             "detections": [{"class": "person"}, {"class": "person"}, {"class": "person"}]},
+            {"schema": "icarus.edge.yolo.v1", "camera": {"id": "downward_rgbd"},
+             "detections": [{"class": "person"}, {"class": "person"}]},
+        ]
+        result = summarize_observer_window(records, ["person"])
+        self.assertEqual(result["unique_person_count"], 3)
+        self.assertEqual(result["camera_evidence"]["downward_rgbd"]["max_simultaneous_persons"], 2)
 
     def test_manifest_is_simulation_only_and_roles_are_pinned(self):
         manifest = {"profile": "edge-vision", "simulation_only": True, "llama_cpp_revision": "x", "artifacts": [
