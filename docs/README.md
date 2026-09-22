@@ -29,6 +29,9 @@ For the current data and DCM work, continue with
 [`simulation/PHASE-10-EPISODES.md`](simulation/PHASE-10-EPISODES.md),
 [`architecture/DCM-OBSERVE-V1.md`](architecture/DCM-OBSERVE-V1.md) and
 [`architecture/DCM-MODEL-SELECTION.md`](architecture/DCM-MODEL-SELECTION.md).
+The V2 research decision, including the AerialClaw adoption boundary, AirSim
+feasibility plan and Laya System-1 experiment, is recorded in
+[`architecture/V2-RESEARCH-AND-ARCHITECTURE-DECISION.md`](architecture/V2-RESEARCH-AND-ARCHITECTURE-DECISION.md).
 
 ## Documentation Map
 
