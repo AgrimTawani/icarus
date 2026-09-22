@@ -1,6 +1,28 @@
 # Project Status
 
-Last updated: 2026-09-22
+## Edge autonomous vision (experimental, simulation-only)
+
+The RTX 4050/6 GB profile is available as `edge-vision`. It reuses the pinned
+Qwen3 4B Q4 GGUF at a 4096 context, adds YOLO11n at 640 px and at most 5 FPS,
+and uses SmolVLM-256M-Instruct only on demand (one request per 5 seconds,
+load/infer/release by default). YOLO and VLM are structured evidence only;
+neither can command flight, select a landing site, or bypass the typed Drone
+API, guardrails, planner, safety supervisor, or Phase 10-12 evaluation gates.
+
+`edge_people_building` uses a committed `north_building` landmark and four
+checksum-pinned Gazebo human-actor targets. Stock YOLO11n does not reliably identify
+buildings, roofs, or safe landing areas; landing safety remains deterministic
+depth/LiDAR/geometry. This profile makes no real-world-readiness claim.
+
+V1 closeout is recorded in
+[`../simulation/EDGE-VISION-V1.md`](../simulation/EDGE-VISION-V1.md). It
+documents the operator flow, model/asset provenance, ENU↔NED landmark mapping,
+dual-camera grid, total YOLO scheduling cap, test results, and retained failed
+count episode. The profile implementation is complete; a post-coordinate-fix
+end-to-end person-count acceptance result is still required before any success
+claim.
+
+Last updated: 2026-09-23
 
 ## Executive Summary
 
@@ -34,7 +56,7 @@ is yet exposed to the DCM and physical depth calibration remains open.
 | Separated simulator/control launch | Complete; named profiles and global readiness | Phase 6 |
 | Keyboard manual control | Implemented; simulation-only | `scripts/manual-control` |
 | Xbox manual control | Background polling hardware-verified | SDL Xbox 360 mapping |
-| Forward video | H.264/RTP onboard stream and ground viewer verified | `scripts/view-camera` |
+| Camera grid | Forward and downward RGB-D H.264/RTP streams in a passive ground viewer | `scripts/view-camera` |
 | C++ autonomy services | Phase 8 complete | Drone API, authority, guardrails, executor, state engine, safety supervisor and MAVLink gateway |
 | Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |

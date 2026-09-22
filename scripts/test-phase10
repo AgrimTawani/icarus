@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
-"${ROOT}/.venv/bin/python" -m unittest tests.unit.test_episode_replay -v
+"${ROOT}/.venv/bin/python" -m unittest discover -s tests/unit \
+  -p 'test_episode_replay.py' -v
 if [[ $# -gt 0 ]]; then
   exec "${ROOT}/scripts/replay-episode" --complete "$1"
 fi

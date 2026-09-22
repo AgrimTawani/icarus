@@ -12,3 +12,5 @@ tensorboard==2.21.0
 torch==2.14.0
 transformers==5.17.0
 trl==1.13.0
+# Research-only edge detector; Ultralytics is AGPL-3.0.
+ultralytics==8.3.0

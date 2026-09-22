@@ -19,8 +19,10 @@ from python.dcm.contract import (
     RuntimeDescriptor,
 )
 from python.dcm.fly import dumps, fly_mission, session_episode_summary, summarize
+from python.dcm.resource_sampler import ResourceSampler
 
 DEFAULT_MANIFEST = Path.home() / "models/qwen/MANIFEST.json"
+EDGE_MANIFEST = Path.home() / "models/edge/MANIFEST.json"
 
 BANNER = """\
 Icarus DCM flight console
@@ -69,8 +71,9 @@ def main():
     parser.add_argument("--endpoint", default="127.0.0.1:50051")
     parser.add_argument("--runtime", choices=("llama", "mock", "scripted"), default="llama")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--profile", choices=("default", "edge-vision"), default="default")
     parser.add_argument("--role", default="primary",
-                        choices=("primary", "secondary", "second_family"))
+                        choices=("primary", "secondary", "second_family", "qwen_edge_primary"))
     parser.add_argument("--mode", choices=("approval", "autonomous"),
                         default="approval",
                         help="approval asks before every action; autonomous "
@@ -89,6 +92,15 @@ def main():
     parser.add_argument("--json", action="store_true",
                         help="print the machine-readable result too")
     args = parser.parse_args()
+    if args.profile == "edge-vision":
+        if args.manifest == DEFAULT_MANIFEST:
+            args.manifest = EDGE_MANIFEST
+        if args.mode != "autonomous":
+            parser.error("edge-vision is simulation-only and requires --mode autonomous")
+        if args.context_length != 4096:
+            parser.error("edge-vision requires --context-length 4096")
+        if args.role == "primary":
+            args.role = "qwen_edge_primary"
 
     MissionClient = _load_mission_client()
 
@@ -96,6 +108,7 @@ def main():
     client = MissionClient(args.endpoint, args.mission or "dcm_chat_session")
     mode = args.mode
     session_results = []
+    sampler = None
     try:
         client.connect()
         client.acquire()
@@ -103,6 +116,9 @@ def main():
         if args.runtime == "llama":
             print("loading model, the first decision is slow...")
             runtime.start()
+        sampler = ResourceSampler(
+            pid_provider=lambda: (runtime.process.pid if getattr(runtime, "process", None) else None))
+        sampler.__enter__()
         if args.mission:
             missions = [args.mission]
         else:
@@ -138,6 +154,8 @@ def main():
             result = fly_mission(
                 client, runtime, mission, mode=mode, descriptor=descriptor,
                 max_decisions=args.max_decisions)
+            if sampler:
+                result["resources"] = sampler.peaks()
             session_results.append(result)
             # MissionClient.close() seals unconditionally.  Update these after
             # every mission so an operator exit still retains all previous
@@ -157,6 +175,10 @@ def main():
             session_results, error)
         raise
     finally:
+        if sampler:
+            sampler.__exit__(None, None, None)
+            if session_results:
+                session_results[-1]["resources"] = sampler.peaks()
         stop = getattr(runtime, "stop", None)
         if stop:
             stop()

@@ -85,8 +85,12 @@ def observe(client, memory, decision_index):
         perception = {}
     now = int(time.time() * 1000)
     event = {"seq": decision_index, "unix_ms": now}
-    return curate(state, perception, None, memory.mission, event,
-                  history=memory.as_history())
+    observation = curate(state, perception, None, memory.mission, event,
+                         history=memory.as_history())
+    reference = getattr(client, "mission_reference", lambda: {})()
+    if reference:
+        observation["mission_reference"] = reference
+    return observation
 
 
 def approve(proposal, mode, stream=sys.stdin, out=None):
@@ -202,6 +206,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         executed.append({"action": proposal["action"],
                          "arguments": proposal["arguments"],
                          "outcome": outcome})
+        if proposal["action"] in ("detect", "inspect_scene", "assess_landing_zone") and outcome == "SUCCEEDED":
+            executed[-1]["result"] = detail
         counts["executed"] += 1
         if outcome not in ("SUCCEEDED",):
             counts["failed"] += 1
@@ -220,8 +226,9 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             echo("      aircraft is down; mission complete")
             break
 
+    completion = getattr(client, "assess_mission_completion", lambda *_: None)(mission, executed)
     return {"mission": mission, "mode": mode, "counts": counts,
-            "executed": executed,
+            "executed": executed, "semantic_completion": completion,
             "model": descriptor.as_record() if descriptor else None}
 
 
@@ -236,7 +243,9 @@ def session_episode_summary(results, error=None):
     episode.
     """
     failed = error is not None or any(
-        result.get("counts", {}).get("failed", 0) > 0 for result in results)
+        result.get("counts", {}).get("failed", 0) > 0
+        or (result.get("semantic_completion") or {}).get("success") is False
+        for result in results)
     score = {"missions": list(results), "status": "failed" if failed else "completed"}
     if error is not None:
         score["error"] = {"type": type(error).__name__, "message": str(error)}

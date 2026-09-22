@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Open the ground-station viewer for the Icarus forward camera."""
+"""Open the passive ground-station grid for all Icarus RGB cameras."""
 
 import os
 import sys

@@ -13,6 +13,7 @@ import socket
 import subprocess
 import time
 import uuid
+from pathlib import Path
 
 from build_akshu_candidate import ROOT
 from launch_profiles import load_profiles, resolve_profile
@@ -75,8 +76,8 @@ def main():
         video_destination = str(ipaddress.IPv4Address(args.video_destination))
     except ipaddress.AddressValueError:
         parser.error("--video-destination must be an IPv4 address")
-    if not 1 <= args.video_port <= 65535:
-        parser.error("--video-port must be in 1..65535")
+    if not 1 <= args.video_port < 65535:
+        parser.error("--video-port must be in 1..65534 because the camera grid uses the next port")
     scenario_path, scenario = (None, None)
     if args.scenario:
         scenario_path, scenario = load_scenario(args.scenario)
@@ -84,7 +85,16 @@ def main():
             raise ValueError("--sensor-profile conflicts with reproducible scenario")
         if args.seed is not None and args.seed != scenario["seed"]:
             raise ValueError("--seed conflicts with reproducible scenario")
+        if scenario.get("edge_profile"):
+            edge_root = Path(os.environ.get("EDGE_MODEL_DIR", Path.home() / "models/edge"))
+            required_actor = edge_root / (
+                "gazebo_fuel_cache/fuel.gazebosim.org/mingfei/models/actor/1/meshes/walk.dae")
+            if not required_actor.is_file():
+                raise RuntimeError(
+                    "edge scenario human asset is missing; run ./scripts/setup-edge-vision-runtime")
     sensor_profile = scenario["sensor_profile"] if scenario else (args.sensor_profile or "physical")
+    effective_profile = profile_name or (
+        "edge-vision" if scenario and scenario.get("edge_profile", {}).get("name") == "edge-vision" else None)
     seed = scenario["seed"] if scenario else (42 if args.seed is None else args.seed)
     for tool in ("gz", "cmake", "ninja"):
         if not shutil.which(tool):
@@ -316,7 +326,7 @@ def main():
         summary["sensor_profile"] = sensor_profile
         summary["seed"] = seed
         summary["scenario"] = scenario["name"] if scenario else None
-        summary["profile"] = profile_name
+        summary["profile"] = effective_profile
         summary["media_capture"] = False
         summary["revisions"] = {
             name: subprocess.check_output(
@@ -420,8 +430,8 @@ def main():
                 raise TimeoutError("Camera stream readiness timed out: " + str(video_health))
             time.sleep(0.1)
         print(
-            "READY: forward camera streaming H.264/RTP to "
-            f"{video_destination}:{args.video_port}",
+            "READY: camera grid streaming H.264/RTP to "
+            f"{video_destination}:{args.video_port}-{args.video_port + 1}",
             flush=True,
         )
         if scenario and scenario["sensor_fault_schedule"]:
@@ -461,11 +471,15 @@ def main():
                     "width": 640,
                     "height": 480,
                     "fps": 15,
+                    "streams": [
+                        {"id": "forward_rgbd", "label": "Forward RGB-D", "port": args.video_port},
+                        {"id": "downward_rgbd", "label": "Downward RGB-D", "port": args.video_port + 1},
+                    ],
                 },
                 "partition": env["GZ_PARTITION"],
                 "run_directory": str(directory),
                 "scenario": scenario["name"] if scenario else None,
-                "profile": profile_name,
+                "profile": effective_profile,
                 "world": world_name,
                 "model": "icarus_compact",
                 "ground_height_m": 0.1901,

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "edge_people_building",
+  "world_profile": "obstacles",
+  "environment_preset": "custom",
+  "vehicle_profile": "akshu_compact_sitl",
+  "initial_pose": {"x_m": 0, "y_m": 0, "z_m": 0.195, "yaw_deg": 0},
+  "home": {"latitude_deg": -35.363262, "longitude_deg": 149.165237, "elevation_m": 584, "heading_deg": 0},
+  "seed": 4050,
+  "wind": {"enabled": false, "speed_m_s": 0, "direction_deg": 0, "rise_time_s": 0, "gust_amplitude_fraction": 0, "gust_period_s": 0, "direction_swing_deg": 0, "direction_period_s": 0, "operational_limit_m_s": 6},
+  "obstacles": [
+    {"name": "north_building", "type": "building", "center_m": [0, 18, 3], "size_m": [8, 8, 6]},
+    {"name": "north_wall_west", "type": "wall", "center_m": [-8, 12, 1.5], "size_m": [7, 0.4, 3]},
+    {"name": "north_tree_east", "type": "tree", "center_m": [8, 25, 0], "radius_m": 0.35, "height_m": 5, "canopy_radius_m": 2, "canopy_collision": "enabled"}
+  ],
+  "targets": [
+    {"id": "person_01", "class": "person", "center_m": [-3, 15, 0], "height_m": 1.8, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
+    {"id": "person_02", "class": "person", "center_m": [3, 17, 0], "height_m": 1.7, "radius_m": 0.28, "animated": true, "visual_asset": "gazebo_actor_v1"},
+    {"id": "person_03", "class": "person", "center_m": [-3, 22, 0], "height_m": 1.75, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
+    {"id": "person_04", "class": "person", "center_m": [3, 22, 0], "height_m": 1.65, "radius_m": 0.28, "animated": true, "visual_asset": "gazebo_actor_v1"}
+  ],
+  "edge_profile": {"name": "edge-vision", "yolo_image_size": 640, "yolo_max_fps": 5, "vlm_interval_s": 5, "simulation_only": true},
+  "sensor_profile": "physical",
+  "sensor_fault_schedule": [],
+  "gps_degradation": {"position_stddev_m": 0, "velocity_stddev_m_s": 0},
+  "communication": {"delay_s": 0, "dropout_s": 0},
+  "battery": {"initial_soc": 1.0, "load_w": 700},
+  "mission": {"type": "takeoff_hover_land", "altitude_m": 3, "hover_s": 10},
+  "maximum_duration_s": 240,
+  "success": {"expected_outcome": "pass", "maximum_drift_m": 0.30, "maximum_tilt_deg": 10, "minimum_real_time_factor": 0.8},
+  "ground_truth": {"known_landmarks": [{"id": "north_building", "local_ned_m": [18, 0, -3], "semantic_source": "scenario_commit"}], "unique_person_count": 4, "count_window_s": 20, "routes": [{"name": "safe_north", "clearance_m": 3, "waypoints_enu_m": [[0, 0, 5], [0, 8, 5], [0, 14, 7], [0, 18, 7]]}]}
+}

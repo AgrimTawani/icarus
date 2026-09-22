@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Provision edge-vision artifacts outside Git; safe to re-run.
+set -Eeuo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+EDGE_DIR="${EDGE_MODEL_DIR:-$HOME/models/edge}"
+YOLO_DIR="${EDGE_DIR}/yolo"; SMOL_DIR="${EDGE_DIR}/smolvlm"
+ACTOR_CACHE="${EDGE_DIR}/gazebo_fuel_cache"
+ACTOR_DIR="${ACTOR_CACHE}/fuel.gazebosim.org/mingfei/models/actor/1"
+MANIFEST="${EDGE_DIR}/MANIFEST.json"; VENV="${ROOT}/.venv"
+mkdir -p "${YOLO_DIR}" "${SMOL_DIR}" "${ACTOR_CACHE}"
+[[ -x "${VENV}/bin/python" ]] || { echo "missing .venv; run ./scripts/bootstrap --profile ml" >&2; exit 1; }
+if [[ ! -f "${ACTOR_DIR}/meshes/walk.dae" || ! -f "${ACTOR_DIR}/meshes/stand.dae" ]]; then
+  command -v gz >/dev/null || { echo "missing Gazebo Fuel client (gz)" >&2; exit 1; }
+  GZ_FUEL_CACHE_PATH="${ACTOR_CACHE}" gz fuel download --url https://fuel.gazebosim.org/1.0/Mingfei/models/actor
+fi
+if ! "${VENV}/bin/python" -c 'import ultralytics' >/dev/null 2>&1; then
+  "${VENV}/bin/pip" install --requirement "${ROOT}/requirements/ml.txt"
+fi
+"${VENV}/bin/python" - "${ROOT}" "${YOLO_DIR}" "${SMOL_DIR}" "${ACTOR_DIR}" "${MANIFEST}" <<'PY'
+import hashlib, json, os, sys
+from datetime import datetime, timezone
+from pathlib import Path
+root, yolo_dir, smol_dir, actor_dir, manifest_path = map(Path, sys.argv[1:])
+qwen_manifest = Path.home() / "models/qwen/MANIFEST.json"
+if not qwen_manifest.is_file(): raise SystemExit("existing Qwen manifest missing; run ./scripts/setup-model-runtime")
+qwen = json.loads(qwen_manifest.read_text())
+q4 = next((a for a in qwen.get("artifacts", []) if a.get("quantization") == "q4_k_m"), None)
+if not q4 or not Path(q4["path"]).is_file(): raise SystemExit("existing Qwen Q4 artifact missing")
+def sha(path):
+    h = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""): h.update(block)
+    return h.hexdigest()
+yolo = yolo_dir / "yolo11n.pt"
+if not yolo.is_file():
+    from ultralytics import YOLO
+    previous_cwd = Path.cwd()
+    os.chdir(yolo_dir)
+    try:
+        model = YOLO("yolo11n.pt")
+        source = Path(getattr(model, "ckpt_path", "yolo11n.pt"))
+        if not source.is_file(): source = yolo_dir / "yolo11n.pt"
+        if source.resolve() != yolo.resolve(): yolo.write_bytes(source.read_bytes())
+    finally:
+        os.chdir(previous_cwd)
+from huggingface_hub import model_info, snapshot_download
+previous = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+previous_vlm = next((a for a in previous.get("artifacts", []) if a.get("role") == "vlm"), {})
+smol_revision = previous_vlm.get("revision") or model_info(
+    "HuggingFaceTB/SmolVLM-256M-Instruct", revision="main").sha
+if not (smol_dir / "model.safetensors").is_file():
+    snapshot_download("HuggingFaceTB/SmolVLM-256M-Instruct", local_dir=str(smol_dir),
+                      revision=smol_revision, allow_patterns=["*.json", "*.txt", "*.safetensors"])
+import ultralytics
+smol_files = {str(p.relative_to(smol_dir)): sha(p) for p in sorted(smol_dir.rglob("*"))
+              if p.is_file() and ".cache" not in p.relative_to(smol_dir).parts}
+if not smol_files: raise SystemExit("SmolVLM download produced no files")
+smol_weights = smol_dir / "model.safetensors"
+if not smol_weights.is_file(): raise SystemExit("SmolVLM model.safetensors is missing")
+actor_meshes = {str(p.relative_to(actor_dir)): sha(p) for p in sorted(actor_dir.rglob("*")) if p.is_file()}
+if not (actor_dir / "meshes/walk.dae").is_file() or not (actor_dir / "meshes/stand.dae").is_file():
+    raise SystemExit("Gazebo actor asset is incomplete")
+artifacts = [
+ {"role":"qwen_edge_primary","family":"qwen","repository":qwen.get("repository"),"revision":qwen.get("llama_cpp_revision"),"path":q4["path"],"sha256":q4["sha256"],"runtime":"llama_cpp","quantization":"q4_k_m","model_role":"flight_llm"},
+ {"role":"yolo","family":"yolo","repository":"ultralytics/yolo11","revision":"ultralytics=="+ultralytics.__version__,"path":str(yolo),"sha256":sha(yolo),"runtime":"ultralytics","quantization":"fp16-or-runtime-default","model_role":"continuous_detector"},
+ {"role":"vlm","family":"smolvlm","repository":"HuggingFaceTB/SmolVLM-256M-Instruct","revision":smol_revision,"path":str(smol_dir),"sha256":sha(smol_weights),"file_sha256":smol_files,"runtime":"transformers","quantization":"bf16-or-fp16","model_role":"bounded_qualitative_inspection"},
+ {"role":"gazebo_actor","family":"gazebo_fuel","repository":"https://fuel.gazebosim.org/1.0/Mingfei/models/actor","revision":"1","path":str(actor_dir),"sha256":sha(actor_dir / "model.sdf"),"file_sha256":actor_meshes,"runtime":"gazebo_harmonic","quantization":"n/a","model_role":"detector-visible_simulation_target"},
+]
+manifest = {"schema":"icarus.edge.runtime.v1","profile":"edge-vision","simulation_only":True,"recorded_at":datetime.now(timezone.utc).isoformat(),"context_length":4096,"llama_cpp_revision":qwen.get("llama_cpp_revision"),"artifacts":artifacts,"policy":{"yolo_image_size":640,"yolo_max_fps":5,"vlm_interval_s":5,"vlm_load_mode":"load-infer-release","raw_pixels_in_episode_logs":False}}
+manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+print(manifest_path)
+PY
+echo "Edge vision manifest: ${MANIFEST}"

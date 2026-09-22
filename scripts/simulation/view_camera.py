@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # ruff: noqa: I001
-"""Ground-station viewer for the Icarus H.264 RTP camera contract."""
+"""Ground-station grid viewer for the Icarus H.264 RTP camera contract."""
 
 import argparse
 import json
@@ -20,28 +20,38 @@ ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_SESSION = ROOT / "logs/simulation/active_session.json"
 
 
-def receiver_pipeline(port, latency_ms):
-    return (
-        f"udpsrc port={port} "
-        'caps="application/x-rtp,media=video,encoding-name=H264,payload=96" '
-        f"! rtpjitterbuffer latency={latency_ms} drop-on-latency=true "
-        "! rtph264depay ! avdec_h264 ! videoconvert "
-        "! autovideosink name=display sync=false"
-    )
+def receiver_pipeline(streams, latency_ms):
+    """Compose trusted session streams in a two-column labeled grid."""
+    compositor = ["compositor name=grid background=black"]
+    branches = []
+    for index, stream in enumerate(streams):
+        xpos, ypos = (index % 2) * stream["width"], (index // 2) * stream["height"]
+        compositor.append(f"sink_{index}::xpos={xpos} sink_{index}::ypos={ypos}")
+        branches.append(
+            f"udpsrc port={stream['port']} "
+            'caps="application/x-rtp,media=video,encoding-name=H264,payload=96" '
+            f"! rtpjitterbuffer latency={latency_ms} drop-on-latency=true "
+            "! rtph264depay ! avdec_h264 ! videoconvert "
+            f"! textoverlay text=\"{stream['label']}\" valignment=top halignment=left shaded-background=true "
+            f"! queue ! grid.sink_{index}")
+    return " ".join(compositor) + " ! videoconvert ! autovideosink name=display sync=false " + " ".join(branches)
 
 
-def session_video_port():
+def session_video_streams():
     if not ACTIVE_SESSION.is_file():
-        return None
+        return []
     session = json.loads(ACTIVE_SESSION.read_text())
     try:
         os.kill(int(session["launcher_pid"]), 0)
     except (KeyError, ProcessLookupError, ValueError):
-        return None
+        return []
     video = session.get("video", {})
     if video.get("transport") != "rtp-h264":
-        return None
-    return int(video["port"])
+        return []
+    streams = video.get("streams") or [{"id": "forward_rgbd", "label": "Forward RGB-D", "port": video["port"]}]
+    return [{"id": str(stream["id"]), "label": str(stream["label"]), "port": int(stream["port"]),
+             "width": int(video.get("width", 640)), "height": int(video.get("height", 480))}
+            for stream in streams]
 
 
 def main():
@@ -49,18 +59,24 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        help="Local RTP listen port; defaults to the active vehicle session or 5600",
+        help="Base local RTP listen port; defaults to the active vehicle session or 5600",
     )
     parser.add_argument("--latency-ms", type=int, default=75)
     args = parser.parse_args()
-    port = args.port or session_video_port() or 5600
-    if not 1 <= port <= 65535:
-        raise ValueError("port must be in 1..65535")
+    streams = session_video_streams() or [
+        {"id": "forward_rgbd", "label": "Forward RGB-D", "port": 5600, "width": 640, "height": 480},
+        {"id": "downward_rgbd", "label": "Downward RGB-D", "port": 5601, "width": 640, "height": 480},
+    ]
+    if args.port is not None:
+        for index, stream in enumerate(streams):
+            stream["port"] = args.port + index
+    if any(not 1 <= stream["port"] <= 65535 for stream in streams):
+        raise ValueError("camera grid ports must be in 1..65535")
     if not 0 <= args.latency_ms <= 2000:
         raise ValueError("latency must be in 0..2000 ms")
 
     Gst.init(None)
-    pipeline = Gst.parse_launch(receiver_pipeline(port, args.latency_ms))
+    pipeline = Gst.parse_launch(receiver_pipeline(streams, args.latency_ms))
     decoder = pipeline.get_by_name("display").get_static_pad("sink")
     lock = threading.Lock()
     frame_count = 0
@@ -84,7 +100,8 @@ def main():
     bus = pipeline.get_bus()
     if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
         raise RuntimeError("Could not start the camera viewer")
-    print(f"Listening for Icarus H.264/RTP video on UDP {port}")
+    print("Listening for Icarus camera grid: " + ", ".join(
+        f"{stream['label']} UDP {stream['port']}" for stream in streams))
     print("The viewer can start before the drone stream. Press Ctrl+C to close it.")
     previous_count = 0
     previous_time = time.monotonic()

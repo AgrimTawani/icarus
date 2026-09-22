@@ -74,7 +74,7 @@ def _source_fingerprint(root):
     """Fingerprint the actual source bytes, including uncommitted changes."""
     digest = hashlib.sha256()
     roots = [root / name for name in ("cpp", "perception", "proto",
-                                     "python/dataset_tools", "python/dcm",
+                                     "python/perception", "python/dataset_tools", "python/dcm",
                                      "scripts/autonomy", "scripts/simulation")]
     files = [root / "CMakeLists.txt", root / "scripts/start-autonomy"]
     for source_root in roots:
@@ -116,6 +116,20 @@ def _snapshot_simulator_sensors(session, destination):
         "channels": sorted((schema.get("channels") or {}).keys()),
         "files": hashes,
     }
+
+
+def _snapshot_edge_vision(session, destination):
+    """Seal structured edge-observer evidence without copying camera pixels."""
+    if not session or not session.get("run_directory"):
+        return None
+    source = Path(session["run_directory"]) / "edge_vision.jsonl"
+    if not source.is_file():
+        return None
+    target = destination / "edge_vision.jsonl"
+    shutil.copyfile(source, target)
+    target.chmod(0o444)
+    return {"path": str(target.relative_to(destination)), "sha256": _sha256(target),
+            "raw_pixels_saved": False}
 
 
 class ActionRecorder:
@@ -280,17 +294,21 @@ class Episode:
             if scenario:
                 config_paths.append(self.root / "simulation/scenarios" /
                                     (scenario + ".json"))
+            if session.get("profile") == "edge-vision":
+                config_paths.append(Path.home() / "models/edge/MANIFEST.json")
         snapshots = self.directory / "config"
         snapshots.mkdir()
         config_hashes = {}
         for source in config_paths:
             if source.is_file():
-                target = snapshots / source.name
+                target = snapshots / ("edge-model-manifest.json" if source.name == "MANIFEST.json"
+                                      and source.parent.name == "edge" else source.name)
                 shutil.copyfile(source, target)
                 target.chmod(0o444)
                 config_hashes[str(target.relative_to(self.directory))] = _sha256(target)
         raw_sensor_snapshot = _snapshot_simulator_sensors(
             session, self.directory)
+        edge_vision_snapshot = _snapshot_edge_vision(session, self.directory)
         manifest = {
             "schema": "icarus.episode.v1", "episode_id": self.id,
             "mission": self.mission, "source": "simulation" if session else "physical",
@@ -305,6 +323,7 @@ class Episode:
             "vehicle_id": "icarus-01",
             "raw_sensor_payloads": raw_sensor_snapshot is not None,
             "raw_sensor_snapshot": raw_sensor_snapshot,
+            "edge_vision_snapshot": edge_vision_snapshot,
             "model": self.model,
             "privacy": {"operator_identifiers": "excluded",
                         "training_status": "unreviewed_do_not_train"},

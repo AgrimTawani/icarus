@@ -6,8 +6,10 @@ import copy
 import hashlib
 import json
 import math
+import os
 import subprocess
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from build_akshu_candidate import ROOT
 from scenario_config import canonical_bytes, load_scenario
@@ -97,6 +99,31 @@ def tree_model(world, item):
         material(node, "0.10 0.32 0.08 1")
 
 
+def target_model(world, item):
+    """Render a pinned, detector-visible human actor without network access."""
+    edge_root = Path(os.environ.get("EDGE_MODEL_DIR", Path.home() / "models/edge"))
+    mesh_dir = edge_root / "gazebo_fuel_cache/fuel.gazebosim.org/mingfei/models/actor/1/meshes"
+    actor = element(world, "actor", name=item["id"])
+    x, y, z = item["center_m"]
+    element(actor, "pose", f"{x} {y} {z + 1.0} 0 0 0")
+    animation = "walk" if item.get("animated") else "stand"
+    skin = element(actor, "skin")
+    element(skin, "filename", (mesh_dir / "walk.dae").as_uri())
+    element(skin, "scale", "1.0")
+    animation_node = element(actor, "animation", name=animation)
+    element(animation_node, "filename", (mesh_dir / (animation + ".dae")).as_uri())
+    element(animation_node, "scale", "1.0")
+    element(animation_node, "interpolate_x", "true")
+    script = element(actor, "script")
+    element(script, "loop", "true")
+    element(script, "auto_start", "true")
+    trajectory = element(script, "trajectory", id="0", type=animation)
+    for seconds in (0, 30):
+        waypoint = element(trajectory, "waypoint")
+        element(waypoint, "time", seconds)
+        element(waypoint, "pose", f"{x} {y} {z + 1.0} 0 0 0")
+
+
 def decorate_site(world):
     ground = world.find("model[@name='test_pad']/link/visual[@name='ground']/material")
     if ground is not None:
@@ -180,6 +207,8 @@ def build(scenario_value):
 
     for item in obstacles:
         (tree_model if item["type"] == "tree" else box_model)(world, item)
+    for item in scenario.get("targets", []):
+        target_model(world, item)
 
     wind = scenario["wind"]
     atmosphere = model.find("plugin[@name='icarus::TurbulentAtmosphere']")
@@ -237,6 +266,8 @@ def build(scenario_value):
         "environment_preset_sha256": hashlib.sha256(preset_path.read_bytes()).hexdigest(),
         "obstacles": obstacles,
         "routes": scenario["ground_truth"].get("routes", []),
+        "targets": scenario.get("targets", []),
+        "unique_person_count": scenario["ground_truth"].get("unique_person_count"),
         "world_sha256": hashlib.sha256(xml.encode()).hexdigest(),
         "scenario_sha256": hashlib.sha256(canonical_bytes(scenario)).hexdigest(),
         "vehicle_model_sha256": hashlib.sha256(model_xml.encode()).hexdigest(),

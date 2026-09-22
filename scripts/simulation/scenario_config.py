@@ -29,7 +29,7 @@ REQUIRED = {
     "success",
     "ground_truth",
 }
-OPTIONAL = {"mavlink_fault_schedule"}
+OPTIONAL = {"mavlink_fault_schedule", "targets", "edge_profile"}
 
 
 def resolve_scenario(value):
@@ -114,6 +114,32 @@ def load_scenario(value):
                 _number(dimension, item["name"] + ".size", 0.001)
             if item["type"] == "building" and item["size_m"][2] > 6:
                 raise ValueError("buildings are limited to two storeys / 6 m")
+    if "targets" in data:
+        if not isinstance(data["targets"], list):
+            raise TypeError("targets must be a list")
+        ids = set()
+        for target in data["targets"]:
+            if set(target) - {"id", "class", "center_m", "height_m", "radius_m", "animated", "visual_asset"}:
+                raise ValueError("unsupported target fields")
+            if not target.get("id") or target["id"] in ids or target.get("class") != "person":
+                raise ValueError("targets must have unique person IDs")
+            ids.add(target["id"])
+            if len(target.get("center_m", [])) != 3:
+                raise ValueError("target center_m must have three values")
+            _number(target.get("height_m"), target["id"] + ".height_m", 0.5)
+            _number(target.get("radius_m"), target["id"] + ".radius_m", 0.05)
+            if not isinstance(target.get("animated", False), bool):
+                raise TypeError("target animated must be boolean")
+            if target.get("visual_asset") not in (None, "gazebo_actor_v1"):
+                raise ValueError("unsupported target visual asset")
+    if "edge_profile" in data:
+        profile = data["edge_profile"]
+        if not isinstance(profile, dict) or profile.get("name") != "edge-vision":
+            raise ValueError("invalid edge_profile")
+        if profile.get("yolo_max_fps") != 5 or profile.get("yolo_image_size") != 640:
+            raise ValueError("edge profile must cap YOLO at 640 px and 5 FPS")
+        if profile.get("vlm_interval_s") != 5 or profile.get("simulation_only") is not True:
+            raise ValueError("edge profile must be simulation-only with a 5 s VLM interval")
     for event in data["sensor_fault_schedule"]:
         if set(event) != {"channel", "mode", "start_s", "duration_s"}:
             raise ValueError("invalid sensor fault event")

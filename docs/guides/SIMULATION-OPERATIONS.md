@@ -93,13 +93,14 @@ real-hardware safety test.
 ./scripts/view-camera
 ```
 
-This is a passive ground-station client. It listens for the forward H.264/RTP
-video on UDP 5600, opens the video window, and prints LIVE/STALE status, decoded
+This is a passive ground-station client. It opens a labeled grid of every
+available RGB camera: forward RGB-D on UDP 5600 and downward RGB-D on UDP 5601.
+It prints LIVE/STALE status, decoded
 FPS and last-frame age. It sends no vehicle commands. It may start before or
 after `start-sim`, and closing it never stops the aircraft or encoder. Nothing is
 recorded unless a separate recording feature is explicitly added and enabled.
 
-For a non-default receive port:
+For a non-default base receive port (the downward stream uses the next port):
 
 ```bash
 ./scripts/view-camera --port 5601
@@ -345,3 +346,40 @@ Run artifacts are stored under `logs/simulation/` and ignored by Git. A result
 should identify the scenario, input hashes, process logs, health record,
 trajectory/dynamics metrics and terminal state. Copy only concise, dated
 acceptance conclusions into a dated `SIM-*` report; do not commit bulk recordings.
+
+## Edge vision profile (simulation only)
+
+```bash
+./scripts/setup-edge-vision-runtime
+./scripts/start-sim --profile edge-vision
+./scripts/view-camera
+./scripts/start-autonomy --profile edge-vision
+./scripts/dcm-fly --runtime llama --role primary --mode autonomous \
+  --profile edge-vision --context-length 4096 \
+  --mission "Arm, take off to 5 metres, fly to the known north building, orbit it at 7 metres, count unique people visible below for 20 seconds, return home, and land."
+```
+
+The setup step also provisions a checksum-pinned, local CC-BY human actor asset
+under `~/models/edge/`; restart the simulator after updating the edge runtime
+so the generated world uses those actors. The simulator stays headless while
+the separate RTP viewer remains visible.
+YOLO11n is capped at 640 px and 5 FPS; SmolVLM is a bounded qualitative
+question, rate-limited to five seconds and load/infer/release by default.
+The YOLO observer round-robins the forward and downward RGB-D feeds within
+that single total 5-FPS budget. Unique-person counting remains tied to the
+downward feed because cross-camera identity re-identification is not claimed.
+Neither vision component has flight authority. Stock YOLO11n cannot discover
+arbitrary buildings or safe rooftops, and landing safety remains deterministic
+depth/LiDAR/geometry.
+
+Do not add “count the buildings you see” to this acceptance prompt: the known
+`north_building` landmark is a committed navigation reference, not a YOLO
+class. A mission that asks for people must produce successful `detect(person)`
+evidence before its landing is scored as a completed mission.
+
+After the DCM client seals its episode, produce the evidence report with:
+
+```bash
+./scripts/report-edge-vision logs/episodes/EPISODE_ID
+./scripts/test-phase10 logs/episodes/EPISODE_ID
+```

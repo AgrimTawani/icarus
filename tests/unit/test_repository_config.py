@@ -24,6 +24,7 @@ def test_launch_profiles_resolve_to_versioned_scenarios():
         "simulation-obstacles",
         "simulation-adverse",
         "simulation-perception-stress",
+        "edge-vision",
     }
     for name, profile in simulation.items():
         assert resolve_profile(name) == profile
@@ -41,9 +42,9 @@ def test_third_party_lock_uses_immutable_revisions():
         (ROOT / "config/dependencies/third_party.lock.json").read_text()
     )
     assert lock["version"] == 1
-    assert set(lock["repositories"]) == {"ardupilot", "ardupilot_gazebo"}
+    assert set(lock["repositories"]) == {"ardupilot", "ardupilot_gazebo", "llama_cpp"}
     for dependency in lock["repositories"].values():
-        assert dependency["url"].startswith("https://github.com/ArduPilot/")
+        assert dependency["url"].startswith("https://github.com/")
         assert re.fullmatch(r"[0-9a-f]{40}", dependency["revision"])
 
 

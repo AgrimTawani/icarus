@@ -26,6 +26,12 @@
       "scenario": "phase9_stress",
       "description": "Turbulent obstacle field and live perception-failure gate"
     },
+    "edge-vision": {
+      "adapter": "sitl",
+      "scenario": "edge_people_building",
+      "description": "Simulation-only RTX 4050 edge vision profile: Qwen Q4, YOLO11n and on-demand SmolVLM",
+      "simulation_only": true
+    },
     "hardware-bench": {
       "adapter": "hardware",
       "available": false,

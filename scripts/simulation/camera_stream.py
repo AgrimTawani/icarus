@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # ruff: noqa: I001
-"""Publish the normalized forward camera as a low-latency H.264 RTP stream."""
+"""Publish every normalized RGB camera as a low-latency H.264 RTP stream."""
 
 import argparse
 import json
@@ -15,7 +15,10 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst
 
 
-CAMERA_TOPIC = "/icarus/sensors/rgbd/image"
+CAMERA_STREAMS = (
+    {"id": "forward_rgbd", "label": "Forward RGB-D", "topic": "/icarus/sensors/rgbd/image"},
+    {"id": "downward_rgbd", "label": "Downward RGB-D", "topic": "/icarus/sensors/rgbd_down/image"},
+)
 
 
 def encoder_pipeline(host, port, width, height, fps, bitrate_kbps):
@@ -59,36 +62,20 @@ def main():
     from gz.transport13 import Node
 
     Gst.init(None)
-    pipeline = Gst.parse_launch(
-        encoder_pipeline(
-            args.destination,
-            args.port,
-            args.width,
-            args.height,
-            args.fps,
-            args.bitrate_kbps,
-        )
-    )
-    source = pipeline.get_by_name("source")
-    bus = pipeline.get_bus()
     stopping = threading.Event()
     lock = threading.Lock()
     started = time.monotonic()
-    state = {
-        "status": "starting",
-        "topic": CAMERA_TOPIC,
-        "transport": "rtp-h264",
-        "destination": args.destination,
-        "port": args.port,
-        "width": args.width,
-        "height": args.height,
-        "nominal_fps": args.fps,
-        "bitrate_kbps": args.bitrate_kbps,
-        "frames_received": 0,
-        "frames_pushed": 0,
-        "invalid_frames": 0,
-        "push_failures": 0,
-    }
+    streams = []
+    for index, specification in enumerate(CAMERA_STREAMS):
+        port = args.port + index
+        if port > 65535:
+            raise ValueError("camera stream port range exceeds 65535")
+        pipeline = Gst.parse_launch(encoder_pipeline(
+            args.destination, port, args.width, args.height, args.fps, args.bitrate_kbps))
+        streams.append({**specification, "port": port, "pipeline": pipeline,
+                        "source": pipeline.get_by_name("source"), "bus": pipeline.get_bus(),
+                        "frames_received": 0, "frames_pushed": 0, "invalid_frames": 0,
+                        "push_failures": 0})
 
     def stop(_signum, _frame):
         stopping.set()
@@ -96,64 +83,75 @@ def main():
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
 
-    def receive(message):
+    def receive(message, stream):
         now = time.monotonic()
         with lock:
-            state["frames_received"] += 1
-            state["last_frame_monotonic_s"] = now
+            stream["frames_received"] += 1
+            stream["last_frame_monotonic_s"] = now
         if not valid_rgb_frame(message, args.width, args.height):
             with lock:
-                state["invalid_frames"] += 1
+                stream["invalid_frames"] += 1
             return
         buffer = Gst.Buffer.new_allocate(None, len(message.data), None)
         buffer.fill(0, bytes(message.data))
-        result = source.emit("push-buffer", buffer)
+        result = stream["source"].emit("push-buffer", buffer)
         with lock:
             if result == Gst.FlowReturn.OK:
-                state["frames_pushed"] += 1
-                state["last_push_monotonic_s"] = now
+                stream["frames_pushed"] += 1
+                stream["last_push_monotonic_s"] = now
             else:
-                state["push_failures"] += 1
+                stream["push_failures"] += 1
 
     node = Node()
-    if not node.subscribe(Image, CAMERA_TOPIC, receive):
-        raise RuntimeError("Could not subscribe to " + CAMERA_TOPIC)
+    for stream in streams:
+        if not node.subscribe(Image, stream["topic"],
+                              lambda message, stream=stream: receive(message, stream)):
+            raise RuntimeError("Could not subscribe to " + stream["topic"])
 
     health_path = args.directory / "camera_stream.json"
 
     def publish(final=False):
         with lock:
             now = time.monotonic()
-            age = now - state.get("last_frame_monotonic_s", now)
             elapsed = max(now - started, 1e-6)
-            state["measured_input_fps"] = state["frames_received"] / elapsed
-            state["measured_output_fps"] = state["frames_pushed"] / elapsed
-            state["last_frame_age_s"] = age
-            state["updated_monotonic_s"] = now
-            if final:
-                state["status"] = "stopped"
-            elif state["frames_pushed"] >= 3 and age <= 2.0:
-                state["status"] = "ready"
-            elif state["frames_pushed"] and age > 2.0:
-                state["status"] = "stale"
-            snapshot = dict(state)
+            snapshots = []
+            for stream in streams:
+                age = now - stream.get("last_frame_monotonic_s", now)
+                snapshots.append({key: stream[key] for key in (
+                    "id", "label", "topic", "port", "frames_received", "frames_pushed",
+                    "invalid_frames", "push_failures")})
+                snapshots[-1].update({"measured_input_fps": stream["frames_received"] / elapsed,
+                                      "measured_output_fps": stream["frames_pushed"] / elapsed,
+                                      "last_frame_age_s": age})
+            ready = all(item["frames_pushed"] >= 3 and item["last_frame_age_s"] <= 2.0
+                        for item in snapshots)
+            stale = any(item["frames_pushed"] and item["last_frame_age_s"] > 2.0
+                        for item in snapshots)
+            snapshot = {"status": "stopped" if final else "ready" if ready else "stale" if stale else "starting",
+                        "transport": "rtp-h264", "destination": args.destination,
+                        "width": args.width, "height": args.height, "nominal_fps": args.fps,
+                        "bitrate_kbps": args.bitrate_kbps, "streams": snapshots,
+                        "updated_monotonic_s": now}
         temporary = health_path.with_suffix(".tmp")
         temporary.write_text(json.dumps(snapshot, indent=2) + "\n")
         temporary.replace(health_path)
 
-    if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-        raise RuntimeError("Could not start the H.264 camera pipeline")
+    for stream in streams:
+        if stream["pipeline"].set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+            raise RuntimeError("Could not start the H.264 camera pipeline for " + stream["id"])
     try:
         while not stopping.wait(0.25):
-            message = bus.pop_filtered(Gst.MessageType.ERROR)
-            if message:
-                error, debug = message.parse_error()
-                raise RuntimeError(f"GStreamer camera error: {error}; {debug}")
+            for stream in streams:
+                message = stream["bus"].pop_filtered(Gst.MessageType.ERROR)
+                if message:
+                    error, debug = message.parse_error()
+                    raise RuntimeError(f"GStreamer camera error ({stream['id']}): {error}; {debug}")
             publish()
     finally:
         stopping.set()
-        source.emit("end-of-stream")
-        pipeline.set_state(Gst.State.NULL)
+        for stream in streams:
+            stream["source"].emit("end-of-stream")
+            stream["pipeline"].set_state(Gst.State.NULL)
         publish(final=True)
 
 

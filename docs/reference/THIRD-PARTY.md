@@ -35,3 +35,18 @@ the active revisions:
 Review and comply with each upstream project's license. The supplied/custom
 mesh provenance is documented separately in the `VEHICLE-*` documents and
 `simulation/models/` metadata.
+
+## Edge vision provenance
+
+The experimental, simulation-only `edge-vision` profile uses
+`ultralytics/yolo11` (`yolo11n`) for continuous 640 px detection/tracking.
+Ultralytics is AGPL-3.0; this dependency is research-only until a commercial
+licensing decision or a permissively licensed replacement is made. SmolVLM
+(`HuggingFaceTB/SmolVLM-256M-Instruct`) is Apache-2.0 and is bounded
+qualitative evidence only, with no flight authority.
+
+The deterministic edge scenario also provisions version 1 of Mingfei's Gazebo
+Fuel `actor` model to `~/models/edge/gazebo_fuel_cache/`. It is CC-BY-4.0 and
+its per-file checksums are included in `~/models/edge/MANIFEST.json`. The
+generated world uses only that local pinned copy; the simulator does not fetch
+Fuel assets while a mission is running.

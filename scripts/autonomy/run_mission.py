@@ -57,6 +57,10 @@ class MissionClient:
         self.episode = None
         self.episode_outcome = "completed"
         self.episode_score = None
+        self.edge_tracker = None
+        self.edge_detection_limiter = None
+        self.edge_vlm_limiter = None
+        self.simulation_session = None
 
     def connect(self):
         response = self.session_api.Connect(
@@ -89,9 +93,56 @@ class MissionClient:
                 session = candidate
             except (KeyError, ValueError, ProcessLookupError):
                 pass
+        self.simulation_session = session
         self.episode = Episode(ROOT, self.mission_name, self.endpoint, session)
         self.action_api = ActionRecorder(self.action_api, self.episode, self)
         self.episode.start_sampling(self)
+
+    def mission_reference(self):
+        """Return committed edge landmarks, never hidden ground-truth counts."""
+        if not self.simulation_session or self.simulation_session.get("profile") != "edge-vision":
+            return {}
+        scenario_path = ROOT / "simulation/scenarios" / (self.simulation_session["scenario"] + ".json")
+        scenario = json.loads(scenario_path.read_text())
+        truth = scenario.get("ground_truth", {})
+        return {"known_landmarks": truth.get("known_landmarks", []),
+                "count_window_s": truth.get("count_window_s"),
+                "visual_requirements": {
+                    "person_count_requires_detect": True,
+                    "detector_classes": ["person"],
+                    "known_landmarks_are_not_detector_classes": True,
+                }}
+
+    def assess_mission_completion(self, mission, executed):
+        """Score requested edge evidence after landing without exposing it to the model."""
+        if not self.simulation_session or self.simulation_session.get("profile") != "edge-vision":
+            return None
+        text = mission.lower()
+        asks_people = ("person" in text or "people" in text) and "count" in text
+        asks_buildings = "building" in text and "count" in text
+        report = {"required": [], "satisfied": [], "reasons": []}
+        person_results = [item.get("result") for item in executed
+                          if item["action"] == "detect" and item["outcome"] == "SUCCEEDED"
+                          and "person" in item.get("arguments", {}).get("classes", [])]
+        if asks_people:
+            report["required"].append("unique_person_count")
+            if not person_results:
+                report["reasons"].append("requested person count has no successful detect evidence")
+            else:
+                scenario_path = ROOT / "simulation/scenarios" / (self.simulation_session["scenario"] + ".json")
+                expected = json.loads(scenario_path.read_text())["ground_truth"]["unique_person_count"]
+                observed = person_results[-1].get("unique_person_count")
+                if observed == expected:
+                    report["satisfied"].append("unique_person_count")
+                else:
+                    report["reasons"].append(
+                        f"person count is {observed!r}; expected {expected} in this deterministic scenario")
+        if asks_buildings:
+            report["required"].append("visual_building_count")
+            report["reasons"].append(
+                "stock YOLO11n has no building class; use the committed north_building landmark instead")
+        report["success"] = not report["reasons"]
+        return report
 
     def acquire(self):
         response = self.authority_api.AcquireControl(
@@ -162,17 +213,31 @@ class MissionClient:
         with tempfile.TemporaryDirectory(prefix="icarus-vision-") as temporary:
             output = Path(temporary) / "frame.ppm"
             subprocess.run(
-                [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output)],
+                [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output),
+                 "--topic", "/icarus/sensors/rgbd_down/image"],
                 cwd=ROOT, check=True, timeout=15)
-            result = detect_image(
-                output, classes, Path.home() / "models/vision/MANIFEST.json")
-        result["image"].pop("path", None)
-        result["image"]["source"] = "simulator_ephemeral_capture"
+            if self.episode.session.get("profile") == "edge-vision":
+                from python.perception.edge_vision import RateLimiter, UniqueTrackCounter, detect_edge_image
+                if self.edge_tracker is None:
+                    self.edge_tracker = UniqueTrackCounter()
+                    self.edge_detection_limiter = RateLimiter(interval_s=0.2)
+                self.edge_detection_limiter.admit()
+                result = detect_edge_image(output, Path.home() / "models/edge/MANIFEST.json",
+                                           self.edge_tracker, max_fps=5)
+            else:
+                result = detect_image(output, classes, Path.home() / "models/vision/MANIFEST.json")
+        if "image" in result:
+            result["image"].pop("path", None)
+            result["image"]["source"] = "simulator_ephemeral_capture"
+        result["source"] = "simulator_ephemeral_capture"
         # Keep the model's next observation bounded: it needs count evidence,
         # not a potentially large box list or image payload.
-        summary = {"counts": result["counts"],
-                   "requested_classes": result["requested_classes"],
-                   "observed_at_unix_ms": result["observed_at_unix_ms"]}
+        summary = ({"unique_person_count": result["unique_person_count"],
+                    "classes": result["classes"], "observed_at_unix_ms": result["observed_at_unix_ms"],
+                    "flight_authority": False}
+                   if result.get("schema") == "icarus.edge.yolo.v1" else
+                   {"counts": result["counts"], "requested_classes": result["requested_classes"],
+                    "observed_at_unix_ms": result["observed_at_unix_ms"]})
         self.episode.record("semantic_detection", result)
         return summary
 
@@ -225,8 +290,14 @@ class MissionClient:
             subprocess.run(
                 [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output)],
                 cwd=ROOT, check=True, timeout=15)
-            result = inspect_image(
-                output, question, Path.home() / "models/vision/MANIFEST.json")
+            if self.episode.session.get("profile") == "edge-vision":
+                from python.perception.edge_vision import RateLimiter, inspect_smolvlm
+                if self.edge_vlm_limiter is None:
+                    self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
+                result = inspect_smolvlm(output, question, Path.home() / "models/edge/MANIFEST.json",
+                                         self.edge_vlm_limiter)
+            else:
+                result = inspect_image(output, question, Path.home() / "models/vision/MANIFEST.json")
         result["image"]["source"] = "simulator_ephemeral_capture"
         self.episode.record("semantic_visual_inspection", result)
         return {key: result[key] for key in ("question", "answer", "latency_ms",

@@ -57,6 +57,13 @@ def replay(directory, check_guardrails=True):
             sensor_file = directory / name
             if not sensor_file.is_file() or digest(sensor_file) != expected:
                 raise ReplayError("sensor snapshot hash mismatch: " + name)
+    edge_snapshot = manifest.get("edge_vision_snapshot")
+    if edge_snapshot:
+        name = edge_snapshot.get("path", "")
+        if name.startswith("/") or ".." in Path(name).parts:
+            raise ReplayError("unsafe edge vision snapshot path")
+        if edge_snapshot.get("raw_pixels_saved") is not False or digest(directory / name) != edge_snapshot.get("sha256"):
+            raise ReplayError("edge vision snapshot hash mismatch")
     stream = manifest["streams"]["events.jsonl"]
     path = directory / "events.jsonl"
     if digest(path) != stream["sha256"]:

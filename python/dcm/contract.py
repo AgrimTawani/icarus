@@ -375,6 +375,10 @@ Rules:
 - If the aircraft is airborne and safety/perception is uncertain, choose hold
   or return_home rather than another takeoff. If it is landed and a completed
   mission has no further safe task, choose none.
+- If ``mission_reference.visual_requirements.person_count_requires_detect`` is
+  true and the mission asks for a person count, call ``detect`` with
+  ``["person"]`` before returning home or landing. A known landmark is a
+  committed navigation reference, not a visual detector class.
 - If no action is appropriate or the situation is unclear, reply with \
 {{"action":"none","arguments":{{}}}}.{ending}\
 """

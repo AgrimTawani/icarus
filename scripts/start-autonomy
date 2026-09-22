@@ -5,9 +5,14 @@ import json
 import os
 import socket
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
+if sys.argv[1:] not in ([], ["--profile", "edge-vision"]):
+    raise SystemExit("usage: ./scripts/start-autonomy [--profile edge-vision]")
+edge_profile = sys.argv[1:] == ["--profile", "edge-vision"]
 session_path = root / "logs/simulation/active_session.json"
 if not session_path.is_file():
     raise SystemExit("No active simulator; run ./scripts/start-sim first")
@@ -46,6 +51,19 @@ if not isinstance(scenario_name, str):
     raise SystemExit("Active simulator did not publish its scenario")
 scenario_path = root / "simulation/scenarios" / (scenario_name + ".json")
 scenario = json.loads(scenario_path.read_text())
+if edge_profile and scenario_name != "edge_people_building":
+    raise SystemExit("edge-vision requires ./scripts/start-sim --profile edge-vision")
+if edge_profile:
+    edge_log = root / "logs" / "simulation" / "edge-vision-observer.log"
+    with edge_log.open("ab") as log:
+        observer = subprocess.Popen(
+            [str(root / "scripts/start-edge-vision"), "--profile", "edge-vision"],
+            cwd=root, env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True)
+    # Fail closed if the pinned edge manifest is unavailable or invalid.
+    time.sleep(0.15)
+    if observer.poll() is not None:
+        raise SystemExit("edge vision observer failed; inspect " + str(edge_log))
 faults = scenario.get("mavlink_fault_schedule", [])
 if len(faults) > 1:
     raise SystemExit("Only one simulator MAVLink fault event is supported")

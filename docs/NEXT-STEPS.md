@@ -9,6 +9,16 @@ not a claim that Phase 10 or Phase 11 has passed its full exit gate.
 The historical sections below describe the route taken; they do not describe
 the current implementation state by themselves.
 
+## Edge-vision V1 closeout — 2026-09-23
+
+The simulation-only edge-vision implementation is complete and has a dedicated
+closeout record at [`simulation/EDGE-VISION-V1.md`](simulation/EDGE-VISION-V1.md).
+It adds Qwen Q4/4096 edge configuration, pinned YOLO11n and SmolVLM artifacts,
+the deterministic north-building/person scenario, sealed edge evidence,
+dual-camera grid streaming, and targeted tests. The retained early episode is
+replay-valid but semantic-count-invalid; rerun the documented acceptance mission
+after the ENU↔NED landmark correction before treating V1 as an acceptance pass.
+
 | Area | Current state | What remains before promotion |
 | --- | --- | --- |
 | Live DCM | Qwen/Llama runtime adapters, terminal chat, explicit approval and simulator-only autonomous modes are implemented behind typed Drone API actions. | Neither evaluated model meets the autonomous promotion threshold. |
