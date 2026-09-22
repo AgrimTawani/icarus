@@ -34,3 +34,6 @@ simulation/worlds/generated/
 *.swp
 *~
 .DS_Store
+
+
+_reference/
