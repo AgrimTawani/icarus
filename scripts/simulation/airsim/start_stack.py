@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SESSION = ROOT / "logs/simulation/airsim_active_session.json"
 ARDUPILOT = ROOT / "third_party/ardupilot"
 SITL = ARDUPILOT / "build/sitl/bin/arducopter"
+DEFAULT_SETTINGS = ROOT / "config/simulation/airsim/settings.arducopter.json"
 
 
 def _sha256(path):
@@ -24,9 +25,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True,
                         help="AirSim Unreal environment entrypoint")
+    parser.add_argument("--settings", type=Path, default=DEFAULT_SETTINGS)
+    parser.add_argument("--environment-id", default="blocks-v1.8.0")
+    parser.add_argument("--environment-license", default="MIT-compatible-binary-distribution")
+    parser.add_argument("--environment-source", default="microsoft/AirSim-v1.8.0")
+    parser.add_argument("--mission-reference", type=Path,
+                        help="Reviewed landmark/reference JSON for this scene")
+    parser.add_argument("--binary-arg", action="append", default=[],
+                        help="Argument forwarded to the Unreal entrypoint (repeatable)")
     parser.add_argument("--startup-timeout", type=float, default=60)
     parser.add_argument("--rebuild-sitl", action="store_true")
     args = parser.parse_args()
+    mission_reference = None
+    if args.mission_reference:
+        mission_reference = json.loads(args.mission_reference.read_text())
+        if not isinstance(mission_reference.get("known_landmarks", []), list):
+            parser.error("mission reference known_landmarks must be a list")
     if args.rebuild_sitl or not SITL.is_file():
         environment = dict(os.environ)
         environment["PATH"] = str(ARDUPILOT / ".venv/bin") + os.pathsep + environment["PATH"]
@@ -35,9 +49,13 @@ def main():
                        cwd=ARDUPILOT, env=environment, check=True)
         subprocess.run([str(waf), "build", "--target", "bin/arducopter"],
                        cwd=ARDUPILOT, env=environment, check=True)
-    subprocess.run([sys.executable, str(ROOT / "scripts/simulation/airsim/start.py"),
-                    "--binary", str(args.binary),
-                    "--startup-timeout", str(args.startup_timeout)], check=True)
+    start_command = [sys.executable, str(ROOT / "scripts/simulation/airsim/start.py"),
+                     "--binary", str(args.binary),
+                     "--settings", str(args.settings),
+                     "--startup-timeout", str(args.startup_timeout)]
+    if args.binary_arg:
+        start_command.extend(["--", *args.binary_arg])
+    subprocess.run(start_command, check=True)
     session = json.loads(SESSION.read_text())
     run_dir = ROOT / Path(session["runtime_home"]).parent
     sitl_log = run_dir / "arducopter.log"
@@ -82,7 +100,15 @@ def main():
             ["git", "rev-parse", "HEAD"], cwd=ARDUPILOT, text=True).strip(),
         "controller": "ArduPilot-SITL",
         "capability": "arducopter-sensor-conformance-candidate",
+        "profile": "airsim-realistic" if args.environment_id != "blocks-v1.8.0" else "airsim-blocks",
+        "environment": {
+            "id": args.environment_id,
+            "license": args.environment_license,
+            "source": args.environment_source,
+        },
     })
+    if mission_reference is not None:
+        session["mission_reference"] = mission_reference
     SESSION.write_text(json.dumps(session, indent=2) + "\n")
     deadline = time.monotonic() + args.startup_timeout
     smoke = [str(ROOT / "scripts/airsim-smoke"), "--timeout", "5"]

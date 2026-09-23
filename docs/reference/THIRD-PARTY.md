@@ -58,3 +58,19 @@ Fuel `actor` model to `~/models/edge/gazebo_fuel_cache/`. It is CC-BY-4.0 and
 its per-file checksums are included in `~/models/edge/MANIFEST.json`. The
 generated world uses only that local pinned copy; the simulator does not fetch
 Fuel assets while a mission is running.
+
+## AirVLN city environments
+
+`scripts/fetch-airvln-environments` installs the external AerialVLN Simulators
+v2 archive from `shuboliu/aerialvln-simulators` beneath ignored
+`third_party/airsim/environments/airvln/`. The 25 near-realistic Unreal/AirSim
+city scenarios are published under **CC BY-NC 4.0**. They are optional,
+non-commercial research assets and are never committed or redistributed with
+Icarus. Dataset version, source URL, declared size and archive digest live in
+`config/simulation/airsim/airvln-simulators.json`.
+
+AirVLN is Copyright its respective authors. Research using the environments
+should cite *AerialVLN: Vision-and-Language Navigation for UAVs* (ICCV 2023)
+as requested by the upstream project. AerialClaw's separate Shanghai/OpenFly
+binary is not public in its repository and is not bundled or represented as
+an Icarus asset.

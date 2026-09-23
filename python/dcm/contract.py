@@ -40,7 +40,7 @@ HISTORY_LIMIT = 12
 # v2 grounds every decision in the current physical aircraft state rather than
 # presenting the payload as an abstract JSON exercise.  It is a model-visible
 # change and must therefore travel with every report.
-PROMPT_VERSION = "dcm-prompt-v4-state-sequence"
+PROMPT_VERSION = "dcm-prompt-v6-mission-evidence"
 PROMPT_VERSION_CONTEXT = "dcm-prompt-v5-feedback"
 # The optional ending variant adds extra terminal emphasis above the base v2
 # embodiment guidance. It remains separately versioned for fair comparison.
@@ -429,6 +429,9 @@ Allowed actions:
 
 Rules:
 - Choose exactly one action from the list above.
+- When ``mission_guidance.required_next_action`` is present, propose that exact
+  action and its supplied arguments unless the current physical state makes it
+  unsafe. This is a deterministic pending mission obligation, not a suggestion.
 - "arguments" is always an object. Use {{}} when the action takes no arguments.
 - Never invent an action, an argument, or a unit.
 - Respect the present physical flight state, even if the mission text asks for
@@ -441,9 +444,24 @@ Rules:
   or return_home rather than another takeoff. If it is landed and a completed
   mission has no further safe task, choose none.
 - If ``mission_reference.visual_requirements.person_count_requires_detect`` is
-  true and the mission asks for a person count, call ``detect`` with
-  ``["person"]`` before returning home or landing. A known landmark is a
-  committed navigation reference, not a visual detector class.
+  true and the mission asks for a person count, a successful ``detect`` with
+  ``["person"]`` is a mandatory completion requirement. If history does not
+  contain it when the requested hover/navigation is complete, propose it next.
+  A known landmark is a committed navigation reference, not a detector class.
+- If ``mission_reference.visual_requirements.building_inspection_requires_inspect_scene``
+  is true and the mission asks to inspect or check a building, a successful
+  ``inspect_scene`` is a mandatory completion requirement. Immediately after
+  takeoff at its reviewed ``inspection_waypoint``, if history has no successful
+  ``inspect_scene``, the next non-safety action MUST be ``inspect_scene``—not
+  goto, hold, detect, return_home or land. Ask one concise visual question.
+  Takeoff at that same local position and altitude already satisfies the move.
+  Never infer people from qualitative prose when ``detect`` is available.
+- If the mission says "that building" or "the building", use
+  ``mission_reference.primary_target_id`` and the matching reviewed landmark;
+  do not invent coordinates from an image. If it asks to hover over/above that
+  building, first ``goto`` its exact ``hover_waypoint``, then ``hold`` there.
+- Before proposing ``return_home``, ``land`` or ``none``, inspect successful
+  action history and complete every requested mandatory visual requirement.
 - Honor the operator's explicit task order. If a mission says to orbit and
   then count people, complete the orbit before requesting ``detect``.
 - If no action is appropriate or the situation is unclear, reply with \

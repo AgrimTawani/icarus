@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Download and unpack the external CC-BY-NC AirVLN city environments.
+set -Eeuo pipefail
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  echo "usage: ./scripts/fetch-airvln-environments"
+  echo "Download, verify and extract the external CC-BY-NC AirVLN city archive."
+  exit 0
+fi
+if (( $# != 0 )); then
+  echo "usage: ./scripts/fetch-airvln-environments" >&2
+  exit 2
+fi
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG="${ROOT}/config/simulation/airsim/airvln-simulators.json"
+DESTINATION="${AIRVLN_ENV_DIR:-${ROOT}/third_party/airsim/environments/airvln}"
+URL="$(jq -r .url "${CONFIG}")"
+ARCHIVE="${DESTINATION}/$(jq -r .archive "${CONFIG}")"
+EXTRACTED="${DESTINATION}/$(jq -r .extract_dir "${CONFIG}")"
+
+mkdir -p "${DESTINATION}" "${EXTRACTED}"
+echo "AirVLN is CC-BY-NC-4.0 and is installed only as an external research asset."
+EXPECTED_SHA="$(jq -r '.archive_sha256 // empty' "${CONFIG}")"
+if [[ -n "${EXPECTED_SHA}" && -f "${ARCHIVE}" ]] && \
+   printf '%s  %s\n' "${EXPECTED_SHA}" "${ARCHIVE}" | sha256sum --check --status; then
+  echo "Using the already downloaded, digest-verified archive: ${ARCHIVE}"
+else
+  echo "Downloading/resuming approximately 35-40 GB: ${ARCHIVE}"
+  curl -L --fail --retry 5 --retry-delay 5 --continue-at - \
+    --output "${ARCHIVE}" "${URL}"
+fi
+if [[ -n "${EXPECTED_SHA}" ]]; then
+  printf '%s  %s\n' "${EXPECTED_SHA}" "${ARCHIVE}" | sha256sum --check
+fi
+unzip -tq "${ARCHIVE}"
+echo "Extracting city environments into ${EXTRACTED}"
+unzip -q -n "${ARCHIVE}" -d "${EXTRACTED}"
+find "${EXTRACTED}" -type f \( -name '*.sh' -o -name '*Linux-Shipping' \) \
+  -exec chmod u+x {} +
+echo "Installed AirVLN entrypoints:"
+find "${EXTRACTED}" -type f \( -name '*.sh' -o -name '*Linux-Shipping' \) \
+  -printf '%p\n' | sort

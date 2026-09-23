@@ -1,0 +1,18 @@
+{
+  "name": "AerialVLN Simulators v2",
+  "dataset": "shuboliu/aerialvln-simulators",
+  "url": "https://www.kaggle.com/api/v1/datasets/download/shuboliu/aerialvln-simulators",
+  "dataset_version": 2,
+  "available_scenes": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26],
+  "default_scene": 6,
+  "last_updated": "2024-10-08T06:51:26.837Z",
+  "license": "CC-BY-NC-4.0",
+  "license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
+  "declared_uncompressed_bytes": 40541039478,
+  "archive": "aerialvln-simulators.zip",
+  "archive_bytes": 34809808002,
+  "archive_sha256": "48921c09e51feb854be5ee072a8470ea87832adaa53473dc98dec1cc84afb22f",
+  "extract_dir": "extracted",
+  "redistribution": "External non-commercial research asset; never commit or redistribute with Icarus.",
+  "source": "https://github.com/AirVLN/AirVLN"
+}

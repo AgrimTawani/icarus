@@ -3,10 +3,11 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
-import tempfile
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -41,12 +42,25 @@ TERMINAL = {
 
 def _asks_count_of(text, noun):
     """Match an explicit count request, not a nearby unrelated noun."""
-    return bool(re.search(r"\bcount(?:\s+(?:the|a|an))?(?:\s+(?:number|amount))?(?:\s+of)?(?:\s+unique)?\s+"
+    return bool(re.search(r"\bcount(?:\s+(?:the|a|an))?(?:\s+(?:number|amount|no\.?))?(?:\s+of)?(?:\s+unique)?\s+"
                           + re.escape(noun) + r"\b", text.lower()))
 
 
+def _asks_building_inspection(text):
+    return bool(re.search(
+        r"\b(?:check|inspect|examine|observe|survey|look\s+at)\b[^.]{0,80}"
+        r"\b(?:building|structure|tower)\b", text.lower()))
+
+
+def _asks_hover_over_building(text):
+    return bool(re.search(
+        r"\bhover\b[^.]{0,50}\b(?:over|above)\b[^.]{0,30}"
+        r"\b(?:it|building|structure|tower)\b", text.lower()))
+
+
 class MissionClient:
-    def __init__(self, endpoint: str, mission_name: str = "drone_api_mission"):
+    def __init__(self, endpoint: str, mission_name: str = "drone_api_mission",
+                 vision_profile: str = "default"):
         self.endpoint = endpoint
         self.channel = grpc.insecure_channel(endpoint)
         grpc.channel_ready_future(self.channel).result(timeout=15)
@@ -68,6 +82,7 @@ class MissionClient:
         self.edge_detection_limiter = None
         self.edge_vlm_limiter = None
         self.simulation_session = None
+        self.vision_profile = vision_profile
 
     def connect(self):
         response = self.session_api.Connect(
@@ -90,16 +105,27 @@ class MissionClient:
         missing = required - available
         if missing:
             raise RuntimeError("Drone API lacks required capabilities: " + str(missing))
-        session_path = ROOT / "logs/simulation/active_session.json"
         session = None
-        if session_path.is_file():
+        candidates = (
+            (ROOT / "logs/simulation/active_session.json", "gazebo", "launcher_pid"),
+            (ROOT / "logs/simulation/airsim_active_session.json", "airsim", "pid"),
+        )
+        for session_path, simulator, pid_key in candidates:
+            if not session_path.is_file():
+                continue
             candidate = json.loads(session_path.read_text())
             try:
-                import os
-                os.kill(int(candidate["launcher_pid"]), 0)
-                session = candidate
+                os.kill(int(candidate[pid_key]), 0)
             except (KeyError, ValueError, ProcessLookupError):
-                pass
+                continue
+            candidate["simulator"] = simulator
+            if simulator == "airsim":
+                candidate.setdefault("profile", "airsim")
+                candidate.setdefault(
+                    "run_directory",
+                    str((ROOT / Path(candidate["runtime_home"])).parent))
+            session = candidate
+            break
         self.simulation_session = session
         self.episode = Episode(ROOT, self.mission_name, self.endpoint, session)
         self.action_api = ActionRecorder(self.action_api, self.episode, self)
@@ -107,26 +133,101 @@ class MissionClient:
 
     def mission_reference(self):
         """Return committed edge landmarks, never hidden ground-truth counts."""
-        if not self.simulation_session or self.simulation_session.get("profile") != "edge-vision":
+        if not self.simulation_session or self.vision_profile != "edge-vision":
             return {}
-        scenario_path = ROOT / "simulation/scenarios" / (self.simulation_session["scenario"] + ".json")
-        scenario = json.loads(scenario_path.read_text())
-        truth = scenario.get("ground_truth", {})
-        return {"known_landmarks": truth.get("known_landmarks", []),
-                "count_window_s": truth.get("count_window_s"),
+        truth = {}
+        if self.simulation_session.get("simulator") == "gazebo":
+            scenario_path = ROOT / "simulation/scenarios" / (
+                self.simulation_session["scenario"] + ".json")
+            truth = json.loads(scenario_path.read_text()).get("ground_truth", {})
+        reference = self.simulation_session.get("mission_reference", {})
+        result = {"known_landmarks": reference.get(
+                    "known_landmarks", truth.get("known_landmarks", [])),
+                "count_window_s": reference.get(
+                    "count_window_s", truth.get("count_window_s", 1)),
                 "visual_requirements": {
                     "person_count_requires_detect": True,
+                    "building_inspection_requires_inspect_scene": True,
                     "detector_classes": ["person"],
                     "known_landmarks_are_not_detector_classes": True,
                 }}
+        if reference.get("primary_target_id"):
+            result["primary_target_id"] = reference["primary_target_id"]
+        return result
+
+    def mission_guidance(self, mission, history, observation):
+        """Expose the next evidence obligation; it never executes an action."""
+        state = observation.get("state") or {}
+        flight_requested = bool(re.search(
+            r"\b(?:arm|take\s*off|takeoff|hover)\b", mission.lower()))
+        if flight_requested and state.get("landed") is True:
+            if state.get("armed") is not True:
+                return {"required_next_action": "arm", "arguments": {},
+                        "reason": "requested flight is disarmed on the ground"}
+            altitude = re.search(
+                r"\btake\s*off(?:\s+to)?\s+(\d+(?:\.\d+)?)\s*"
+                r"(?:m|metre|metres|meter|meters)\b", mission.lower())
+            target_altitude = float(altitude.group(1)) if altitude else 3.0
+            return {"required_next_action": "takeoff",
+                    "arguments": {"target_altitude_agl_m": target_altitude},
+                    "reason": "requested flight is armed but still on the ground"}
+        airborne = (state.get("armed") is True and
+                    (state.get("landed") is False or
+                     state.get("flight_phase") == "FLIGHT_PHASE_AIRBORNE"))
+        if not airborne:
+            return {}
+        successful = [item["action"] for item in history
+                      if item.get("outcome") == "SUCCEEDED"]
+        reference = self.mission_reference()
+        primary = next((item for item in reference.get("known_landmarks", [])
+                        if item.get("id") == reference.get("primary_target_id")), None)
+        if _asks_building_inspection(mission) and "inspect_scene" not in successful:
+            return {"required_next_action": "inspect_scene", "arguments": {
+                "question": "Describe the primary building and its visible surroundings."},
+                "reason": "requested building inspection has no successful visual evidence"}
+        if _asks_hover_over_building(mission):
+            waypoint = (primary or {}).get("hover_waypoint")
+            goto_index = next((index for index, action in enumerate(successful)
+                               if action == "goto"), None)
+            if goto_index is None and waypoint:
+                return {"required_next_action": "goto", "arguments": waypoint,
+                        "reason": "requested hover has not reached its reviewed waypoint"}
+            hold_after = (goto_index is not None and
+                          any(action == "hold" for action in successful[goto_index + 1:]))
+            if goto_index is not None and not hold_after:
+                seconds = re.search(r"\bhover\b[^.]{0,35}\bfor\s+(\d+(?:\.\d+)?)\s*seconds?\b",
+                                    mission.lower())
+                duration_ms = int(float(seconds.group(1)) * 1000) if seconds else 3000
+                return {"required_next_action": "hold",
+                        "arguments": {"duration_ms": duration_ms},
+                        "reason": "requested building waypoint has not been held"}
+            evidence_start = (next((index for index, action in enumerate(successful)
+                                    if action == "hold" and goto_index is not None
+                                    and index > goto_index), -1) + 1)
+        else:
+            evidence_start = 0
+        asks_people = (_asks_count_of(mission, "people") or
+                       _asks_count_of(mission, "person"))
+        if asks_people and "detect" not in successful[evidence_start:]:
+            return {"required_next_action": "detect",
+                    "arguments": {"classes": ["person"]},
+                    "reason": "requested person count has no post-hover detector evidence"}
+        if re.search(r"\breturn\s+(?:to\s+)?home\b", mission.lower()) and \
+                "return_home" not in successful:
+            return {"required_next_action": "return_home", "arguments": {},
+                    "reason": "operator requested a return home after evidence collection"}
+        return {}
 
     def assess_mission_completion(self, mission, executed):
         """Score requested edge evidence after landing without exposing it to the model."""
-        if not self.simulation_session or self.simulation_session.get("profile") != "edge-vision":
+        if not self.simulation_session or self.vision_profile != "edge-vision":
             return None
         text = mission.lower()
         asks_people = _asks_count_of(text, "people") or _asks_count_of(text, "person")
         asks_buildings = _asks_count_of(text, "building") or _asks_count_of(text, "buildings")
+        asks_building_inspection = _asks_building_inspection(text)
+        asks_hover_over_building = _asks_hover_over_building(text)
+        asks_return_home = bool(re.search(r"\breturn\s+(?:to\s+)?home\b", text))
         report = {"required": [], "satisfied": [], "reasons": []}
         person_results = [item.get("result") for item in executed
                           if item["action"] == "detect" and item["outcome"] == "SUCCEEDED"
@@ -135,7 +236,7 @@ class MissionClient:
             report["required"].append("unique_person_count")
             if not person_results:
                 report["reasons"].append("requested person count has no successful detect evidence")
-            else:
+            elif self.simulation_session.get("simulator") == "gazebo":
                 scenario_path = ROOT / "simulation/scenarios" / (self.simulation_session["scenario"] + ".json")
                 expected = json.loads(scenario_path.read_text())["ground_truth"]["unique_person_count"]
                 observed = person_results[-1].get("unique_person_count")
@@ -144,6 +245,10 @@ class MissionClient:
                 else:
                     report["reasons"].append(
                         f"person count is {observed!r}; expected {expected} in this deterministic scenario")
+            else:
+                report["satisfied"].append("visible_person_count")
+                report["observed_person_count"] = person_results[-1].get(
+                    "unique_person_count")
             if "orbit" in text:
                 orbit_index = next((index for index, item in enumerate(executed)
                                     if item["action"] == "orbit" and item["outcome"] == "SUCCEEDED"), None)
@@ -155,9 +260,77 @@ class MissionClient:
         if asks_buildings:
             report["required"].append("visual_building_count")
             report["reasons"].append(
-                "stock YOLO11n has no building class; use the committed north_building landmark instead")
+                "stock YOLO11n has no building class; use a committed building landmark instead")
+        if asks_building_inspection:
+            report["required"].append("building_visual_inspection")
+            inspected = [item.get("result") for item in executed
+                         if item["action"] == "inspect_scene"
+                         and item["outcome"] == "SUCCEEDED"]
+            if inspected:
+                report["satisfied"].append("building_visual_inspection")
+            else:
+                report["reasons"].append(
+                    "requested building inspection has no successful inspect_scene evidence")
+        if asks_hover_over_building:
+            report["required"].append("building_hover")
+            reference = self.simulation_session.get("mission_reference", {})
+            primary_id = reference.get("primary_target_id")
+            primary = next((item for item in reference.get("known_landmarks", [])
+                            if item.get("id") == primary_id), None)
+            waypoint = (primary or {}).get("hover_waypoint")
+            if not waypoint:
+                report["reasons"].append(
+                    "requested building hover has no reviewed hover waypoint")
+            else:
+                goto_index = next((index for index, item in enumerate(executed)
+                                   if item["action"] == "goto"
+                                   and item["outcome"] == "SUCCEEDED"
+                                   and all(abs(float(item["arguments"].get(key, 1e9))
+                                               - float(waypoint[key])) <= 1.0
+                                           for key in ("north_m", "east_m",
+                                                       "altitude_agl_m"))), None)
+                hold_index = next((index for index, item in enumerate(executed)
+                                   if item["action"] == "hold"
+                                   and item["outcome"] == "SUCCEEDED"
+                                   and goto_index is not None and index > goto_index), None)
+                if goto_index is None or hold_index is None:
+                    report["reasons"].append(
+                        "requested building hover did not reach the reviewed waypoint and hold")
+                else:
+                    report["satisfied"].append("building_hover")
+                    if asks_people:
+                        detect_after = any(
+                            index > hold_index and item["action"] == "detect"
+                            and item["outcome"] == "SUCCEEDED"
+                            and "person" in item.get("arguments", {}).get("classes", [])
+                            for index, item in enumerate(executed))
+                        if not detect_after:
+                            report["reasons"].append(
+                                "requested person count was not observed after the building hover")
+        if asks_return_home:
+            report["required"].append("return_home")
+            if any(item["action"] == "return_home" and item["outcome"] == "SUCCEEDED"
+                   for item in executed):
+                report["satisfied"].append("return_home")
+            else:
+                report["reasons"].append("requested return home did not complete")
         report["success"] = not report["reasons"]
         return report
+
+    def _capture_rgb(self, output, *, camera="0"):
+        """Capture one ephemeral frame from the active simulator."""
+        if self.simulation_session.get("simulator") == "airsim":
+            command = [str(ROOT / "scripts/capture-airsim-frame"),
+                       "--output", str(output), "--camera", camera]
+            source = "airsim_ephemeral_capture"
+        else:
+            command = [str(ROOT / "scripts/capture-camera-frame"),
+                       "--output", str(output),
+                       "--topic", "/icarus/sensors/rgbd_down/image"]
+            source = "gazebo_ephemeral_capture"
+        subprocess.run(command, cwd=ROOT, check=True, timeout=15,
+                       capture_output=True, text=True)
+        return source
 
     def acquire(self):
         response = self.authority_api.AcquireControl(
@@ -222,19 +395,23 @@ class MissionClient:
         from python.perception.vision import detect_image, normalize_classes
 
         classes = normalize_classes(classes)
-        if self.episode.session.get("profile") == "edge-vision" and "person" in classes:
+        if (self.vision_profile == "edge-vision" and
+                self.simulation_session.get("simulator") == "gazebo" and
+                "person" in classes):
             return self._edge_count_window(classes)
         # Pixels are inspection input, not episode data. Capture into an
         # ephemeral directory, retain only the image hash and structured
         # detector output, then remove the frame before returning.
         with tempfile.TemporaryDirectory(prefix="icarus-vision-") as temporary:
-            output = Path(temporary) / "frame.ppm"
-            subprocess.run(
-                [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output),
-                 "--topic", "/icarus/sensors/rgbd_down/image"],
-                cwd=ROOT, check=True, timeout=15)
-            if self.episode.session.get("profile") == "edge-vision":
-                from python.perception.edge_vision import RateLimiter, UniqueTrackCounter, detect_edge_image
+            suffix = ".png" if self.simulation_session.get("simulator") == "airsim" else ".ppm"
+            output = Path(temporary) / ("frame" + suffix)
+            source = self._capture_rgb(output)
+            if self.vision_profile == "edge-vision":
+                from python.perception.edge_vision import (
+                    RateLimiter,
+                    UniqueTrackCounter,
+                    detect_edge_image,
+                )
                 if self.edge_tracker is None:
                     self.edge_tracker = UniqueTrackCounter()
                     self.edge_detection_limiter = RateLimiter(interval_s=0.2)
@@ -246,7 +423,7 @@ class MissionClient:
         if "image" in result:
             result["image"].pop("path", None)
             result["image"]["source"] = "simulator_ephemeral_capture"
-        result["source"] = "simulator_ephemeral_capture"
+        result["source"] = source
         # Keep the model's next observation bounded: it needs count evidence,
         # not a potentially large box list or image payload.
         summary = ({"unique_person_count": result["unique_person_count"],
@@ -299,7 +476,11 @@ class MissionClient:
         if self.episode is None or not self.episode.session:
             raise RuntimeError("landing assessment requires an active simulator episode")
         import numpy as np
-        from python.perception.landing_zone import assess_landing_zone, load_landing_source
+
+        from python.perception.landing_zone import (
+            assess_landing_zone,
+            load_landing_source,
+        )
 
         source = load_landing_source(ROOT / "config/perception/landing_zone.json")
 
@@ -334,11 +515,10 @@ class MissionClient:
 
         question = normalize_question(question)
         with tempfile.TemporaryDirectory(prefix="icarus-vlm-") as temporary:
-            output = Path(temporary) / "frame.ppm"
-            subprocess.run(
-                [str(ROOT / "scripts/capture-camera-frame"), "--output", str(output)],
-                cwd=ROOT, check=True, timeout=15)
-            if self.episode.session.get("profile") == "edge-vision":
+            suffix = ".png" if self.simulation_session.get("simulator") == "airsim" else ".ppm"
+            output = Path(temporary) / ("frame" + suffix)
+            source = self._capture_rgb(output)
+            if self.vision_profile == "edge-vision":
                 from python.perception.edge_vision import RateLimiter, inspect_smolvlm
                 if self.edge_vlm_limiter is None:
                     self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
@@ -346,7 +526,7 @@ class MissionClient:
                                          self.edge_vlm_limiter)
             else:
                 result = inspect_image(output, question, Path.home() / "models/vision/MANIFEST.json")
-        result["image"]["source"] = "simulator_ephemeral_capture"
+        result["image"]["source"] = source
         self.episode.record("semantic_visual_inspection", result)
         return {key: result[key] for key in ("question", "answer", "latency_ms",
                                               "observed_at_unix_ms", "flight_authority")}

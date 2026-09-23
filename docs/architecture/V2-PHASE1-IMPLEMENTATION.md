@@ -74,6 +74,28 @@ AirSim remains a supplementary track. Blocks does not supply Icarus's frozen
 Gazebo scenarios, seeded atmosphere or equivalent scene determinism, so this
 proof does not promote it over Gazebo.
 
+### Realistic city and semantic mission extension
+
+The optional, digest-pinned AerialVLN Simulators v2 archive now supplies 25
+external city-scale Unreal environments under CC BY-NC 4.0. Scene 6 is the
+tested default because it provides a bright textured residential area and a
+safe nearby low-rise target. `start-airsim-realistic` preserves the same
+ArduPilot route and attaches a reviewed landmark reference to the session.
+
+Live AirSim RGB frames now feed the existing edge-vision boundaries. SmolVLM
+describes the primary building; YOLO supplies the visible-person count. Neither
+has flight authority. A deterministic mission-guidance feedback field exposes
+pending evidence obligations, and proposals that contradict it are recorded
+and refused before reaching the Drone API. This prevents a model from claiming
+“hover over that building” at an invented coordinate or landing before required
+visual evidence is collected.
+
+The final prompt-driven scene-6 episode
+`20260923T212718_6bf94baf9b39` executed Arm, Takeoff 3 m, InspectScene, Goto the
+reviewed `(25, -6, 22)` NED/AGL waypoint, Hold 3 s, Detect person, and
+ReturnHome/land. One premature goto was refused, the model recovered on its
+next decision, every executed action succeeded, and semantic completion passed.
+
 ## Reproduction
 
 ```bash
@@ -87,6 +109,18 @@ ctest --test-dir build/phase8 --output-on-failure
 # second terminal
 ./scripts/start-autonomy-airsim
 ./scripts/run-mission --mission takeoff_hover_land --altitude 2 --hover-seconds 3
+
+# One-time optional realistic city installation, then tested scene 6.
+./scripts/fetch-airvln-environments
+./scripts/start-airsim-realistic
+# second terminal
+./scripts/start-autonomy-airsim
+# third terminal
+./scripts/view-airsim-camera
+# fourth terminal
+./scripts/dcm-fly --runtime llama --profile edge-vision --mode autonomous \
+  --context-length 4096 --max-decisions 18 \
+  --mission "Arm, take off to 3 metres, check that building, hover over it for 3 seconds, count no. of people, then return home and land."
 ```
 
 The evaluation and promotion commands are documented in

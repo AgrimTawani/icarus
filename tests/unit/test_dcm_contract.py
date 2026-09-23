@@ -384,7 +384,7 @@ class PromptTests(unittest.TestCase):
     def test_prompt_carries_its_version_and_the_observation(self):
         observation = {"observed_at_unix_ms": 1, "state": {}}
         prompt = render_prompt(observation)
-        self.assertEqual(prompt["prompt_version"], "dcm-prompt-v4-state-sequence")
+        self.assertEqual(prompt["prompt_version"], "dcm-prompt-v6-mission-evidence")
         self.assertIn("real multirotor aircraft", prompt["system"])
         self.assertIn("disarmed aircraft on the ground must arm before takeoff",
                       prompt["system"])

@@ -117,7 +117,8 @@ def main():
     MissionClient = _load_mission_client()
 
     runtime, descriptor = build_runtime(args)
-    client = MissionClient(args.endpoint, args.mission or "dcm_chat_session")
+    client = MissionClient(args.endpoint, args.mission or "dcm_chat_session",
+                           args.profile)
     mode = args.mode
     session_results = []
     sampler = None

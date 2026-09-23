@@ -98,6 +98,10 @@ def observe(client, memory, decision_index, context_version="v2"):
     reference = getattr(client, "mission_reference", dict)()
     if reference:
         observation["mission_reference"] = reference
+    guidance = getattr(client, "mission_guidance", lambda *_: {})(
+        memory.mission, memory.as_history(), observation)
+    if guidance:
+        observation["mission_guidance"] = guidance
     return observation
 
 
@@ -197,6 +201,24 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             status, proposal, error = "invalid", None, str(invalid)
         latency_ms = (time.monotonic() - started) * 1000
         counts["proposed"] += 1
+
+        guidance = observation.get("mission_guidance") or {}
+        if proposal is not None and guidance:
+            required_action = guidance["required_next_action"]
+            required_arguments = guidance.get("arguments", {})
+            arguments_match = (proposal["action"] == "inspect_scene" or
+                               proposal["arguments"] == required_arguments)
+            if proposal["action"] != required_action or not arguments_match:
+                counts["invalid"] += 1
+                error = ("proposal does not satisfy deterministic mission guidance: "
+                         f"required {required_action} {required_arguments}")
+                transition = health.transition("invalid", airborne=_airborne(observation))
+                echo(f"[{index}] refused {proposal['action']}: {error}")
+                memory.remember(proposal["action"], "REJECTED", {"reason": error})
+                _record(client, index, observation, prompt, raw, "invalid", error,
+                        latency_ms, proposal=proposal, rationale=rationale,
+                        health=health.record())
+                continue
 
         if proposal is None:
             transition = health.transition(status, airborne=_airborne(observation))

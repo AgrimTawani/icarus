@@ -4,12 +4,28 @@
 import json
 import os
 import signal
+import socket
 import subprocess
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SESSION = ROOT / "logs/simulation/airsim_active_session.json"
+
+
+def _port_open(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.2)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _wait_port_closed(port, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _port_open(port):
+            return True
+        time.sleep(0.1)
+    return False
 
 
 def _stop_group(pid):
@@ -56,6 +72,8 @@ def main():
     else:
         _stop_group(session.get("sitl_pid"))
     _stop_group(pid)
+    if not _wait_port_closed(int(session.get("rpc_port", 41451))):
+        raise SystemExit("Recorded AirSim group stopped but RPC port is still open")
     SESSION.unlink()
     print("Stopped recorded AirSim session")
 

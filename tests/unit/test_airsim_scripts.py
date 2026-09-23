@@ -62,9 +62,15 @@ class AirSimScriptTests(unittest.TestCase):
             ROOT / "scripts/start-autonomy-airsim",
             ROOT / "scripts/airsim-sensor-bridge",
             ROOT / "scripts/airsim-doctor", ROOT / "scripts/fetch-airsim-blocks",
+            ROOT / "scripts/fetch-airvln-environments",
+            ROOT / "scripts/start-airsim-realistic",
             ROOT / "scripts/airsim-smoke", ROOT / "scripts/view-airsim-camera",
+            ROOT / "scripts/capture-airsim-frame",
             ROOT / "scripts/simulation/airsim/README.md",
             ROOT / "scripts/simulation/gazebo/README.md", ROOT / "scripts/README.md",
             ROOT / "config/simulation/airsim/blocks-v1.8.0.json",
+            ROOT / "config/simulation/airsim/airvln-simulators.json",
+            ROOT / "config/simulation/airsim/settings.realistic-city.json",
+            ROOT / "config/simulation/airsim/airvln-env-6-reference.json",
         ):
             self.assertTrue(path.is_file(), path)

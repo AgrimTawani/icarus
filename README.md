@@ -41,10 +41,20 @@ The complete documentation index is [docs/README.md](docs/README.md).
 # Legacy one-shot acceptance run
 ./scripts/sim --profile simulation-wind --gui
 
-# Separate AirSim track (after ./scripts/fetch-airsim-blocks)
+# Small AirSim compatibility track (after ./scripts/fetch-airsim-blocks)
 ./scripts/start-airsim-stack --binary \
   third_party/airsim/blocks-v1.8.0-linux/Blocks/LinuxNoEditor/Blocks.sh
 # second terminal: ./scripts/start-autonomy-airsim
+
+# High-detail city track (one-time CC-BY-NC asset installation first)
+./scripts/fetch-airvln-environments
+./scripts/start-airsim-realistic
+# second terminal: ./scripts/start-autonomy-airsim
+# third terminal:  ./scripts/view-airsim-camera
+# fourth terminal: ./scripts/dcm-fly --runtime llama --profile edge-vision \
+#   --mode autonomous --context-length 4096 --max-decisions 18 \
+#   --mission "Arm, take off to 3 metres, check that building, hover over it \
+#   for 3 seconds, count no. of people, then return home and land."
 ```
 
 List every supported or reserved profile with

@@ -150,7 +150,7 @@ class ObserveTests(unittest.TestCase):
             self.assertEqual(contract["vocabulary_version"],
                              "dcm-actions-v4-vision-inspection")
             self.assertEqual(contract["prompt_version"],
-                             "dcm-prompt-v4-state-sequence")
+                             "dcm-prompt-v6-mission-evidence")
             self.assertIn("none", contract["allowed_actions"])
             self.assertIsNone(summary["model"])
 

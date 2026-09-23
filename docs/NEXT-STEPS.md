@@ -20,9 +20,12 @@ latency, despite better recovery. Do not make V3 the default until it passes
 the committed scorecard including three paired live Gazebo episodes.
 
 AirSim has passed a real Drone API takeoff/hold/land and stale-LiDAR refusal.
-Its next research task is a frozen Gazebo/AirSim scenario subset with pinned
-environment conditions; it must not replace Gazebo promotion evidence. The
-full closeout is
+The optional AerialVLN v2 archive is digest-pinned and all 25 external city
+scenes are installed. Default scene 6 also passed a prompt-driven live-camera
+building inspection, reviewed hover, visible-person count and RTL/land. The
+remaining research task is a frozen Gazebo/AirSim scenario subset with pinned
+environment conditions; the city track must not replace Gazebo promotion
+evidence. The full closeout is
 [`architecture/V2-PHASE1-IMPLEMENTATION.md`](architecture/V2-PHASE1-IMPLEMENTATION.md).
 
 ## Edge-vision V1 closeout — 2026-09-23

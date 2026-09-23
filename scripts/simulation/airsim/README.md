@@ -1,4 +1,4 @@
-# AirSim ArduCopter simulation track (experimental)
+# AirSim ArduCopter simulation track
 
 AirSim is a second, isolated simulator track for high-detail visual/perception
 experiments. It is **not** a replacement for the Gazebo Harmonic promotion
@@ -23,9 +23,9 @@ their transport, sensors and timing must not be accidentally mixed.
 
 ## Prerequisites
 
-1. Fetch the digest-pinned Blocks v1.8.0 asset or supply another licensed,
-   version-pinned Linux environment. AerialClaw's OpenFly host is not an
-   Icarus dependency and is not reproduced here.
+1. Use the digest-pinned Blocks v1.8.0 asset for a small compatibility smoke,
+   or install the external AirVLN cities for high-detail visual testing.
+   AerialClaw's private OpenFly/Shanghai host is not an Icarus dependency.
 2. Use an AirSim version that supports `ArduCopter`; do not use `SimpleFlight`
    and do not use direct AirSim Python movement APIs for Icarus tests.
 3. Build/provide the pinned ArduPilot checkout. The full stack launcher starts
@@ -46,6 +46,10 @@ caused the binary to fall back to SimpleFlight.
 # Fetch the digest-verified environment into ignored third_party/.
 ./scripts/fetch-airsim-blocks
 
+# Optional: install the ~35 GB AirVLN archive (~40 GB extracted).
+# The asset is CC BY-NC 4.0 and is for non-commercial research only.
+./scripts/fetch-airvln-environments
+
 # Low-level RPC-only diagnostic (not flight-ready).
 ./scripts/start-airsim --binary /path/to/Environment.sh
 
@@ -55,6 +59,9 @@ caused the binary to fall back to SimpleFlight.
 ./scripts/view-airsim-camera
 ./scripts/start-autonomy-airsim
 ./scripts/run-mission --mission takeoff_hover_land --altitude 2 --hover-seconds 3
+
+# High-detail city track (same ArduPilot/Drone API control path).
+./scripts/start-airsim-realistic
 
 # Stop only the recorded AirSim process.
 ./scripts/stop-airsim
@@ -75,3 +82,16 @@ The adapter/conformance suite covers frames, units, timestamps, metadata,
 malformed packets, stale-sensor fail-closed behavior and proof that truth/raw
 sensor payloads never reach DCM curation. See the architecture document for
 the remaining cross-simulator promotion boundary.
+
+## Prompt-driven city mission
+
+The realistic launcher records the scene ID, asset source, license, settings
+digest and reviewed landmark reference in the active session. With the Drone
+API running, `dcm-fly --profile edge-vision` can use those committed local-NED
+waypoints, inspect one live RGB frame with SmolVLM and count visible people
+with YOLO. The image models remain evidence-only: every arm, takeoff, goto,
+hold and land still passes through Icarus guardrails, MAVLink and ArduPilot.
+
+AirVLN cities are visually rich but are not deterministic people-count test
+fixtures. A valid result may therefore be zero visible people. Use the Gazebo
+`edge-vision` scenario when a fixed expected count is required for regression.

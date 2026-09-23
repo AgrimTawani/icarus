@@ -7,7 +7,7 @@ operator command used by prior acceptance evidence.
 | Area | Canonical location | Stable entry points |
 | --- | --- | --- |
 | Gazebo simulation | `scripts/simulation/gazebo/` and existing builders in `scripts/simulation/` | `start-sim`, `sim`, `manual-control`, `view-camera` |
-| AirSim simulation | `scripts/simulation/airsim/` | `airsim-doctor`, `fetch-airsim-blocks`, `start-airsim-stack`, `start-autonomy-airsim`, `airsim-smoke`, `view-airsim-camera`, `stop-airsim` |
+| AirSim simulation | `scripts/simulation/airsim/` | `airsim-doctor`, `fetch-airsim-blocks`, `fetch-airvln-environments`, `start-airsim-stack`, `start-airsim-realistic`, `start-autonomy-airsim`, `airsim-smoke`, `view-airsim-camera`, `capture-airsim-frame`, `stop-airsim` |
 | Autonomous acceptance | `scripts/autonomy/` | `run-mission`, `test-phase8`, `test-phase9`, Phase 12 commands |
 | DCM/evaluation | `python/dcm/` with root wrappers | `dcm-fly`, `observe-dcm`, `evaluate-dcm`, `compare-dcm`, `build-dcm-feedback`, `evaluate-dcm-v2-promotion` |
 | Perception | `python/perception/` with root wrappers | `detect-image`, `detect-edge-image`, `assess-landing-zone` |
