@@ -1,0 +1,85 @@
+{
+  "SettingsVersion": 1.2,
+  "SimMode": "Multirotor",
+  "ViewMode": "FlyWithMe",
+  "RpcEnabled": true,
+  "ApiServerPort": 41451,
+  "CameraDefaults": {
+    "CaptureSettings": [
+      {
+        "ImageType": 0,
+        "Width": 1280,
+        "Height": 720,
+        "FOV_Degrees": 90,
+        "AutoExposureSpeed": 100,
+        "AutoExposureBias": 0
+      },
+      {
+        "ImageType": 1,
+        "Width": 640,
+        "Height": 360,
+        "FOV_Degrees": 90
+      }
+    ]
+  },
+  "OriginGeopoint": {
+    "Latitude": -35.363261,
+    "Longitude": 149.165230,
+    "Altitude": 583
+  },
+  "Vehicles": {
+    "Icarus": {
+      "VehicleType": "ArduCopter",
+      "UseSerial": false,
+      "LocalHostIp": "127.0.0.1",
+      "UdpIp": "127.0.0.1",
+      "UdpPort": 9003,
+      "ControlPort": 9002,
+      "AutoCreate": true,
+      "Cameras": {
+        "0": {
+          "CaptureSettings": [
+            {
+              "ImageType": 0,
+              "Width": 1280,
+              "Height": 720,
+              "FOV_Degrees": 90,
+              "AutoExposureSpeed": 100,
+              "AutoExposureBias": 0
+            },
+            {
+              "ImageType": 1,
+              "Width": 640,
+              "Height": 360,
+              "FOV_Degrees": 90
+            }
+          ],
+          "X": 0.35,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": -20,
+          "Roll": 0,
+          "Yaw": 0
+        }
+      },
+      "Sensors": {
+        "Imu": {"SensorType": 2, "Enabled": true},
+        "Gps": {"SensorType": 3, "Enabled": true},
+        "Lidar1": {
+          "SensorType": 6,
+          "Enabled": true,
+          "NumberOfChannels": 16,
+          "PointsPerSecond": 10000,
+          "DrawDebugPoints": false,
+          "RotationsPerSecond": 10,
+          "VerticalFOVUpper": 10,
+          "VerticalFOVLower": -20,
+          "HorizontalFOVStart": 0,
+          "HorizontalFOVEnd": 359,
+          "DataFrame": "SensorLocalFrame",
+          "ExternalController": true
+        }
+      }
+    }
+  }
+}

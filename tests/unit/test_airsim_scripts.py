@@ -48,6 +48,24 @@ class AirSimScriptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("never SimpleFlight", result.stdout)
 
+    def test_doctor_accepts_reviewed_windowed_configuration_only_when_requested(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = self._settings(temp)
+            value = json.loads(settings.read_text())
+            value["ViewMode"] = "FlyWithMe"
+            settings.write_text(json.dumps(value))
+            binary = self._binary(temp)
+            rejected = subprocess.run(
+                ["/usr/bin/python3", str(DOCTOR), "--binary", str(binary),
+                 "--settings", str(settings)], text=True, capture_output=True,
+                check=False)
+            accepted = subprocess.run(
+                ["/usr/bin/python3", str(DOCTOR), "--binary", str(binary),
+                 "--settings", str(settings), "--allow-windowed"], text=True,
+                capture_output=True, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+
     def test_launcher_refuses_nullrhi_for_a_visual_run(self):
         result = subprocess.run(
             ["/usr/bin/python3", str(START), "--binary", "/does/not/exist",
@@ -71,6 +89,7 @@ class AirSimScriptTests(unittest.TestCase):
             ROOT / "config/simulation/airsim/blocks-v1.8.0.json",
             ROOT / "config/simulation/airsim/airvln-simulators.json",
             ROOT / "config/simulation/airsim/settings.realistic-city.json",
+            ROOT / "config/simulation/airsim/settings.realistic-city.gui.json",
             ROOT / "config/simulation/airsim/airvln-env-6-reference.json",
         ):
             self.assertTrue(path.is_file(), path)

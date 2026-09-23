@@ -128,7 +128,15 @@ For the high-detail track, replace steps 1 and 3 with:
 ```bash
 ./scripts/fetch-airvln-environments   # one-time, large external download
 ./scripts/start-airsim-realistic      # tested default scene
+./scripts/start-airsim-realistic --gui # native 1280x720 Unreal viewport
 ```
+
+The `--gui` mode is for an operator who wants to inspect the rendered city. It
+uses a separate reviewed `FlyWithMe` settings profile and retains the full
+ArduPilot/RPC/sensor stack. The default command remains off-screen and
+`NoDisplay` for repeatable automated runs. `view-airsim-camera` is not the
+Unreal viewport: it displays the vehicle's RGB capture beside a false-color
+depth product, at the sensor resolutions selected for autonomy throughput.
 
 `--scene <id>` selects another installed AirVLN scene, but it does not make
 that scene a calibrated mission environment. Prompt-driven building flight

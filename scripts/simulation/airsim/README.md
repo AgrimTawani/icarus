@@ -63,6 +63,9 @@ caused the binary to fall back to SimpleFlight.
 # High-detail city track (same ArduPilot/Drone API control path).
 ./scripts/start-airsim-realistic
 
+# High-detail city with the native Unreal/AirSim viewport visible.
+./scripts/start-airsim-realistic --gui
+
 # Stop only the recorded AirSim process.
 ./scripts/stop-airsim
 ```
@@ -72,9 +75,19 @@ the main viewport. Do not pass `--nullrhi` for RGB/depth/segmentation tests:
 it disables rendering and image APIs. It is accepted only with `--no-vision`
 for explicitly non-visual throughput experiments.
 
+`./scripts/start-airsim-realistic --gui` is the operator-view alternative. It
+uses the reviewed `FlyWithMe` profile, opens the packaged Unreal viewport at
+1280x720, and still starts the same ArduPilot SITL stack. This is different
+from `view-airsim-camera`: the former is the simulator's native rendered
+viewport, while the latter is a diagnostic composite of the vehicle RGB and
+false-color depth API streams.
+
 `./scripts/view-airsim-camera` opens a passive live grid with forward RGB and
 colorized planar depth from the off-screen AirSim API. Run it in its own
 terminal while the stack is active; press `q`, Escape, or Ctrl+C to close it.
+The headless autonomy profile intentionally captures RGB at 640x360 and depth
+at 320x180. Its diagnostic viewer is evidence-oriented, not a measure of the
+native viewport's visual fidelity.
 For a non-GUI capture test use
 `./scripts/view-airsim-camera --no-window --frames 3 --output /tmp/airsim-camera.png`.
 

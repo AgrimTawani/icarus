@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--binary", type=Path,
                         default=Path(configured_binary) if configured_binary else None)
     parser.add_argument("--settings", type=Path, default=DEFAULT_SETTINGS)
+    parser.add_argument("--allow-windowed", action="store_true",
+                        help="Accept a reviewed interactive AirSim ViewMode instead of NoDisplay.")
     args = parser.parse_args()
     findings = []
     if args.binary is None:
@@ -28,7 +30,14 @@ def main():
         findings.append(f"invalid settings file {args.settings}: {error}")
         settings = {}
     vehicle = (settings.get("Vehicles") or {}).get("Icarus") or {}
-    if settings.get("ViewMode") != "NoDisplay":
+    view_mode = settings.get("ViewMode")
+    interactive_modes = {"FlyWithMe", "Fpv", "GroundObserver", "SpringArmChase", "Manual"}
+    if args.allow_windowed:
+        if view_mode not in interactive_modes:
+            findings.append(
+                "windowed settings must use a supported interactive ViewMode "
+                f"({', '.join(sorted(interactive_modes))})")
+    elif view_mode != "NoDisplay":
         findings.append("settings must set ViewMode=NoDisplay for headless visual tests")
     if vehicle.get("VehicleType") != "ArduCopter":
         findings.append("settings must use VehicleType=ArduCopter, never SimpleFlight")

@@ -114,7 +114,9 @@ def main():
         parser.error(f"AirSim RPC port {args.port} is already in use")
     doctor = ROOT / "scripts/simulation/airsim/doctor.py"
     checked = subprocess.run([sys.executable, str(doctor), "--binary", str(args.binary),
-                              "--settings", str(args.settings)], check=False)
+                              "--settings", str(args.settings),
+                              *(["--allow-windowed"] if args.no_render_offscreen else [])],
+                             check=False)
     if checked.returncode:
         raise SystemExit(checked.returncode)
     # Classic AirSim does not consume a ``-settings=`` command-line option.
@@ -166,7 +168,8 @@ def main():
                 "settings_sha256": _sha256(args.settings),
                 "binary_sha256": _sha256(args.binary),
                 "runtime_home": str(runtime_home.relative_to(ROOT)),
-                "rendering": "disabled" if args.nullrhi else "offscreen",
+                "rendering": ("disabled" if args.nullrhi else
+                              "windowed" if args.no_render_offscreen else "offscreen"),
                 "capability": "visual-rpc-smoke-only" if simpleflight else "arducopter-candidate",
                 "log": str(log_path.relative_to(ROOT)),
                 "started_unix_ms": started_ms,

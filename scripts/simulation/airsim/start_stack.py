@@ -34,6 +34,8 @@ def main():
     parser.add_argument("--binary-arg", action="append", default=[],
                         help="Argument forwarded to the Unreal entrypoint (repeatable)")
     parser.add_argument("--startup-timeout", type=float, default=60)
+    parser.add_argument("--no-render-offscreen", action="store_true",
+                        help="Open the Unreal viewport instead of using off-screen rendering.")
     parser.add_argument("--rebuild-sitl", action="store_true")
     args = parser.parse_args()
     mission_reference = None
@@ -53,6 +55,8 @@ def main():
                      "--binary", str(args.binary),
                      "--settings", str(args.settings),
                      "--startup-timeout", str(args.startup_timeout)]
+    if args.no_render_offscreen:
+        start_command.append("--no-render-offscreen")
     if args.binary_arg:
         start_command.extend(["--", *args.binary_arg])
     subprocess.run(start_command, check=True)
