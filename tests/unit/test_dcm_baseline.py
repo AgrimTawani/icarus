@@ -9,7 +9,7 @@ import json
 import unittest
 
 from python.dcm.baseline import ScriptedRuntime
-from python.dcm.contract import validate_proposal
+from python.dcm.contract import validate_decision, validate_proposal
 
 
 def observation(mission="takeoff_hover_land", completed=(), **state):
@@ -44,6 +44,14 @@ class ContractComplianceTests(unittest.TestCase):
         for case in cases:
             with self.subTest(case=case["state"]["flight_phase"]):
                 validate_proposal(runtime.propose(case))
+
+    def test_v3_response_adds_the_required_bounded_rationale(self):
+        case = observation()
+        case["context_version"] = "dcm-context-v3-feedback"
+        proposal, rationale = validate_decision(
+            ScriptedRuntime().propose(case), allow_rationale=True)
+        self.assertEqual(proposal["action"], "arm")
+        self.assertTrue(rationale)
 
     def test_it_never_reads_the_recorded_action(self):
         # A baseline that peeked would score perfectly and mean nothing.

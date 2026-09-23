@@ -464,7 +464,7 @@ class EpisodeSealSummaryTests(unittest.TestCase):
         }
         with patch.object(fly_cli, "_load_mission_client", return_value=ClosingClient), \
              patch.object(fly_cli, "build_runtime", return_value=(object(), None)), \
-             patch.object(fly_cli, "fly_mission", return_value=result), \
+             patch.object(fly_cli, "fly_mission", return_value=result) as run, \
              patch.object(sys, "argv", ["dcm-fly", "--runtime", "mock", "--mission", "m"]):
             self.assertEqual(fly_cli.main(), 0)
 
@@ -473,6 +473,7 @@ class EpisodeSealSummaryTests(unittest.TestCase):
         self.assertTrue(client.closed)
         self.assertEqual(client.episode_outcome, "failed")
         self.assertEqual(client.episode_score["missions"], [result])
+        self.assertEqual(run.call_args.kwargs["context_version"], "v3")
 
 
 class ModeValidationTests(unittest.TestCase):

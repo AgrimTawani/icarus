@@ -1,8 +1,9 @@
 # Version 2 research and architecture decision
 
 Status: research complete and Phase-1 implementation executed on 2026-09-23.
-V3 remains opt-in because the frozen promotion experiment returned
-`retain-v1`. This document is not permission to relax a safety boundary or
+V3 became the DCM CLI default by explicit operator decision on 2026-09-24;
+V2 remains selectable for comparison. The frozen promotion experiment still
+returned `retain-v1`. This document is not permission to relax a safety boundary or
 enable a new model in autonomous flight. Implementation evidence is in
 [`V2-PHASE1-IMPLEMENTATION.md`](V2-PHASE1-IMPLEMENTATION.md).
 
@@ -29,8 +30,9 @@ AirSim demonstration:
   heartbeat by C++, commanding BRAKE and then RTL if the controller disappears
   while airborne.
 
-These changes preserve the opt-in status of V3. Implementation completeness is
-not a promotion result; the frozen Gazebo scorecard still governs default use.
+These changes do not constitute an unattended-flight promotion. The frozen
+Gazebo scorecard still governs deployment approval even though V3 now supplies
+the default model context.
 
 ## Executive decision
 

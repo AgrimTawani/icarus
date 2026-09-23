@@ -11,7 +11,7 @@ Gazebo environments, native simulated sensors, ArduPilot SITL integration,
 repeatable wind/fault scenarios, and tested Drone API, safety and local
 avoidance services. A simulator-only local-LLM DCM can propose typed actions in
 approval or closed-loop modes; it remains unapproved for unattended or physical
-flight. V3 adds reviewed SOUL/BODY/world context, enforced mission macros,
+flight. V3 is the default DCM context and adds reviewed SOUL/BODY/world context, enforced mission macros,
 sealed feedback artifacts and process-heartbeat recovery without giving the
 model a new control path.
 
@@ -80,8 +80,11 @@ gets direct motor, MAVLink, shell or unrestricted operating-system access.
 Phases 0–9 are reported complete; episode/replay, local Qwen DCM and closed-loop
 simulation paths are implemented, but no language model is approved for
 unattended flight. V2 Phase 1's AerialClaw-inspired candidate and AirSim
-ArduCopter track are implemented and tested. The frozen promotion scorecard
-retains the current DCM because V3 regressed timeout/latency and lacks paired
-live Gazebo evidence. Simulation realism still requires as-built validation. See
+ArduCopter track are implemented and tested. V3 is now the operator-selected
+default so live runs receive the complete reviewed context; `--context v2`
+remains available for baseline comparisons. This does not waive the frozen
+promotion result: V3 regressed timeout/latency and lacks paired live Gazebo
+evidence, so it is not approved for unattended flight. Simulation realism
+still requires as-built validation. See
 [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

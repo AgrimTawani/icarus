@@ -4,7 +4,9 @@ Date: 2026-09-23
 
 Branch: `feat/version-v2-software-architecture`
 
-Decision: implementation complete; retain the current DCM default.
+Decision: implementation complete. As of 2026-09-24, V3 is the interactive,
+observe and evaluation CLI default by explicit operator decision; V2 remains
+available through `--context v2` for compatibility and baseline comparisons.
 
 ## Delivered architecture
 
@@ -13,9 +15,9 @@ Decision: implementation complete; retain the current DCM default.
 The diagram distinguishes the model-visible cognitive loop from the
 authoritative C++ control path, shows the independent safety override, and
 keeps Gazebo, AirSim, and future physical-motor execution as separate device
-branches. The status callouts are intentional: V3 remains opt-in, and the
-current AirSim multirotor is not physically equivalent to the Gazebo Akshu
-airframe.
+branches. Status update: the image's original “V2 default / V3 opt-in” label is
+historical; V3 is now the CLI default. The current AirSim multirotor is still
+not physically equivalent to the Gazebo Akshu airframe.
 
 - `dcm-contract-v3-feedback` builds a deterministic, byte-bounded context from
   the existing curated allow-list. It adds source freshness, sectorized
@@ -63,8 +65,9 @@ No proposal was executed in this offline comparison.
 The candidate improved recovery but doubled timeouts and exceeded the frozen
 1.25x latency ratio. Three paired closed-loop Gazebo candidate/baseline runs
 are also not yet present. `evaluate-dcm-v2-promotion` therefore correctly
-returns `retain-v1`. V3 is available for further experiments via
-`--context v3`; it is not the runtime default.
+returns `retain-v1`. That result still blocks unattended promotion, but it no
+longer controls the interactive context default: V3 is selected unless the
+operator explicitly requests `--context v2`.
 
 Retained local report hashes:
 

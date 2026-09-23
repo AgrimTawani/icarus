@@ -59,6 +59,9 @@ class MockRuntime:
     name = "mock-no-action"
 
     def propose(self, observation: dict) -> str:
+        if observation.get("context_version") == "dcm-context-v3-feedback":
+            return ('{"action":"none","arguments":{},'
+                    '"rationale":"Mock runtime requests no action."}')
         return '{"action":"none","arguments":{}}'
 
 

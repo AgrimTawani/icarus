@@ -36,8 +36,9 @@ def main():
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed"
                              " (contract v2) instead of only the last result")
-    parser.add_argument("--context", choices=("v2", "v3"), default="v2",
-                        help="v3 enables the reviewed Phase-1 feedback context")
+    parser.add_argument("--context", choices=("v2", "v3"), default="v3",
+                        help="context contract (default: v3 with reviewed "
+                             "Phase-1 context; v2 remains available as a baseline)")
     parser.add_argument("--macro-id",
                         help="explicit reviewed macro id (valid only with --context v3)")
     parser.add_argument("--elapsed", action="store_true",

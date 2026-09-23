@@ -70,7 +70,7 @@ arbitrary MAVLink messages, shell commands or filesystem/network operations.
 | Local planner | `cpp/local_planner` | Short-horizon collision-safe motion planning; effective clearance is `max(policy minimum, action-request minimum)` |
 | Autonomy core | `cpp/autonomy_core` | Composition root and service lifecycle |
 | Perception | `perception/` | Sensor adapters, calibration, detections and obstacle map |
-| DCM | `python/dcm` | Model-facing reasoning loop and action selection; V2 adds an opt-in, versioned feedback context and reviewed mission macros without expanding authority |
+| DCM | `python/dcm` | Model-facing reasoning loop and action selection; V3 is the default versioned context with reviewed/enforced mission macros and no expanded authority; V2 remains a compatibility baseline |
 | Model runtime | `python/model_runtime` | Qwen/Llama/provider abstraction and resource controls |
 | Evaluation | `python/evaluation` | Frozen campaigns, metrics and comparisons |
 | Dataset tools | `python/dataset_tools` | Episode validation, curation, export and replay preparation |

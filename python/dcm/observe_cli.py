@@ -40,8 +40,9 @@ def main():
                         help="hard per-decision deadline for the llama runtime")
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed")
-    parser.add_argument("--context", choices=("v2", "v3"), default="v2",
-                        help="v3 adds reviewed feedback/macro context; v2 preserves historical comparisons")
+    parser.add_argument("--context", choices=("v2", "v3"), default="v3",
+                        help="context contract (default: v3; select v2 only "
+                             "for historical comparisons)")
     parser.add_argument("--macro-id",
                         help="explicit reviewed macro id (valid only with --context v3)")
     parser.add_argument("--skip-verify", action="store_true",

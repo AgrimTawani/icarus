@@ -1,8 +1,9 @@
 # DCM V2 Feedback Architecture
 
-Status: Phase 1 implementation. The V2 context path is implemented and
-versioned, but remains opt-in while it is compared against retained V1/V2
-reports. It does not change DCM authority or autonomous-promotion thresholds.
+Status: Phase 1 implementation. The V3 context path is implemented, versioned
+and is now the default for `dcm-fly`, `observe-dcm` and `evaluate-dcm`.
+`--context v2` preserves historical comparisons. This default change does not
+change DCM authority or autonomous-promotion thresholds.
 
 ## Components
 
@@ -89,8 +90,8 @@ points) through the same Qwen3-4B Q4 runtime.
 V3 improved only the recovery proxy and fixed the first V3 prompt's missing
 takeoff arguments, but missed the frozen timeout and latency gates and lacks
 three paired live Gazebo episodes. The machine decision is therefore
-`retain-v1`: V3 remains implemented and opt-in, while the current contract
-stays the default. This is the required evidence-based answer to whether the
+`retain-v1`: V3 therefore remains unpromoted for unattended operation, even
+though it is now the user-selected CLI context default. This is the required evidence-based answer to whether the
 AerialClaw concepts improve the existing system—not an assumption that more
 context is automatically better.
 

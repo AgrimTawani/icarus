@@ -61,7 +61,10 @@ class ScriptedRuntime:
         self.hold_ms = hold_ms
 
     def propose(self, observation):
-        return json.dumps(self.decide(observation))
+        decision = self.decide(observation)
+        if observation.get("context_version") == "dcm-context-v3-feedback":
+            decision["rationale"] = "Deterministic scripted baseline decision."
+        return json.dumps(decision)
 
     def decide(self, observation):
         """One action from state alone. Never reads the recorded action."""
