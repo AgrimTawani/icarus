@@ -136,8 +136,12 @@ bool ArdupilotGateway::WaitForReady(std::uint32_t timeout_ms) {
   std::unique_lock<std::mutex> lock(state_mutex_);
   return state_changed_.wait_for(
       lock, std::chrono::milliseconds(timeout_ms),
-      [this] { return !running_ || (heartbeat_received_ && position_received_); }) &&
-         running_ && heartbeat_received_ && position_received_;
+      [this] {
+        return !running_ || (heartbeat_received_ && position_received_ &&
+                             local_position_received_);
+      }) &&
+         running_ && heartbeat_received_ && position_received_ &&
+         local_position_received_;
 }
 
 void ArdupilotGateway::SetStateCallback(StateCallback callback) {
@@ -344,6 +348,7 @@ void ArdupilotGateway::HandleMessage(const void* opaque) {
         local->set_east_m(position.y);
         local->set_down_m(position.z);
         local->set_origin_id("ekf-origin");
+        local_position_received_ = true;
         publish = true;
         break;
       }
@@ -469,6 +474,16 @@ void ArdupilotGateway::HandleMessage(const void* opaque) {
         static_cast<float>(MAVLINK_MSG_ID_EXTENDED_SYS_STATE), 200'000, 0, 0, 0,
         0, 0);
     SendMessage(&landed_request);
+    // Perception projects body-frame ranges through the vehicle's local NED
+    // pose. Request that prerequisite explicitly instead of relying on the
+    // implementation-defined contents/timing of MAV_DATA_STREAM_ALL.
+    mavlink_message_t local_position_request{};
+    mavlink_msg_command_long_pack(
+        kSourceSystem, kSourceComponent, &local_position_request,
+        target_system_, target_component_, MAV_CMD_SET_MESSAGE_INTERVAL, 0,
+        static_cast<float>(MAVLINK_MSG_ID_LOCAL_POSITION_NED), 200'000, 0, 0,
+        0, 0, 0);
+    SendMessage(&local_position_request);
   }
   if (autopilot_event) {
     PublishEvent(autopilot_event->first, "AUTOPILOT_STATUS",

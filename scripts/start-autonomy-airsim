@@ -3,6 +3,7 @@
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import time
@@ -61,5 +62,41 @@ session["sensor_bridge_pid"] = bridge.pid
 session["sensor_bridge_command"] = bridge_command
 session["sensor_bridge_log"] = str(bridge_log.relative_to(root))
 session_path.write_text(json.dumps(session, indent=2) + "\n")
-os.chdir(root)
-os.execv(str(binary), arguments)
+api = None
+return_code = 1
+try:
+    api = subprocess.Popen(arguments, cwd=root)
+    return_code = api.wait()
+except KeyboardInterrupt:
+    if api is not None and api.poll() is None:
+        api.send_signal(signal.SIGINT)
+        try:
+            return_code = api.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            api.terminate()
+            return_code = api.wait(timeout=5)
+finally:
+    try:
+        os.killpg(bridge.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        bridge.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(bridge.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        bridge.wait(timeout=5)
+    # Keep the stack manifest truthful: a later API launch must not inherit a
+    # dead bridge PID or accidentally create an untracked duplicate.
+    try:
+        current = json.loads(session_path.read_text())
+        if current.get("sensor_bridge_pid") == bridge.pid:
+            for key in ("sensor_bridge_pid", "sensor_bridge_command",
+                        "sensor_bridge_log"):
+                current.pop(key, None)
+            session_path.write_text(json.dumps(current, indent=2) + "\n")
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+raise SystemExit(return_code)

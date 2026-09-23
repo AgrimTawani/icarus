@@ -106,7 +106,8 @@ int main(int argc, char** argv) {
       return 1;
     }
     if (!gateway.WaitForReady(45'000)) {
-      std::cerr << "Timed out waiting for ArduPilot heartbeat and position\n";
+      std::cerr << "Timed out waiting for ArduPilot heartbeat, global position, "
+                   "and local position\n";
       return 1;
     }
 

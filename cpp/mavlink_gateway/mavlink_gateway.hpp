@@ -92,6 +92,7 @@ class ArdupilotGateway final : public MavlinkGateway {
   v1::DroneState state_;
   bool heartbeat_received_ = false;
   bool position_received_ = false;
+  bool local_position_received_ = false;
   std::uint32_t custom_mode_ = 0;
   std::uint8_t target_system_ = 0;
   std::uint8_t target_component_ = 0;
