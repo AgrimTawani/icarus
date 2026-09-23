@@ -51,7 +51,7 @@ def main():
     parser.add_argument("--port", type=int, default=41451)
     parser.add_argument("--vehicle", default="Icarus")
     parser.add_argument("--camera", default="0")
-    parser.add_argument("--fps", type=float, default=10.0)
+    parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--scale", type=float, default=3.0)
     parser.add_argument("--near-m", type=float, default=0.5)
     parser.add_argument("--far-m", type=float, default=50.0)
@@ -101,6 +101,7 @@ def main():
     count = 0
     started = time.monotonic()
     last_timestamp = 0
+    window_check_after = started + 1.0
     try:
         if not rpc.ping():
             raise RuntimeError("AirSim RPC ping returned false")
@@ -109,6 +110,11 @@ def main():
             raise RuntimeError(f"AirSim vehicle {args.vehicle!r} is absent: {vehicles}")
         print(f"Live AirSim camera: vehicle={args.vehicle} camera={args.camera}; "
               "press q, Esc, or Ctrl+C to close", flush=True)
+        if not args.no_window:
+            # Create and map the Qt window before testing WND_PROP_VISIBLE.
+            # Some window managers report it as invisible during the first
+            # imshow event, which previously made the viewer exit after frame 1.
+            cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         while not stopping:
             frame_started = time.monotonic()
             responses = rpc.images(requests, args.vehicle)
@@ -143,9 +149,12 @@ def main():
                 temporary.replace(args.output)
             if not args.no_window:
                 cv2.imshow(WINDOW_NAME, grid)
-                key = cv2.waitKey(1) & 0xFF
-                if key in (ord("q"), 27) or cv2.getWindowProperty(
-                        WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+                key = cv2.waitKey(10) & 0xFF
+                window_closed = (
+                    time.monotonic() >= window_check_after
+                    and cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1
+                )
+                if key in (ord("q"), 27) or window_closed:
                     break
             if args.frames is not None and count >= args.frames:
                 break
