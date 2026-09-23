@@ -27,9 +27,11 @@ Last updated: 2026-09-23
 ## V2 Phase 1 status
 
 The AerialClaw-inspired Phase-1 architecture is implemented behind the opt-in
-`dcm-contract-v3-feedback` contract: generated BODY, static SOUL/world facts,
-four reviewed macros, bounded rationale, deterministic feedback/review queue,
-runtime circuit breaker and a frozen promotion scorecard. A paired 135-point
+`dcm-contract-v3-feedback` contract: live deployment BODY, static SOUL/world
+facts, five enforced/auto-resolved reviewed macros, bounded rationale,
+automatically sealed feedback/review artifacts, suppressing circuit breaker,
+material state recheck, independent control-lease heartbeat and a frozen
+promotion scorecard. A paired 135-point
 offline Gazebo evaluation improved the recovery proxy but regressed timeouts
 and latency; the machine gate returned `retain-v1`, so the existing DCM remains
 the default.
@@ -38,10 +40,11 @@ The separate AirSim track runs pinned Blocks v1.8.0 headlessly with
 ArduCopter SITL, RGB/depth/LiDAR, the Icarus Drone API and a distinct C++ LiDAR
 adapter. A real 2 m takeoff/hold/land passed, and sensor-bridge loss blocked
 preflight with `PERCEPTION_UNAVAILABLE`. The optional digest-pinned AirVLN v2
-install now adds all 25 CC-BY-NC city scenes. Default scene 6 passed the full
-prompt-driven building-inspection/hover/person-count/RTL mission with live
-SmolVLM and YOLO evidence; episode `20260923T212718_6bf94baf9b39` is the
-retained proof. It remains supplementary because cross-simulator
+install now adds all 25 CC-BY-NC city scenes. Default scene 6 executed the full
+prompt-driven building-inspection/hover/detection/RTL mission with live
+SmolVLM and YOLO evidence; episode `20260923T212718_6bf94baf9b39` is retained
+as integration proof, not count-accuracy proof, because the scene lacks reviewed
+crowd truth. It remains supplementary because cross-simulator
 frozen-scene/seed equivalence is not established. See
 [`../architecture/V2-PHASE1-IMPLEMENTATION.md`](../architecture/V2-PHASE1-IMPLEMENTATION.md).
 

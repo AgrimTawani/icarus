@@ -202,11 +202,14 @@ detector accuracy or any autonomous visual-flight capability.
 
 V2 Phase 1 adds a separately-versioned `dcm-contract-v3-feedback` context
 builder. It begins with the existing curated allow-list, then adds deterministic
-failure/repetition facts, compact normalized obstacle sectors, generated
-capability facts, reviewed world facts, and an explicitly selected reviewed
-mission macro. It is read-only while a mission runs. Macro/profile/context
-hashes travel with the decision evidence; an offline reliability aggregator may
-propose a change but cannot write a live macro or safety policy. The legacy V1/
+failure/repetition facts, compact normalized obstacle sectors, live deployment
+capability facts, reviewed world facts, and an explicitly overridden or
+deterministically resolved reviewed mission macro. It is read-only while a
+mission runs, and the macro's action subset is enforced. Macro/profile/final
+context hashes travel with decision evidence; episode sealing automatically
+creates reliability and human-review artifacts but cannot write a live macro or
+safety policy. A renewable control lease also acts as the independent DCM
+process heartbeat monitored by the C++ safety supervisor. The legacy V1/
 V2 contracts remain available for fair comparisons. See
 [`DCM-V2-FEEDBACK.md`](DCM-V2-FEEDBACK.md).
 

@@ -64,6 +64,14 @@ def replay(directory, check_guardrails=True):
             raise ReplayError("unsafe edge vision snapshot path")
         if edge_snapshot.get("raw_pixels_saved") is not False or digest(directory / name) != edge_snapshot.get("sha256"):
             raise ReplayError("edge vision snapshot hash mismatch")
+    for name, metadata in manifest.get("dcm_feedback", {}).items():
+        if name.startswith("/") or ".." in Path(name).parts:
+            raise ReplayError("unsafe DCM feedback path")
+        artifact = directory / name
+        if (not artifact.is_file() or digest(artifact) != metadata.get("sha256")
+                or metadata.get("promotion_authority") !=
+                "human_review_required"):
+            raise ReplayError("DCM feedback artifact mismatch: " + name)
     stream = manifest["streams"]["events.jsonl"]
     path = directory / "events.jsonl"
     if digest(path) != stream["sha256"]:

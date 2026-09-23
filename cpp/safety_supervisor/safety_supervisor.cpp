@@ -14,12 +14,14 @@ SafetySupervisor::SafetySupervisor(
     const core::Clock& clock, const guardrails::SafetyPolicy& policy,
     state_engine::StateEngine& state_engine,
     mission_executor::ActionStore& actions,
+    drone_api::AuthorityManager& authority,
     mavlink_gateway::MavlinkGateway& gateway,
     perception::PerceptionEngine* perception)
     : clock_(clock),
       policy_(policy),
       state_engine_(state_engine),
       actions_(actions),
+      authority_(authority),
       gateway_(gateway),
       perception_(perception) {}
 
@@ -46,11 +48,13 @@ void SafetySupervisor::AbortActive(v1::ReasonCode reason, const char* message,
 
 void SafetySupervisor::Run() {
   std::int64_t stale_since = 0;
+  std::int64_t lease_lost_since = 0;
   int last_response = 0;
   while (running_) {
     const auto state = state_engine_.Snapshot();
     if (!state || !state->armed()) {
       stale_since = 0;
+      lease_lost_since = 0;
       last_response = 0;
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       continue;
@@ -60,6 +64,9 @@ void SafetySupervisor::Run() {
     const bool stale = !gateway_.IsConnected() ||
                        now - state->observed_at_unix_ms() >
                            policy_.maximum_state_age_ms;
+    const bool controller_present = authority_.Current().has_value();
+    if (!stale) stale_since = 0;
+    if (controller_present) lease_lost_since = 0;
     int response = 0;
     v1::ReasonCode reason = v1::REASON_CODE_OK;
     const char* message = "";
@@ -75,6 +82,14 @@ void SafetySupervisor::Run() {
                                       : v1::REASON_CODE_NOT_CONNECTED;
       message = response == 1 ? "state stale: safe hold commanded"
                               : "state stale: RTL escalation commanded";
+    } else if (!controller_present) {
+      if (lease_lost_since == 0) lease_lost_since = now;
+      response = now - lease_lost_since >=
+                         policy_.control_lease_lost_rtl_delay_ms ? 2 : 1;
+      reason = v1::REASON_CODE_CONTROL_LEASE_EXPIRED;
+      message = response == 1
+                    ? "controller heartbeat lost: safe hold commanded"
+                    : "controller heartbeat lost: RTL escalation commanded";
     } else if (perception_ != nullptr && !perception_->Healthy()) {
       response = 1;
       reason = v1::REASON_CODE_SAFETY_INTERVENTION;
@@ -100,6 +115,7 @@ void SafetySupervisor::Run() {
     }
     if (response == 0) {
       stale_since = 0;
+      lease_lost_since = 0;
       const double battery = state->battery().remaining_percent();
       if (battery <= policy_.land_battery_percent) {
         response = 3;

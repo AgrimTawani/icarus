@@ -93,18 +93,21 @@ overrides upstream ComputerVision/SimpleFlight examples with the reviewed
 LiDAR are timestamped API sensors, and ArduPilot SITL remains the only flight
 controller. No AirSim movement or pose RPC is available to the DCM.
 
-Each promoted city scene has a separate reviewed mission-reference JSON. It
-names a primary building and an explicit local-NED hover waypoint; it does not
-contain a hidden person count. A prompt such as “check that building, hover
+Each calibrated city scene has a separate reviewed mission-reference JSON. It
+names a primary building and an explicit local-NED hover waypoint. A prompt such as “check that building, hover
 over it, and count no. of people” must produce successful `inspect_scene`,
 `goto`, `hold` and `detect(["person"])` evidence in the requested order before
 landing. SmolVLM supplies the qualitative building description and YOLO11n
 supplies the visible-person count. Both are read-only perception tools.
 
 AirVLN scenes are visually rich research worlds, not deterministic crowd
-fixtures. Zero is a valid observed person count when the camera contains no
-person. The project-owned Gazebo `edge_people_building` scenario remains the
-correct regression when a known nonzero ground-truth count is required.
+fixtures. A detector may report zero, but that is an observation rather than a
+verified answer. AirSim person-count completion succeeds only when the scene
+reference contains a reviewed `person_count_ground_truth` block with a
+non-negative expected visible count and camera ID. Without it, completion is
+`inconclusive_no_airsim_ground_truth`. The truth block is scoring-only and is
+never added to the DCM observation. The project-owned Gazebo
+`edge_people_building` scenario remains the deterministic count regression.
 
 ## Bring-up sequence
 
@@ -158,12 +161,13 @@ requires a committed and reviewed `airvln-env-<id>-reference.json`.
 - The scene-6 gray-house route was calibrated with live forward/belly frames;
   `(north=25 m, east=-6 m, altitude=22 m AGL)` was reached through the Drone
   API and ArduPilot, held and returned from successfully.
-- Qwen completed the prompt-driven mission arm, takeoff 3 m, building
+- Qwen executed the prompt-driven mission arm, takeoff 3 m, building
   inspection, reviewed goto, hold 3 s, person detection and RTL/land. One
-  out-of-order proposal was refused by deterministic mission guidance and the
-  next decision recovered. The final semantic result satisfied all four
-  requirements with zero failed flight actions and a camera-observed count of
-  zero people. Evidence episode: `20260923T212718_6bf94baf9b39`.
+  out-of-order proposal was refused by the implementation then in use and the
+  next decision recovered. It had zero failed flight actions and a
+  camera-observed count of zero people, but the current verifier correctly
+  marks the count inconclusive because scene 6 has no reviewed count truth.
+  Evidence episode: `20260923T212718_6bf94baf9b39`.
 - That run peaked at 5,311 MiB VRAM and 657.8 MiB process RAM on the RTX 4050
   laptop profile. Scene content and detector output are not crowd ground truth.
 

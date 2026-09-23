@@ -43,6 +43,9 @@ failure_actions:
   dcm_invalid_output: hold
   state_stale: hold_then_rtl
   state_stale_rtl_delay_s: 5.0
+  # The DCM renews its control lease independently of model inference. If the
+  # process dies while airborne, expiry first commands BRAKE, then RTL.
+  control_lease_lost_rtl_delay_s: 5.0
   mavlink_loss: rtl
   companion_computer_loss: rtl
   critical_sensor_failure: land_or_rtl

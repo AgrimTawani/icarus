@@ -10,10 +10,10 @@ reports. It does not change DCM authority or autonomous-promotion thresholds.
 | --- | --- | --- |
 | Context builder | `python/dcm/v2_context.py` | Pure/read-only transformation of an already curated observation |
 | V3 contract entry | `python/dcm/contract.py:curate_v3` | Retains V1 allow-list, adds `dcm-contract-v3-feedback` context fields |
-| Generated BODY | `python/dcm/v2_profiles.py` | Factual action/freshness/authority manifest; never written during a mission |
+| Generated BODY | `python/dcm/v2_profiles.py` + live `MissionClient.capability_profile()` | Static contract facts plus connected API, simulator, firmware, parameter, camera, LiDAR and airframe facts |
 | Static SOUL/world facts | `config/dcm/profiles/` | Reviewed documents with SHA-256 provenance |
-| Mission macros | `config/dcm/macros/` | YAML front matter plus Markdown guidance; explicit selection only |
-| Reliability aggregation | `python/dcm/v2_feedback.py` | Offline report only; cannot write macros, prompts or policy |
+| Mission macros | `config/dcm/macros/` | YAML front matter plus Markdown guidance; explicit override or deterministic intent resolution |
+| Reliability aggregation | `python/dcm/v2_feedback.py` | Automatically emits sealed evidence and human-review candidates; cannot write live policy |
 | Runtime health | `python/dcm/health.py` | Deterministic late/invalid/unavailable/stale/circuit-open state machine |
 | Promotion scorecard | `config/dcm/v2-scorecard.yaml` | Frozen non-relaxable offline + paired-live gates |
 
@@ -25,37 +25,50 @@ reports. It does not change DCM authority or autonomous-promotion thresholds.
    arrays are neither accepted nor rendered.
 3. Failure count, consecutive failures and repeated actions are computed in
    code. The model is not asked to infer them from unbounded history.
-4. Macro selection requires `mission_metadata.macro_id`; free-text keyword
-   matching is intentionally absent. Every macro is validated against the same
-   declared action vocabulary used by the response validator.
-5. Macro/profile hashes and a context SHA-256 make a decision reproducible.
+4. An explicit `mission_metadata.macro_id` overrides selection. Otherwise a
+   small deterministic intent resolver can select one reviewed macro. The
+   selected macro's action subset is enforced before Drone API execution;
+   hold/RTL/land/none remain universally available safety exits.
+5. Macro/profile hashes and a final context SHA-256 make a decision
+   reproducible. The hash and byte budget are recalculated only after live BODY,
+   mission reference and completion obligations have been attached.
    The context builder does not open a vehicle connection or write runtime
    state.
 6. V3 requires a bounded rationale as a third response field. Validation strips
    it before the action reaches guardrails or execution; it cannot add an
    argument or authorize anything.
 7. Three consecutive invalid/late/unavailable/stale responses open a circuit.
-   The model issues no recovery command: code selects typed `hold`, then
-   `return_home`, through the normal Drone API and safety layers.
+   Normal inference is suppressed for two decision intervals, then one bounded
+   recovery probe is allowed if the mission is still active. Airborne recovery
+   selects typed `hold`, then terminal `return_home`, through the normal Drone
+   API and safety layers while the circuit is open.
+8. The system prompt is assembled in explicit reviewed SOUL, generated BODY,
+   reviewed world-facts and selected-macro sections. Mission obligations state
+   required evidence but never prescribe a next action; planning remains with
+   the DCM.
+9. A second fresh observation must also be materially consistent with the one
+   used for inference (flight phase, arm/land state, position, altitude and
+   perception safety state), or the proposal is discarded.
 
 ## Feedback loop
 
 ```text
-sealed decision rows -> deterministic aggregation -> review queue
+episode seal -> live schema validation -> deterministic aggregation -> review queue
                                                   -> macro/prompt proposal
                                                   -> held-out evaluation
                                                   -> explicit promotion only
 ```
 
-There is no arrow from model reflection to a live macro, world fact or safety
+Every newly sealed episode writes hash-bound `feedback.json` and
+`review_queue.json`. There is no arrow from model reflection to a live macro, world fact or safety
 policy. This is the deliberate Icarus adaptation of AerialClaw's feedback
 loop: observations become measured evidence before changing model-visible
 knowledge.
 
 ## Current macros
 
-The reviewed set is `perimeter-sweep`, `landing-site-survey`,
-`inspection-orbit` and `degraded-position-return`. Every macro has an ID,
+The reviewed set is `building-inspection`, `perimeter-sweep`,
+`landing-site-survey`, `inspection-orbit` and `degraded-position-return`. Every macro has an ID,
 revision, action families, action allow-list, preconditions, evidence link and
 nominal/adverse/recovery fixture. They introduce no new actions.
 
@@ -91,5 +104,7 @@ context is automatically better.
 ```
 
 The tests also deliberately corrupt BODY, exercise all macro fixture classes,
-open/reset the circuit breaker, validate JSON schemas, reproduce feedback
-hashes and prove that missing live evidence fails promotion closed.
+open/suppress/probe/reset the circuit breaker, enforce macro action subsets,
+validate live decision rows, reproduce feedback hashes and prove that missing
+live evidence fails promotion closed. The native suite also expires a DCM
+control lease while airborne and proves BRAKE-then-RTL escalation.

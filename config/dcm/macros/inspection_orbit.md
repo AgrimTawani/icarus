@@ -3,8 +3,8 @@ schema: icarus.dcm.macro.v1
 id: inspection-orbit
 revision: "1"
 tags: [inspection, orbit, perception]
-allowed_action_families: [navigation, perception, safety]
-allowed_actions: [goto, orbit, hold, detect, inspect_scene, return_home, land]
+allowed_action_families: [lifecycle, navigation, perception, safety]
+allowed_actions: [arm, takeoff, goto, orbit, hold, detect, inspect_scene, return_home, land]
 preconditions:
   - Orbit center, radius, and altitude are explicit mission inputs.
   - Obstacle clearance and estimator state are fresh.

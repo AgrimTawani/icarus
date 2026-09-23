@@ -83,6 +83,7 @@ class MissionClient:
         self.edge_vlm_limiter = None
         self.simulation_session = None
         self.vision_profile = vision_profile
+        self.capabilities = None
 
     def connect(self):
         response = self.session_api.Connect(
@@ -105,6 +106,7 @@ class MissionClient:
         missing = required - available
         if missing:
             raise RuntimeError("Drone API lacks required capabilities: " + str(missing))
+        self.capabilities = capabilities
         session = None
         candidates = (
             (ROOT / "logs/simulation/active_session.json", "gazebo", "launcher_pid"),
@@ -155,52 +157,54 @@ class MissionClient:
             result["primary_target_id"] = reference["primary_target_id"]
         return result
 
-    def mission_guidance(self, mission, history, observation):
-        """Expose the next evidence obligation; it never executes an action."""
-        state = observation.get("state") or {}
-        flight_requested = bool(re.search(
-            r"\b(?:arm|take\s*off|takeoff|hover)\b", mission.lower()))
-        if flight_requested and state.get("landed") is True:
-            if state.get("armed") is not True:
-                return {"required_next_action": "arm", "arguments": {},
-                        "reason": "requested flight is disarmed on the ground"}
-            altitude = re.search(
-                r"\btake\s*off(?:\s+to)?\s+(\d+(?:\.\d+)?)\s*"
-                r"(?:m|metre|metres|meter|meters)\b", mission.lower())
-            target_altitude = float(altitude.group(1)) if altitude else 3.0
-            return {"required_next_action": "takeoff",
-                    "arguments": {"target_altitude_agl_m": target_altitude},
-                    "reason": "requested flight is armed but still on the ground"}
-        airborne = (state.get("armed") is True and
-                    (state.get("landed") is False or
-                     state.get("flight_phase") == "FLIGHT_PHASE_AIRBORNE"))
-        if not airborne:
-            return {}
-        successful = [item["action"] for item in history
-                      if item.get("outcome") == "SUCCEEDED"]
+    def mission_obligations(self, mission, history, observation):
+        """Describe measurable completion obligations without choosing actions.
+
+        Unlike the former demo state machine, this method never emits a
+        required next action.  The DCM independently decomposes the mission;
+        deterministic code only states what evidence completion must contain.
+        """
+        successful_items = [item for item in history
+                            if item.get("outcome") == "SUCCEEDED"]
+        successful = [item["action"] for item in successful_items]
         reference = self.mission_reference()
         primary = next((item for item in reference.get("known_landmarks", [])
                         if item.get("id") == reference.get("primary_target_id")), None)
-        if _asks_building_inspection(mission) and "inspect_scene" not in successful:
-            return {"required_next_action": "inspect_scene", "arguments": {
-                "question": "Describe the primary building and its visible surroundings."},
-                "reason": "requested building inspection has no successful visual evidence"}
+        requirements = []
+        if re.search(r"\b(?:arm|take\s*off|takeoff|hover|fly)\b", mission.lower()):
+            altitude = re.search(
+                r"\btake\s*off(?:\s+to)?\s+(\d+(?:\.\d+)?)\s*"
+                r"(?:m|metre|metres|meter|meters)\b", mission.lower())
+            requirements.append({"id": "flight", "status": "satisfied"
+                                 if "takeoff" in successful else "pending",
+                                 "target_altitude_agl_m":
+                                     float(altitude.group(1)) if altitude else None})
+        if _asks_building_inspection(mission):
+            requirements.append({"id": "building_visual_inspection",
+                                 "status": "satisfied" if "inspect_scene" in successful
+                                 else "pending", "target_id": reference.get(
+                                     "primary_target_id")})
         if _asks_hover_over_building(mission):
             waypoint = (primary or {}).get("hover_waypoint")
-            goto_index = next((index for index, action in enumerate(successful)
-                               if action == "goto"), None)
-            if goto_index is None and waypoint:
-                return {"required_next_action": "goto", "arguments": waypoint,
-                        "reason": "requested hover has not reached its reviewed waypoint"}
+            def reached_reviewed_waypoint(item):
+                arguments = item.get("arguments") or {}
+                return (item.get("action") == "goto" and waypoint and
+                        all(type(arguments.get(key)) in (int, float) and
+                            abs(float(arguments[key]) - float(waypoint[key])) <= 1.0
+                            for key in ("north_m", "east_m", "altitude_agl_m")))
+
+            goto_index = next((index for index, item in enumerate(successful_items)
+                               if reached_reviewed_waypoint(item)), None)
             hold_after = (goto_index is not None and
-                          any(action == "hold" for action in successful[goto_index + 1:]))
-            if goto_index is not None and not hold_after:
-                seconds = re.search(r"\bhover\b[^.]{0,35}\bfor\s+(\d+(?:\.\d+)?)\s*seconds?\b",
-                                    mission.lower())
-                duration_ms = int(float(seconds.group(1)) * 1000) if seconds else 3000
-                return {"required_next_action": "hold",
-                        "arguments": {"duration_ms": duration_ms},
-                        "reason": "requested building waypoint has not been held"}
+                          any(item["action"] == "hold"
+                              for item in successful_items[goto_index + 1:]))
+            seconds = re.search(r"\bhover\b[^.]{0,35}\bfor\s+(\d+(?:\.\d+)?)\s*seconds?\b",
+                                mission.lower())
+            requirements.append({"id": "building_hover",
+                                 "status": "satisfied" if hold_after else "pending",
+                                 "reviewed_waypoint": waypoint,
+                                 "duration_ms": int(float(seconds.group(1)) * 1000)
+                                 if seconds else 3000})
             evidence_start = (next((index for index, action in enumerate(successful)
                                     if action == "hold" and goto_index is not None
                                     and index > goto_index), -1) + 1)
@@ -208,15 +212,80 @@ class MissionClient:
             evidence_start = 0
         asks_people = (_asks_count_of(mission, "people") or
                        _asks_count_of(mission, "person"))
-        if asks_people and "detect" not in successful[evidence_start:]:
-            return {"required_next_action": "detect",
-                    "arguments": {"classes": ["person"]},
-                    "reason": "requested person count has no post-hover detector evidence"}
-        if re.search(r"\breturn\s+(?:to\s+)?home\b", mission.lower()) and \
-                "return_home" not in successful:
-            return {"required_next_action": "return_home", "arguments": {},
-                    "reason": "operator requested a return home after evidence collection"}
-        return {}
+        if asks_people:
+            requirements.append({"id": "person_count",
+                                 "status": "satisfied"
+                                 if "detect" in successful[evidence_start:] else "pending",
+                                 "detector_classes": ["person"]})
+        if re.search(r"\breturn\s+(?:to\s+)?home\b", mission.lower()):
+            requirements.append({"id": "return_home",
+                                 "status": "satisfied" if "return_home" in successful
+                                 else "pending"})
+        if not requirements:
+            return {}
+        return {"schema": "icarus.dcm.mission-obligations.v1",
+                "requirements": requirements,
+                "pending": [item["id"] for item in requirements
+                            if item["status"] == "pending"],
+                "authority": "completion_evidence_only"}
+
+    # Compatibility for older callers; semantics are now obligation-only.
+    mission_guidance = mission_obligations
+
+    def capability_profile(self):
+        """Return bounded facts introspected from the connected deployment."""
+        session = self.simulation_session or {}
+        capabilities = []
+        if self.capabilities is not None:
+            capabilities = sorted(item.name for item in self.capabilities.capabilities
+                                  if item.supported)
+        profile = {
+            "schema": "icarus.dcm.live-body.v1",
+            "vehicle_id": "icarus-01",
+            "vehicle_type": getattr(self.capabilities, "vehicle_type", None),
+            "autopilot": getattr(self.capabilities, "autopilot", None),
+            "autopilot_version": getattr(self.capabilities, "autopilot_version", None),
+            "capabilities": capabilities,
+            "simulator": session.get("simulator", "physical"),
+            "simulation_profile": session.get("profile"),
+            "controller": session.get("controller", "ArduPilot"),
+            "environment": session.get("environment"),
+        }
+        if session.get("simulator") == "airsim":
+            settings_path = session.get("settings")
+            if settings_path:
+                path = ROOT / settings_path
+                if path.is_file():
+                    settings = json.loads(path.read_text())
+                    vehicle = (settings.get("Vehicles") or {}).get("Icarus", {})
+                    profile["airframe"] = {
+                        "id": "airsim-default-multirotor",
+                        "gazebo_airframe_equivalent": False,
+                        "vehicle_type": vehicle.get("VehicleType"),
+                    }
+                    profile["sensors"] = sorted((vehicle.get("Sensors") or {}).keys())
+                    profile["cameras"] = vehicle.get("Cameras", {})
+            parameters = {}
+            parameter_path = ROOT / "config/simulation/airsim/icarus-sitl.parm"
+            if parameter_path.is_file():
+                for line in parameter_path.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        name, value = line.split(None, 1)
+                        parameters[name] = value
+            profile["autopilot_parameter_overrides"] = parameters
+        elif session.get("simulator") == "gazebo":
+            mass_path = ROOT / "simulation/models/akshu_compact_sitl/mass_properties.json"
+            mass = json.loads(mass_path.read_text()) if mass_path.is_file() else {}
+            profile["airframe"] = {
+                "id": "akshu_compact_sitl",
+                "mass_kg": mass.get("total_mass_kg"),
+                "gazebo_airframe_equivalent": True,
+            }
+            profile["sensors"] = ["forward_rgbd", "downward_rgbd", "lidar",
+                                  "rangefinder", "imu", "gps", "magnetometer",
+                                  "barometer"]
+        return profile
 
     def assess_mission_completion(self, mission, executed):
         """Score requested edge evidence after landing without exposing it to the model."""
@@ -246,9 +315,26 @@ class MissionClient:
                     report["reasons"].append(
                         f"person count is {observed!r}; expected {expected} in this deterministic scenario")
             else:
-                report["satisfied"].append("visible_person_count")
-                report["observed_person_count"] = person_results[-1].get(
-                    "unique_person_count")
+                observed = person_results[-1].get("unique_person_count")
+                truth = (self.simulation_session.get("mission_reference", {})
+                         .get("person_count_ground_truth") or {})
+                expected = truth.get("expected_visible_count")
+                report["observed_person_count"] = observed
+                if (type(expected) is int and expected >= 0
+                        and truth.get("review_status") == "reviewed"
+                        and isinstance(truth.get("camera_id"), str)
+                        and truth.get("camera_id")):
+                    report["expected_person_count"] = expected
+                    report["ground_truth_camera_id"] = truth["camera_id"]
+                    if observed == expected:
+                        report["satisfied"].append("verified_person_count")
+                    else:
+                        report["reasons"].append(
+                            f"person count is {observed!r}; reviewed AirSim truth is {expected}")
+                else:
+                    report["verification"] = "inconclusive_no_airsim_ground_truth"
+                    report["reasons"].append(
+                        "AirSim person count cannot be verified without reviewed scene ground truth")
             if "orbit" in text:
                 orbit_index = next((index for index, item in enumerate(executed)
                                     if item["action"] == "orbit" and item["outcome"] == "SUCCEEDED"), None)
@@ -349,7 +435,10 @@ class MissionClient:
         self.renewal_thread.start()
 
     def _renew(self):
-        while not self.stop_renewal.wait(10):
+        # AuthorityManager caps leases at 10 s. Renew well inside that window;
+        # waiting exactly 10 s races expiry and would make a healthy client
+        # indistinguishable from a dead DCM to the safety supervisor.
+        while not self.stop_renewal.wait(3):
             try:
                 response = self.authority_api.RenewControl(
                     drone_api_pb2.RenewControlRequest(

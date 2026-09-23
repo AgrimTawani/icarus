@@ -143,7 +143,8 @@ int main(int argc, char** argv) {
         clock, actions, state_engine, authority, guardrails, gateway,
         &perception, &planner);
     icarus::safety_supervisor::SafetySupervisor safety_supervisor(
-        clock, safety_policy, state_engine, actions, gateway, &perception);
+        clock, safety_policy, state_engine, actions, authority, gateway,
+        &perception);
     icarus::drone_api::DroneApiServer services(
         clock, authority, state_engine, guardrails, actions, executor,
         perception);

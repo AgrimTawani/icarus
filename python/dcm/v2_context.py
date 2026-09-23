@@ -167,17 +167,43 @@ def load_macros(directory, actions):
     return catalog
 
 
-def select_macro(catalog, mission_metadata):
-    """Select only an explicit macro id; free-form keyword matching is forbidden."""
+def select_macro(catalog, mission_metadata=None, mission=""):
+    """Resolve an explicit macro or deterministically match reviewed intent tags.
+
+    This is deliberately code-owned retrieval, not LLM keyword injection.  An
+    explicit id always wins.  Automatic selection requires a distinctive
+    mission phrase, is deterministic, and returns at most one reviewed macro.
+    """
     requested = (mission_metadata or {}).get("macro_id")
-    if requested is None:
-        return None
-    matches = [macro for macro in catalog if macro["id"] == requested]
-    if len(matches) != 1:
-        raise ValueError(f"requested macro is unavailable: {requested}")
-    macro = matches[0]
+    if requested is not None:
+        matches = [macro for macro in catalog if macro["id"] == requested]
+        if len(matches) != 1:
+            raise ValueError(f"requested macro is unavailable: {requested}")
+        macro = matches[0]
+        source = "explicit"
+    else:
+        text = " ".join(str(mission).lower().replace("-", " ").split())
+        rules = (
+            ("building-inspection", ("building", "inspect"), ("building", "check"),
+             ("building", "hover")),
+            ("inspection-orbit", ("orbit", "inspect"), ("orbit", "survey")),
+            ("landing-site-survey", ("landing", "survey"), ("landing", "site")),
+            ("perimeter-sweep", ("perimeter",), ("boundary", "survey"),
+             ("perimeter", "sweep")),
+            ("degraded-position-return", ("degraded", "return"),
+             ("estimator", "recovery"), ("lost", "position")),
+        )
+        selected_id = next((identifier for identifier, *patterns in rules
+                            if any(all(word in text for word in pattern)
+                                   for pattern in patterns)), None)
+        matches = [macro for macro in catalog if macro["id"] == selected_id]
+        if not selected_id or len(matches) != 1:
+            return None
+        macro = matches[0]
+        source = "deterministic-intent"
     return {key: macro[key] for key in ("id", "revision", "allowed_actions",
-                                         "guidance", "sha256")}
+                                         "guidance", "sha256")} | {
+                                             "selection_source": source}
 
 
 def build_context(observation, catalog=(), mission_metadata=None, body=None,
@@ -193,7 +219,8 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
     state = observation.get("state") or {}
     perception = observation.get("perception") or {}
     history = observation.get("actions_completed") or []
-    selected = select_macro(catalog, mission_metadata)
+    selected = select_macro(catalog, mission_metadata,
+                            mission=observation.get("mission", ""))
     # Keep the model-visible physical facts once. V1's complete curated state
     # and perception objects overlap heavily with the V3 summaries; retaining
     # both doubled prefill cost without adding evidence.
@@ -247,14 +274,44 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
             record = dict(record)
             record["text"] = record["text"][:MAX_PROFILE_TEXT_CHARS]
             context[profile_name] = record
-    encoded = _canonical(context).encode("utf-8")
+    return finalize_context(context)
+
+
+def model_visible_payload(context):
+    """Return the semantic payload rendered into V3 system and user sections.
+
+    Hash/budget fields are deliberately omitted to avoid a self-referential
+    digest. The macro catalog is retrieval metadata; only the selected reviewed
+    macro reaches the model.
+    """
+    return {
+        "profiles": {
+            "soul": context.get("soul") or {},
+            "body": context.get("body") or {},
+            "world_facts": context.get("world_facts") or {},
+            "mission_macro": context.get("mission_macro"),
+        },
+        "user": {key: value for key, value in context.items()
+                 if key not in ("soul", "body", "world_facts",
+                                "mission_macro", "macro_catalog",
+                                "context_sha256", "context_budget")},
+    }
+
+
+def finalize_context(context):
+    """Hash and budget the final payload after every model-visible field exists."""
+    value = dict(context)
+    value.pop("context_sha256", None)
+    value.pop("context_budget", None)
+    visible = model_visible_payload(value)
+    encoded = _canonical(visible).encode("utf-8")
     if len(encoded) > MAX_CONTEXT_BYTES:
         raise ValueError(
             f"V3 context is {len(encoded)} bytes, limit {MAX_CONTEXT_BYTES}")
-    context["context_budget"] = {
+    value["context_budget"] = {
         "max_bytes": MAX_CONTEXT_BYTES,
         "payload_bytes": len(encoded),
         "estimated_tokens_upper_bound": (len(encoded) + 2) // 3,
     }
-    context["context_sha256"] = digest(context)
-    return context
+    value["context_sha256"] = digest(visible)
+    return value

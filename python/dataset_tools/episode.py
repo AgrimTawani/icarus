@@ -18,13 +18,20 @@ import uuid
 from pathlib import Path
 
 import grpc
+import jsonschema
 from google.protobuf.json_format import MessageToDict
+
+from python.dcm.v2_feedback import aggregate, review_proposals
 
 ACTION_NAMES = {
     "Arm", "Disarm", "Takeoff", "Goto", "ExecuteRoute", "Hold",
     "ReturnHome", "Land", "Orbit", "CancelAction",
 }
 PRIVATE_FIELDS = {"session_id", "control_lease_id", "client_id", "lease_id"}
+ROOT = Path(__file__).resolve().parents[2]
+DECISION_SCHEMA = json.loads(
+    (ROOT / "config/dcm/schema/decision-trace-v2.schema.json").read_text(
+        encoding="utf-8"))
 
 
 def _safe_message(message):
@@ -219,6 +226,11 @@ class Episode:
             self.model = json.loads(json.dumps(descriptor, sort_keys=True))
 
     def record(self, kind, payload):
+        if kind == "dcm_decision":
+            # Reject malformed live evidence before it can enter the immutable
+            # event stream. This makes the schema an enforcement boundary, not
+            # merely documentation checked by representative unit fixtures.
+            jsonschema.validate(payload, DECISION_SCHEMA)
         with self.lock:
             if self.stream.closed:
                 return
@@ -309,6 +321,31 @@ class Episode:
         raw_sensor_snapshot = _snapshot_simulator_sensors(
             session, self.directory)
         edge_vision_snapshot = _snapshot_edge_vision(session, self.directory)
+        decisions = []
+        with self.stream_path.open(encoding="utf-8") as source:
+            for line in source:
+                item = json.loads(line)
+                if item.get("kind") == "dcm_decision":
+                    # Validate once more at the immutable-stream boundary so a
+                    # future alternate recorder cannot bypass record().
+                    jsonschema.validate(item["payload"], DECISION_SCHEMA)
+                    decisions.append(item["payload"])
+        feedback = aggregate(decisions)
+        review_queue = review_proposals(feedback)
+        feedback_artifacts = {}
+        for name, value in (("feedback.json", feedback),
+                            ("review_queue.json", review_queue)):
+            target = self.directory / name
+            with target.open("x", encoding="utf-8") as output:
+                json.dump(value, output, sort_keys=True, indent=2)
+                output.write("\n")
+                output.flush()
+                os.fsync(output.fileno())
+            target.chmod(0o444)
+            feedback_artifacts[name] = {
+                "sha256": _sha256(target),
+                "promotion_authority": "human_review_required",
+            }
         manifest = {
             "schema": "icarus.episode.v1", "episode_id": self.id,
             "mission": self.mission, "source": "simulation" if session else "physical",
@@ -325,6 +362,7 @@ class Episode:
             "raw_sensor_snapshot": raw_sensor_snapshot,
             "edge_vision_snapshot": edge_vision_snapshot,
             "model": self.model,
+            "dcm_feedback": feedback_artifacts,
             "privacy": {"operator_identifiers": "excluded",
                         "training_status": "unreviewed_do_not_train"},
             "config_sha256": config_hashes,

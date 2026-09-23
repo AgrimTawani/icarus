@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "autonomy_core/clock.hpp"
+#include "drone_api/authority_manager.hpp"
 #include "guardrails/safety_policy.hpp"
 #include "mavlink_gateway/mavlink_gateway.hpp"
 #include "mission_executor/action_store.hpp"
@@ -21,6 +22,7 @@ class SafetySupervisor {
                    const guardrails::SafetyPolicy& policy,
                    state_engine::StateEngine& state_engine,
                    mission_executor::ActionStore& actions,
+                   drone_api::AuthorityManager& authority,
                    mavlink_gateway::MavlinkGateway& gateway,
                    perception::PerceptionEngine* perception = nullptr);
   ~SafetySupervisor();
@@ -37,6 +39,7 @@ class SafetySupervisor {
   const guardrails::SafetyPolicy& policy_;
   state_engine::StateEngine& state_engine_;
   mission_executor::ActionStore& actions_;
+  drone_api::AuthorityManager& authority_;
   mavlink_gateway::MavlinkGateway& gateway_;
   perception::PerceptionEngine* perception_;
   std::atomic<bool> running_{false};

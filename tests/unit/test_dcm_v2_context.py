@@ -2,12 +2,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from python.dcm.contract import ACTIONS, CONTRACT_VERSION_CONTEXT, curate_v3
+from python.dcm.contract import (
+    ACTIONS,
+    CONTRACT_VERSION_CONTEXT,
+    curate_v3,
+    material_state_change,
+    render_prompt,
+)
 from python.dcm.v2_context import (
     CONTEXT_VERSION,
     MACRO_SCHEMA,
     bearing_sector,
     build_context,
+    finalize_context,
     load_macros,
     select_macro,
 )
@@ -55,6 +62,23 @@ class V2ContextTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unavailable"):
                 select_macro(catalog, {"macro_id": "unknown"})
 
+    def test_reviewed_macro_is_selected_deterministically_from_intent(self):
+        root = Path(__file__).resolve().parents[2]
+        catalog = load_macros(root / "config/dcm/macros", ACTIONS)
+        selected = select_macro(
+            catalog, mission="Arm, inspect that building, hover and count people")
+        self.assertEqual(selected["id"], "building-inspection")
+        self.assertEqual(selected["selection_source"], "deterministic-intent")
+
+    def test_final_hash_covers_late_model_visible_fields(self):
+        context = build_context({"mission": "survey", "state": {},
+                                 "perception": {}})
+        first = finalize_context({**context, "mission_obligations": {
+            "pending": ["flight"]}})
+        second = finalize_context({**context, "mission_obligations": {
+            "pending": ["return_home"]}})
+        self.assertNotEqual(first["context_sha256"], second["context_sha256"])
+
     def test_v3_curation_keeps_v1_allow_list_and_adds_profile_provenance(self):
         context = curate_v3(
             {"armed": False, "landed": True, "forbidden": "no"},
@@ -68,6 +92,24 @@ class V2ContextTests(unittest.TestCase):
         self.assertIn("sha256", context["soul"])
         self.assertIn("sha256", context["world_facts"])
         self.assertTrue(context["context_sha256"])
+
+    def test_v3_system_prompt_has_explicit_identity_and_capability_sections(self):
+        context = curate_v3(
+            {"armed": False, "landed": True}, {}, None, "survey",
+            {"seq": 1, "unix_ms": 1000}, history=[],
+            runtime_body={"simulator": "airsim"})
+        prompt = render_prompt(context)
+        self.assertIn("REVIEWED SOUL", prompt["system"])
+        self.assertIn("GENERATED BODY", prompt["system"])
+        self.assertIn("REVIEWED WORLD FACTS", prompt["system"])
+        self.assertIn('"simulator": "airsim"', prompt["system"])
+
+    def test_v3_material_recheck_uses_compact_state_summary(self):
+        before = {"state": {}, "state_summary": {
+            "armed": True, "landed": False, "relative_altitude_m": 3.0}}
+        after = {"state": {}, "state_summary": {
+            "armed": True, "landed": False, "relative_altitude_m": 4.0}}
+        self.assertIn("altitude changed", material_state_change(before, after))
 
 
 class V2FeedbackTests(unittest.TestCase):

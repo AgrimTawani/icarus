@@ -3,8 +3,8 @@ schema: icarus.dcm.macro.v1
 id: landing-site-survey
 revision: "2"
 tags: [landing, inspection]
-allowed_action_families: [navigation, perception, safety]
-allowed_actions: [hold, goto, orbit, assess_landing_zone, return_home, land]
+allowed_action_families: [lifecycle, navigation, perception, safety]
+allowed_actions: [arm, takeoff, hold, goto, orbit, assess_landing_zone, return_home, land]
 preconditions:
   - Aircraft is airborne with fresh downward perception.
   - Candidate site is inside the reviewed mission boundary.

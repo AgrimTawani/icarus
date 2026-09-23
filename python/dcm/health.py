@@ -25,6 +25,10 @@ def load_policy(path=DEFAULT_POLICY):
     threshold = policy.get("circuit_breaker", {}).get("consecutive_failures")
     if type(threshold) is not int or threshold < 1:
         raise ValueError("invalid DCM circuit-breaker threshold")
+    recovery = policy.get("circuit_breaker", {}).get(
+        "recovery_probe_after_decisions")
+    if type(recovery) is not int or recovery < 1:
+        raise ValueError("invalid DCM recovery-probe interval")
     return policy
 
 
@@ -42,6 +46,26 @@ class DcmHealthMachine:
         self.policy = policy or load_policy()
         self.state = "healthy"
         self.consecutive_failures = 0
+        self.suppressed_decisions = 0
+
+    def allow_inference(self):
+        """Hold an open circuit shut, then permit one controlled probe."""
+        if self.state != "circuit-open":
+            return True
+        recovery_after = self.policy["circuit_breaker"][
+            "recovery_probe_after_decisions"]
+        if self.suppressed_decisions >= recovery_after:
+            self.suppressed_decisions = 0
+            return True
+        self.suppressed_decisions += 1
+        return False
+
+    def circuit_fallback(self, airborne=False):
+        if not airborne:
+            return self.policy["fallback"].get("landed_action")
+        return (self.policy["fallback"]["opening_action_airborne"]
+                if self.suppressed_decisions == 1 else
+                self.policy["fallback"]["circuit_open_action_airborne"])
 
     def transition(self, outcome, airborne=False):
         previous = self.state
@@ -50,6 +74,7 @@ class DcmHealthMachine:
         if outcome in ("valid", "executed", "none"):
             self.state = "healthy"
             self.consecutive_failures = 0
+            self.suppressed_decisions = 0
         else:
             mapped = self.policy["failure_states"].get(outcome, "unavailable")
             if mapped not in HEALTH_STATES:

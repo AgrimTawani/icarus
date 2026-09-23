@@ -68,6 +68,9 @@ SafetyPolicy SafetyPolicy::Load(const std::filesystem::path& path) {
   policy.stale_state_rtl_delay_ms = static_cast<std::uint32_t>(
       root["failure_actions"]["state_stale_rtl_delay_s"].as<double>() *
       1000.0);
+  policy.control_lease_lost_rtl_delay_ms = static_cast<std::uint32_t>(
+      root["failure_actions"]["control_lease_lost_rtl_delay_s"].as<double>() *
+      1000.0);
   policy.maximum_perception_age_ms =
       root["perception"]["maximum_age_ms"].as<std::uint32_t>();
   policy.minimum_obstacle_clearance_m =
@@ -87,6 +90,7 @@ SafetyPolicy SafetyPolicy::Load(const std::filesystem::path& path) {
       policy.maximum_distance_from_home_m <= 0.0 ||
       policy.maximum_horizontal_speed_mps <= 0.0 ||
       policy.maximum_state_age_ms == 0 ||
+      policy.control_lease_lost_rtl_delay_ms == 0 ||
       policy.maximum_perception_age_ms == 0 ||
       policy.minimum_obstacle_clearance_m <= 0.0 ||
       policy.emergency_stop_distance_m < policy.minimum_obstacle_clearance_m ||

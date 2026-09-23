@@ -1,0 +1,8 @@
+{
+  "macro_id": "building-inspection",
+  "cases": [
+    {"kind": "nominal", "expected_actions": ["arm", "takeoff", "inspect_scene", "goto", "hold", "detect", "return_home"]},
+    {"kind": "adverse", "expected_actions": ["hold", "return_home"]},
+    {"kind": "recovery", "expected_actions": ["hold", "return_home", "land"]}
+  ]
+}

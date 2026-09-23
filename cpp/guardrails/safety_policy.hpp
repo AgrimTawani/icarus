@@ -19,6 +19,7 @@ struct SafetyPolicy {
   double land_battery_percent = 0.0;
   std::uint32_t maximum_state_age_ms = 0;
   std::uint32_t stale_state_rtl_delay_ms = 0;
+  std::uint32_t control_lease_lost_rtl_delay_ms = 0;
   std::uint32_t maximum_perception_age_ms = 0;
   double minimum_obstacle_clearance_m = 0.0;
   double emergency_stop_distance_m = 0.0;

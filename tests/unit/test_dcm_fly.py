@@ -282,6 +282,58 @@ class ExecutionGateTests(unittest.TestCase):
                          "ABORTED_BY_SAFETY")
         sleep.assert_called_once_with(0.5)
 
+    def test_selected_macro_rejects_an_action_outside_its_permissions(self):
+        def observation(client, memory, index, context_version):
+            value = patched_observe(self.fly)(client, memory, index)
+            value["context_version"] = "dcm-context-v3-feedback"
+            value["mission_macro"] = {
+                "id": "recovery", "allowed_actions": ["hold", "land"]}
+            return value
+
+        with patch.object(self.fly, "_observe_for_context", observation):
+            client = FakeClient()
+            runtime = ScriptedRuntime(
+                '{"action":"arm","arguments":{},"rationale":"Start mission."}')
+            result = fly_mission(
+                client, runtime, "test", mode="autonomous", context_version="v3",
+                echo=lambda *_: None, max_decisions=1)
+        self.assertEqual(client.action_api.calls, [])
+        self.assertEqual(result["counts"]["invalid"], 1)
+
+    def test_material_state_change_discards_a_fresh_but_obsolete_decision(self):
+        observations = []
+        for north in (0.0, 2.0):
+            value = patched_observe(self.fly)(None, MissionMemory("m"), 1)
+            value["state"].update({
+                "local_position_ned": {
+                    "north_m": north, "east_m": 0.0, "down_m": -3.0}})
+            observations.append(value)
+        with patch.object(self.fly, "_observe_for_context",
+                          side_effect=observations):
+            client = FakeClient()
+            result = fly_mission(
+                client, ScriptedRuntime('{"action":"hold","arguments":{}}'),
+                "test", mode="autonomous", echo=lambda *_: None,
+                max_decisions=1)
+        self.assertEqual(client.action_api.calls, [])
+        self.assertEqual(result["counts"]["stale"], 1)
+
+    def test_open_circuit_suppresses_inference_and_escalates_airborne(self):
+        def airborne_observe(client, memory, index):
+            value = patched_observe(self.fly)(client, memory, index)
+            value["state"].update({"armed": True, "landed": False})
+            return value
+
+        runtime = ScriptedRuntime(*(["not-json"] * 6))
+        with patch.object(self.fly, "observe", airborne_observe):
+            client = FakeClient()
+            result = fly_mission(client, runtime, "test", mode="autonomous",
+                                 echo=lambda *_: None, max_decisions=6)
+        self.assertEqual(runtime.asked, 3)
+        self.assertEqual(result["counts"]["invalid"], 3)
+        self.assertIn("Hold", client.action_api.calls)
+        self.assertIn("ReturnHome", client.action_api.calls)
+
 
 class EpisodeRecordingTests(unittest.TestCase):
     def setUp(self):

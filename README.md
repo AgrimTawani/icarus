@@ -9,8 +9,11 @@ emergency behavior remain outside the model.
 The repository contains a custom 10-inch quadrotor digital twin, populated
 Gazebo environments, native simulated sensors, ArduPilot SITL integration,
 repeatable wind/fault scenarios, and tested Drone API, safety and local
-avoidance services. A first offline observe-mode DCM mock exists, but no LLM
-controls the drone and the stack is not validated for physical autonomy.
+avoidance services. A simulator-only local-LLM DCM can propose typed actions in
+approval or closed-loop modes; it remains unapproved for unattended or physical
+flight. V3 adds reviewed SOUL/BODY/world context, enforced mission macros,
+sealed feedback artifacts and process-heartbeat recovery without giving the
+model a new control path.
 
 ## Start Here
 

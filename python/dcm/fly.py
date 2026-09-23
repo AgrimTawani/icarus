@@ -30,6 +30,7 @@ from python.dcm.contract import (
     assess_freshness,
     curate,
     curate_v3,
+    material_state_change,
     render_prompt,
     validate_decision,
 )
@@ -55,10 +56,12 @@ class MissionMemory:
         self.completed = []
         self.rejected = 0
 
-    def remember(self, action, outcome, result=None):
+    def remember(self, action, outcome, result=None, arguments=None):
         item = {"action": action, "outcome": outcome}
         if result is not None:
             item["result"] = result
+        if arguments is not None:
+            item["arguments"] = dict(arguments)
         self.completed.append(item)
 
     def as_history(self):
@@ -91,17 +94,23 @@ def observe(client, memory, decision_index, context_version="v2"):
     if context_version not in ("v2", "v3"):
         raise ValueError("context_version must be v2 or v3")
     builder = curate_v3 if context_version == "v3" else curate
-    kwargs = ({"mission_metadata": memory.mission_metadata}
+    runtime_body = getattr(client, "capability_profile", lambda: None)()
+    kwargs = ({"mission_metadata": memory.mission_metadata,
+               "runtime_body": runtime_body}
               if context_version == "v3" else {})
     observation = builder(state, perception, None, memory.mission, event,
                          history=memory.as_history(), **kwargs)
     reference = getattr(client, "mission_reference", dict)()
     if reference:
         observation["mission_reference"] = reference
-    guidance = getattr(client, "mission_guidance", lambda *_: {})(
+    obligations = getattr(client, "mission_obligations",
+                          getattr(client, "mission_guidance", lambda *_: {}))(
         memory.mission, memory.as_history(), observation)
-    if guidance:
-        observation["mission_guidance"] = guidance
+    if obligations:
+        observation["mission_obligations"] = obligations
+    if context_version == "v3":
+        from python.dcm.v2_context import finalize_context
+        observation = finalize_context(observation)
     return observation
 
 
@@ -172,7 +181,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 outcome, detail = _execute(client, action_pb2, fallback, index, echo)
                 counts["executed"] += 1
                 counts["failed"] += outcome != "SUCCEEDED"
-                memory.remember(fallback["action"], outcome)
+                memory.remember(fallback["action"], outcome,
+                                arguments=fallback["arguments"])
                 executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
                 _record(client, index, observation, None, None,
                         "fallback_executed", stale, proposal=fallback,
@@ -181,6 +191,29 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 _record(client, index, observation, None, None, "stale", stale,
                         health=health.record())
             time.sleep(0.5)
+            continue
+
+        if not health.allow_inference():
+            action = health.circuit_fallback(airborne=_airborne(observation))
+            if action and action != "none":
+                fallback = {"action": action, "arguments": {}}
+                outcome, detail = _execute(client, action_pb2, fallback, index, echo)
+                counts["executed"] += 1
+                counts["failed"] += outcome != "SUCCEEDED"
+                memory.remember(action, outcome,
+                                arguments=fallback["arguments"])
+                executed.append({**fallback, "outcome": outcome,
+                                 "senior_fallback": True})
+                _record(client, index, observation, None, None,
+                        "circuit_suppressed", "DCM circuit is open",
+                        proposal=fallback, outcome=outcome,
+                        health=health.record())
+                if action in ("return_home", "land") and outcome == "SUCCEEDED":
+                    break
+            else:
+                _record(client, index, observation, None, None,
+                        "circuit_suppressed", "DCM circuit is open",
+                        health=health.record())
             continue
 
         prompt = render_prompt(observation)
@@ -202,19 +235,17 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         latency_ms = (time.monotonic() - started) * 1000
         counts["proposed"] += 1
 
-        guidance = observation.get("mission_guidance") or {}
-        if proposal is not None and guidance:
-            required_action = guidance["required_next_action"]
-            required_arguments = guidance.get("arguments", {})
-            arguments_match = (proposal["action"] == "inspect_scene" or
-                               proposal["arguments"] == required_arguments)
-            if proposal["action"] != required_action or not arguments_match:
+        macro = observation.get("mission_macro") or {}
+        if proposal is not None and macro:
+            always_safe = {"none", "hold", "return_home", "land"}
+            permitted = set(macro.get("allowed_actions", ())) | always_safe
+            if proposal["action"] not in permitted:
                 counts["invalid"] += 1
-                error = ("proposal does not satisfy deterministic mission guidance: "
-                         f"required {required_action} {required_arguments}")
+                error = (f"action {proposal['action']} is outside reviewed macro "
+                         f"{macro.get('id')} permissions")
                 transition = health.transition("invalid", airborne=_airborne(observation))
                 echo(f"[{index}] refused {proposal['action']}: {error}")
-                memory.remember(proposal["action"], "REJECTED", {"reason": error})
+                memory.rejected += 1
                 _record(client, index, observation, prompt, raw, "invalid", error,
                         latency_ms, proposal=proposal, rationale=rationale,
                         health=health.record())
@@ -228,11 +259,15 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 outcome, detail = _execute(client, action_pb2, fallback, index, echo)
                 counts["executed"] += 1
                 counts["failed"] += outcome != "SUCCEEDED"
-                memory.remember(fallback["action"], outcome)
+                memory.remember(fallback["action"], outcome,
+                                arguments=fallback["arguments"])
                 executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
                 _record(client, index, observation, prompt, raw,
                         "fallback_executed", error, latency_ms, fallback, outcome,
                         rationale=rationale, health=health.record())
+                if fallback["action"] in ("return_home", "land") and \
+                        outcome == "SUCCEEDED":
+                    break
             else:
                 _record(client, index, observation, prompt, raw, status, error,
                         latency_ms, rationale=rationale, health=health.record())
@@ -241,12 +276,32 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         # The world may have moved while the model was thinking. Offline
         # replay could not surface this; a 13 s cold start can.
         confirm = _observe_for_context(client, memory, index, context_version)
-        moved = assess_freshness(confirm)
+        moved = assess_freshness(confirm) or material_state_change(observation, confirm)
         if moved:
             counts["stale"] += 1
+            transition = health.transition(
+                "stale_after", airborne=_airborne(observation))
             echo(f"[{index}] discarded {proposal['action']}: {moved}")
-            _record(client, index, observation, prompt, raw, "stale_after",
-                    moved, latency_ms)
+            if transition.fallback_action:
+                fallback = {"action": transition.fallback_action, "arguments": {}}
+                outcome, detail = _execute(
+                    client, action_pb2, fallback, index, echo)
+                counts["executed"] += 1
+                counts["failed"] += outcome != "SUCCEEDED"
+                memory.remember(fallback["action"], outcome,
+                                arguments=fallback["arguments"])
+                executed.append({**fallback, "outcome": outcome,
+                                 "senior_fallback": True})
+                _record(client, index, observation, prompt, raw,
+                        "fallback_executed", moved, latency_ms,
+                        proposal=fallback, outcome=outcome,
+                        health=health.record())
+                if fallback["action"] in ("return_home", "land") and \
+                        outcome == "SUCCEEDED":
+                    break
+            else:
+                _record(client, index, observation, prompt, raw, "stale_after",
+                        moved, latency_ms, health=health.record())
             continue
 
         echo(f"[{index}] proposes {_describe(proposal)}"
@@ -271,10 +326,12 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         outcome, detail = _execute(client, action_pb2, proposal, index, echo)
         health.transition("executed" if outcome == "SUCCEEDED" else "error",
                           airborne=_airborne(observation))
-        memory.remember(proposal["action"], outcome,
-                        detail if proposal["action"] in
-                        ("detect", "inspect_scene", "assess_landing_zone") and outcome == "SUCCEEDED"
-                        else None)
+        memory.remember(
+            proposal["action"], outcome,
+            detail if proposal["action"] in
+            ("detect", "inspect_scene", "assess_landing_zone") and
+            outcome == "SUCCEEDED" else None,
+            arguments=proposal["arguments"])
         executed.append({"action": proposal["action"],
                          "arguments": proposal["arguments"],
                          "outcome": outcome})
@@ -408,7 +465,9 @@ def _record(client, index, observation, prompt, raw, status, error,
         "error": error,
         "latency_ms": round(latency_ms, 3),
         "outcome": outcome,
-        "executed": status == "executed",
+        "executed": (proposal is not None and outcome is not None and
+                     status in ("executed", "fallback_executed",
+                                "circuit_suppressed")),
         # True/False means an approval-mode operator made an explicit decision;
         # null means no operator approval was requested (autonomous mode or a
         # pre-execution refusal). This is annotation data, not authority.

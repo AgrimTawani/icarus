@@ -6,6 +6,32 @@ V3 remains opt-in because the frozen promotion experiment returned
 enable a new model in autonomous flight. Implementation evidence is in
 [`V2-PHASE1-IMPLEMENTATION.md`](V2-PHASE1-IMPLEMENTATION.md).
 
+## Phase-1 hardening implemented 2026-09-24
+
+The implementation audit closed the gaps discovered after the first live
+AirSim demonstration:
+
+- mission code now publishes completion obligations rather than a forced next
+  action, so a successful demonstration no longer masquerades as independent
+  DCM planning;
+- reviewed macros resolve deterministically from distinctive intent (with
+  explicit ID override) and their action subsets are enforced;
+- BODY includes live connected deployment facts, and SOUL/BODY/world/macro are
+  explicit system-prompt sections;
+- the second observation check detects material aircraft/perception changes,
+  not only timestamp age;
+- circuit-open state suppresses ordinary model calls and uses typed recovery;
+- live decision rows validate before recording, and every new episode seal
+  automatically creates hash-bound feedback and human-review candidates;
+- AirSim person counts pass only against reviewed, camera-specific scene truth;
+  otherwise the result is explicitly inconclusive; and
+- the renewable control lease is monitored as an independent process
+  heartbeat by C++, commanding BRAKE and then RTL if the controller disappears
+  while airborne.
+
+These changes preserve the opt-in status of V3. Implementation completeness is
+not a promotion result; the frozen Gazebo scorecard still governs default use.
+
 ## Executive decision
 
 Adopt AerialClaw's *cognitive-loop concepts* in Phase 1, but do not adopt its

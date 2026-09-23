@@ -261,11 +261,20 @@ void TestPerceptionLossRecovery() {
   state.set_flight_phase(icarus::v1::FLIGHT_PHASE_AIRBORNE);
   states.Publish(state);
   icarus::mission_executor::ActionStore actions(clock);
+  icarus::drone_api::AuthorityManager authority(clock);
+  icarus::v1::AcquireControlRequest request;
+  request.set_session_id("session-1");
+  request.set_client_id("session-1");
+  request.set_vehicle_id("icarus-01");
+  request.set_requested_role(icarus::v1::CONTROL_ROLE_DCM_AUTONOMY);
+  request.set_requested_lease_ms(5'000);
+  Require(authority.Acquire(request).granted(),
+          "perception test lease should be granted");
   FakeGateway gateway;
   icarus::perception::PerceptionEngine perception(
       clock, states, policy.maximum_perception_age_ms);
   icarus::safety_supervisor::SafetySupervisor supervisor(
-      clock, policy, states, actions, gateway, &perception);
+      clock, policy, states, actions, authority, gateway, &perception);
   supervisor.Start();
   for (int attempt = 0; attempt < 100; ++attempt) {
     if (gateway.last_mode == 17) {
@@ -278,6 +287,51 @@ void TestPerceptionLossRecovery() {
   throw std::runtime_error("perception loss did not command BRAKE");
 }
 
+void TestControllerHeartbeatLossRecovery() {
+  FakeClock clock;
+  const auto policy = icarus::guardrails::SafetyPolicy::Load(
+      std::filesystem::path(ICARUS_SOURCE_DIR) / "config/safety/v1.yaml");
+  icarus::state_engine::StateEngine states(clock);
+  auto state = HealthyLandedState(clock.NowUnixMs());
+  state.set_armed(true);
+  state.set_landed(false);
+  state.set_flight_phase(icarus::v1::FLIGHT_PHASE_AIRBORNE);
+  states.Publish(state);
+  icarus::mission_executor::ActionStore actions(clock);
+  icarus::drone_api::AuthorityManager authority(clock);
+  icarus::v1::AcquireControlRequest request;
+  request.set_session_id("dcm-session");
+  request.set_client_id("dcm-process");
+  request.set_vehicle_id("icarus-01");
+  request.set_requested_role(icarus::v1::CONTROL_ROLE_DCM_AUTONOMY);
+  request.set_requested_lease_ms(250);
+  Require(authority.Acquire(request).granted(),
+          "heartbeat test lease should be granted");
+  FakeGateway gateway;
+  icarus::safety_supervisor::SafetySupervisor supervisor(
+      clock, policy, states, actions, authority, gateway);
+  supervisor.Start();
+
+  clock.now_ms += 251;
+  state.set_observed_at_unix_ms(clock.NowUnixMs());
+  states.Publish(state);
+  for (int attempt = 0; attempt < 100 && gateway.last_mode != 17; ++attempt) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  Require(gateway.last_mode == 17,
+          "expired DCM heartbeat must command ArduPilot BRAKE");
+
+  clock.now_ms += policy.control_lease_lost_rtl_delay_ms + 1;
+  state.set_observed_at_unix_ms(clock.NowUnixMs());
+  states.Publish(state);
+  for (int attempt = 0; attempt < 100 && gateway.last_mode != 6; ++attempt) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  supervisor.Stop();
+  Require(gateway.last_mode == 6,
+          "sustained DCM heartbeat loss must escalate to RTL");
+}
+
 }  // namespace
 
 int main() {
@@ -287,6 +341,7 @@ int main() {
     TestStateAndActionLifecycle();
     TestStaleStateRecovery();
     TestPerceptionLossRecovery();
+    TestControllerHeartbeatLossRecovery();
     std::cout << "Phase 8 core tests passed\n";
     return 0;
   } catch (const std::exception& error) {

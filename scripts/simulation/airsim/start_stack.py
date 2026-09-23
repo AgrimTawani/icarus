@@ -43,6 +43,17 @@ def main():
         mission_reference = json.loads(args.mission_reference.read_text())
         if not isinstance(mission_reference.get("known_landmarks", []), list):
             parser.error("mission reference known_landmarks must be a list")
+        person_truth = mission_reference.get("person_count_ground_truth")
+        if person_truth is not None and (
+                not isinstance(person_truth, dict)
+                or type(person_truth.get("expected_visible_count")) is not int
+                or person_truth["expected_visible_count"] < 0
+                or person_truth.get("review_status") != "reviewed"
+                or not isinstance(person_truth.get("camera_id"), str)
+                or not person_truth.get("camera_id")):
+            parser.error(
+                "person_count_ground_truth requires a non-negative "
+                "expected_visible_count, review_status=reviewed, and camera_id")
     if args.rebuild_sitl or not SITL.is_file():
         environment = dict(os.environ)
         environment["PATH"] = str(ARDUPILOT / ".venv/bin") + os.pathsep + environment["PATH"]

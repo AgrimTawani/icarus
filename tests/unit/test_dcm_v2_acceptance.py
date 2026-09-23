@@ -79,6 +79,14 @@ class V2AcceptanceTests(unittest.TestCase):
                          "return_home")
         self.assertEqual(machine.transition("valid", airborne=True).current, "healthy")
 
+    def test_open_circuit_allows_only_a_bounded_recovery_probe(self):
+        machine = DcmHealthMachine()
+        for _ in range(3):
+            machine.transition("invalid")
+        self.assertFalse(machine.allow_inference())
+        self.assertFalse(machine.allow_inference())
+        self.assertTrue(machine.allow_inference())
+
     def test_feedback_report_and_untrusted_queue_are_reproducible(self):
         rows = [{"proposal": {"action": "hold"}, "executed": True,
                  "outcome": "FAILED", "latency_ms": 10}] * 3

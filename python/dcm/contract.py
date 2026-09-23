@@ -347,6 +347,37 @@ def assess_freshness(observation, limits=FRESHNESS_LIMITS):
     return None
 
 
+def material_state_change(before, after, position_tolerance_m=1.0,
+                          altitude_tolerance_m=0.75):
+    """Return a reason when the state materially changed during inference."""
+    first = {**(before.get("state_summary") or {}),
+             **(before.get("state") or {})}
+    second = {**(after.get("state_summary") or {}),
+              **(after.get("state") or {})}
+    for field in ("armed", "landed", "flight_phase", "manual_override_active",
+                  "geofence_breached"):
+        if field in first and field in second and first[field] != second[field]:
+            return f"state changed during inference: {field}"
+    a_alt, b_alt = first.get("relative_altitude_m"), second.get("relative_altitude_m")
+    if type(a_alt) in (int, float) and type(b_alt) in (int, float) and \
+            abs(a_alt - b_alt) > altitude_tolerance_m:
+        return "altitude changed materially during inference"
+    a_pos, b_pos = first.get("local_position_ned") or {}, second.get("local_position_ned") or {}
+    axes = ("north_m", "east_m", "down_m")
+    if all(type(a_pos.get(key)) in (int, float) and
+           type(b_pos.get(key)) in (int, float) for key in axes):
+        distance = math.sqrt(sum((a_pos[key] - b_pos[key]) ** 2 for key in axes))
+        if distance > position_tolerance_m:
+            return f"position changed {distance:.2f} m during inference"
+    first_perception = before.get("perception_summary") or before.get("perception") or {}
+    second_perception = after.get("perception_summary") or after.get("perception") or {}
+    for field in ("overall", "path_ahead_clear"):
+        if field in first_perception and field in second_perception and \
+                first_perception[field] != second_perception[field]:
+            return f"perception changed during inference: {field}"
+    return None
+
+
 def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
            history=None, elapsed_ms=None):
     """Build the bounded observation a model is allowed to see.
@@ -385,7 +416,7 @@ def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
 
 def curate_v3(state, perception, previous_result, mission, event, actions=ACTIONS,
               history=None, elapsed_ms=None, macro_directory=None,
-              mission_metadata=None):
+              mission_metadata=None, runtime_body=None):
     """Build the Phase-1 V2 context without changing the legacy contract.
 
     The source is first curated by the existing allow-list, then enriched by
@@ -405,9 +436,13 @@ def curate_v3(state, perception, previous_result, mission, event, actions=ACTION
                  root / "config" / "dcm" / "macros")
     catalog = load_macros(directory, actions)
     static = profiles()
+    generated = body()
+    if runtime_body:
+        generated = dict(generated)
+        generated["deployment"] = runtime_body
     context = build_context(base, catalog=catalog,
                             mission_metadata=mission_metadata,
-                            body=body(), soul=static["soul"],
+                            body=generated, soul=static["soul"],
                             world_facts=static["world_facts"])
     return context
 
@@ -429,9 +464,11 @@ Allowed actions:
 
 Rules:
 - Choose exactly one action from the list above.
-- When ``mission_guidance.required_next_action`` is present, propose that exact
-  action and its supplied arguments unless the current physical state makes it
-  unsafe. This is a deterministic pending mission obligation, not a suggestion.
+- Use ``mission_obligations`` as completion criteria, not as executable
+  commands. You must independently choose the next legal action and may choose
+  a safer action when state or perception makes progress unsafe.
+- When a reviewed mission macro is selected, use only its ``allowed_actions``;
+  hold, return_home, land and none remain available as safety exits.
 - "arguments" is always an object. Use {{}} when the action takes no arguments.
 - Never invent an action, an argument, or a unit.
 - Respect the present physical flight state, even if the mission text asks for
@@ -450,11 +487,9 @@ Rules:
   A known landmark is a committed navigation reference, not a detector class.
 - If ``mission_reference.visual_requirements.building_inspection_requires_inspect_scene``
   is true and the mission asks to inspect or check a building, a successful
-  ``inspect_scene`` is a mandatory completion requirement. Immediately after
-  takeoff at its reviewed ``inspection_waypoint``, if history has no successful
-  ``inspect_scene``, the next non-safety action MUST be ``inspect_scene``—not
-  goto, hold, detect, return_home or land. Ask one concise visual question.
-  Takeoff at that same local position and altitude already satisfies the move.
+  ``inspect_scene`` is a mandatory completion requirement. Independently plan
+  when to request that evidence while respecting the reviewed target, mission
+  order, current state, and selected macro. Ask one concise visual question.
   Never infer people from qualitative prose when ``detect`` is available.
 - If the mission says "that building" or "the building", use
   ``mission_reference.primary_target_id`` and the matching reviewed landmark;
@@ -504,19 +539,34 @@ def render_prompt(observation, actions=ACTIONS, ending_guidance=False):
         '"rationale":"Armed on ground; mission requests 3 m."}'
         if v3 else
         'The object has exactly two keys: "action" and "arguments".')
-    return {
-        "prompt_version": (PROMPT_VERSION_CONTEXT if v3 else
-                           PROMPT_VERSION_ENDING if ending_guidance
-                           else PROMPT_VERSION),
-        "system": SYSTEM_PROMPT.format(
+    system = SYSTEM_PROMPT.format(
             vocabulary=render_vocabulary(actions),
             response_contract=response_contract,
             no_action=('{"action":"none","arguments":{},'
                        '"rationale":"No safe action is currently needed."}'
                        if v3 else '{"action":"none","arguments":{}}'),
-            ending=ENDING_GUIDANCE if ending_guidance else ""),
+            ending=ENDING_GUIDANCE if ending_guidance else "")
+    user_observation = observation
+    if v3:
+        from python.dcm.v2_context import model_visible_payload
+        visible = model_visible_payload(observation)
+        soul = visible["profiles"]["soul"]
+        body = visible["profiles"]["body"]
+        world = visible["profiles"]["world_facts"]
+        macro = visible["profiles"]["mission_macro"]
+        system += "\n\nREVIEWED SOUL\n" + str(soul.get("text", "")).strip()
+        system += "\n\nGENERATED BODY\n" + json.dumps(body, sort_keys=True)
+        system += "\n\nREVIEWED WORLD FACTS\n" + str(world.get("text", "")).strip()
+        system += "\n\nREVIEWED MISSION MACRO\n" + (
+            json.dumps(macro, sort_keys=True) if macro else "No macro selected.")
+        user_observation = visible["user"]
+    return {
+        "prompt_version": (PROMPT_VERSION_CONTEXT if v3 else
+                           PROMPT_VERSION_ENDING if ending_guidance
+                           else PROMPT_VERSION),
+        "system": system,
         "user": ("Current situation:\n"
-                 + json.dumps(observation, sort_keys=True,
+                 + json.dumps(user_observation, sort_keys=True,
                               separators=(",", ":") if v3 else None,
                               indent=None if v3 else 2)
                  + "\n\nRespond with one JSON object."),

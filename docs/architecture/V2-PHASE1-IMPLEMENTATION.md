@@ -21,19 +21,29 @@ airframe.
   the existing curated allow-list. It adds source freshness, sectorized
   obstacles, bounded history/failure counters, profile/macro provenance and a
   context hash without exposing raw sensors, truth or authority tokens.
-- BODY is generated from the active action/freshness contract and checked in
-  as a manifest. A stale manifest fails closed. SOUL and world facts are static
-  reviewed inputs and cannot be changed by a model or active mission.
-- Four YAML-front-matter mission macros have explicit action families,
+- BODY combines the checked action/freshness manifest with live Drone API,
+  simulator, firmware, parameter, camera, LiDAR and airframe introspection.
+  SOUL and world facts are static reviewed inputs and cannot be changed by a
+  model or active mission.
+- Five YAML-front-matter mission macros have explicit action families,
   preconditions, evidence links and nominal/adverse/recovery fixtures.
+- Explicit `--macro-id` remains an override; otherwise distinctive mission
+  intent deterministically selects a macro. Its action subset is enforced.
 - V3 output has action, arguments and a separate bounded rationale. Only the
   validated action/arguments cross the control boundary.
-- Decision traces validate against a versioned schema. The feedback builder is
-  deterministic; model hypotheses enter an explicitly untrusted human-review
-  queue and cannot mutate policy.
+- Decision traces are schema-validated before live recording. Episode sealing
+  automatically creates hash-bound reliability and human-review artifacts;
+  model hypotheses remain untrusted and cannot mutate policy.
 - Runtime health has healthy/late/invalid/unavailable/stale/circuit-open states.
   Three consecutive failures open the circuit; typed senior fallback requests
-  hold and then RTL through the unchanged Drone API.
+  hold and then RTL through the unchanged Drone API. Normal inference is
+  suppressed while open, with a bounded recovery probe.
+- The final model-visible context is budgeted and hashed only after reference,
+  obligations and live BODY are attached. Post-inference execution additionally
+  requires that the aircraft has not materially moved or changed state.
+- Control-lease renewal is the independent DCM-process heartbeat. If it stops
+  while airborne, the C++ safety supervisor commands BRAKE and then RTL after
+  the configured delay, even if the Python process is gone.
 
 ## Frozen Gazebo comparison
 
@@ -93,17 +103,16 @@ ArduPilot route and attaches a reviewed landmark reference to the session.
 
 Live AirSim RGB frames now feed the existing edge-vision boundaries. SmolVLM
 describes the primary building; YOLO supplies the visible-person count. Neither
-has flight authority. A deterministic mission-guidance feedback field exposes
-pending evidence obligations, and proposals that contradict it are recorded
-and refused before reaching the Drone API. This prevents a model from claiming
-“hover over that building” at an invented coordinate or landing before required
-visual evidence is collected.
+has flight authority. Deterministic mission obligations expose pending evidence
+without choosing the next action. Reviewed macro constraints and ordinary
+argument/guardrail validation refuse actions outside the authorized envelope.
 
 The final prompt-driven scene-6 episode
 `20260923T212718_6bf94baf9b39` executed Arm, Takeoff 3 m, InspectScene, Goto the
 reviewed `(25, -6, 22)` NED/AGL waypoint, Hold 3 s, Detect person, and
-ReturnHome/land. One premature goto was refused, the model recovered on its
-next decision, every executed action succeeded, and semantic completion passed.
+ReturnHome/land. That historical run proved the complete visual/control path,
+but its zero-person result is now correctly classified as **inconclusive**:
+the scene reference has no reviewed visible-person ground truth.
 
 ## Reproduction
 
