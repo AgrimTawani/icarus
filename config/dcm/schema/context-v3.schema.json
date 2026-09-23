@@ -6,11 +6,12 @@
     "contract_version", "context_version", "observed_at_unix_ms",
     "state", "perception", "state_summary", "perception_summary",
     "failure_signals", "source_evidence", "body", "soul", "world_facts", "macro_catalog",
+    "mission_contract",
     "context_budget", "context_sha256"
   ],
   "properties": {
-    "context_version": {"const": "dcm-context-v3-feedback"},
-    "contract_version": {"const": "dcm-contract-v3-feedback"},
+    "context_version": {"const": "dcm-context-v3-compact"},
+    "contract_version": {"const": "dcm-contract-v3-compact"},
     "observed_at_unix_ms": {"type": ["integer", "string"]},
     "state": {"type": "object"},
     "perception": {"type": "object"},
@@ -41,6 +42,19 @@
       "additionalProperties": false
     },
     "mission_macro": {"type": ["object", "null"]},
+    "mission_contract": {
+      "type": "object",
+      "required": ["schema", "mission_type", "objectives", "pending", "completed"],
+      "properties": {
+        "schema": {"const": "icarus.dcm.mission-contract.v1"},
+        "mission_type": {"type": "string"},
+        "objectives": {"type": "array"},
+        "pending": {"type": "array", "items": {"type": "string"}},
+        "completed": {"type": "array", "items": {"type": "string"}},
+        "permitted_actions": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
     "body": {"type": "object"},
     "soul": {"type": "object"},
     "world_facts": {"type": "object"},
@@ -49,9 +63,9 @@
       "type": "object",
       "required": ["max_bytes", "payload_bytes", "estimated_tokens_upper_bound"],
       "properties": {
-        "max_bytes": {"const": 24000},
-        "payload_bytes": {"type": "integer", "maximum": 24000},
-        "estimated_tokens_upper_bound": {"type": "integer", "maximum": 8000}
+      "max_bytes": {"const": 8000},
+      "payload_bytes": {"type": "integer", "maximum": 8000},
+      "estimated_tokens_upper_bound": {"type": "integer", "maximum": 2667}
       }
     },
     "context_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}

@@ -10,6 +10,10 @@ preconditions:
   - State, position, and obstacle evidence are fresh before navigation.
 evidence_links:
   - config/dcm/macro_scenarios/building-inspection.json
+model_policy:
+  phases: [launch, confirm_target, navigate, stabilize, collect_evidence, recover]
+  recovery_actions: [hold, return_home, land]
+  evidence_requirements: [reviewed_target, visual_inspection, requested_detection]
 ---
 # Building inspection
 

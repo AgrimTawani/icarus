@@ -10,6 +10,10 @@ preconditions:
   - Candidate site is inside the reviewed mission boundary.
 evidence_links:
   - config/dcm/macro_scenarios/landing-site-survey.json
+model_policy:
+  phases: [launch, approach_candidate, stabilize, assess_landing_zone, recover]
+  recovery_actions: [hold, return_home, land]
+  evidence_requirements: [reviewed_candidate, landing_zone_assessment]
 ---
 # Landing-site survey
 

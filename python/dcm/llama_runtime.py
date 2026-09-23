@@ -115,7 +115,10 @@ class LlamaCppRuntime:
         docs/architecture/DCM-OBSERVE-V1.md for the measured spread and why the
         deadline must be set with it in mind.
         """
-        prompt = render_prompt({"warmup": True},
+        warmup = {"warmup": True}
+        if self.descriptor.contract_version == "dcm-contract-v3-compact":
+            warmup["context_version"] = "dcm-context-v3-compact"
+        prompt = render_prompt(warmup,
                                ending_guidance=self.ending_guidance)
         body = json.dumps({
             "messages": [

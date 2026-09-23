@@ -109,7 +109,10 @@ def observe(client, memory, decision_index, context_version="v2"):
     if obligations:
         observation["mission_obligations"] = obligations
     if context_version == "v3":
-        from python.dcm.v2_context import finalize_context
+        from python.dcm.v2_context import compile_mission_contract, finalize_context
+        observation["mission_contract"] = compile_mission_contract(
+            memory.mission, observation.get("mission_macro"), reference,
+            obligations)
         observation = finalize_context(observation)
     return observation
 
@@ -219,11 +222,11 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         prompt = render_prompt(observation)
         started = time.monotonic()
         raw = None
-        rationale = None
+        reason_code = None
         try:
             raw = runtime.propose(observation)
-            proposal, rationale = validate_decision(
-                raw, allow_rationale=context_version == "v3")
+            proposal, reason_code = validate_decision(
+                raw, allow_reason_code=context_version == "v3")
             status = "valid"
             error = None
         except DeadlineExceeded as expired:
@@ -247,7 +250,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 echo(f"[{index}] refused {proposal['action']}: {error}")
                 memory.rejected += 1
                 _record(client, index, observation, prompt, raw, "invalid", error,
-                        latency_ms, proposal=proposal, rationale=rationale,
+                        latency_ms, proposal=proposal, reason_code=reason_code,
                         health=health.record())
                 continue
 
@@ -264,13 +267,13 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
                 _record(client, index, observation, prompt, raw,
                         "fallback_executed", error, latency_ms, fallback, outcome,
-                        rationale=rationale, health=health.record())
+                        reason_code=reason_code, health=health.record())
                 if fallback["action"] in ("return_home", "land") and \
                         outcome == "SUCCEEDED":
                     break
             else:
                 _record(client, index, observation, prompt, raw, status, error,
-                        latency_ms, rationale=rationale, health=health.record())
+                        latency_ms, reason_code=reason_code, health=health.record())
             continue
 
         # The world may have moved while the model was thinking. Offline
@@ -310,7 +313,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             health.transition("none")
             echo("      model proposes no action; mission ends")
             _record(client, index, observation, prompt, raw, "none", None,
-                    latency_ms, rationale=rationale, health=health.record())
+                    latency_ms, reason_code=reason_code, health=health.record())
             break
 
         if not approve(proposal, mode, stream,
@@ -320,7 +323,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             echo("      declined")
             _record(client, index, observation, prompt, raw, "declined", None,
                     latency_ms, proposal, operator_approval=False,
-                    rationale=rationale, health=health.record())
+                    reason_code=reason_code, health=health.record())
             continue
 
         outcome, detail = _execute(client, action_pb2, proposal, index, echo)
@@ -343,7 +346,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         _record(client, index, observation, prompt, raw, "executed", detail,
                 latency_ms, proposal, outcome,
                 operator_approval=(True if mode == "approval" else None),
-                rationale=rationale, health=health.record())
+                reason_code=reason_code, health=health.record())
 
         # A faulted command path can recover a fraction of a second later.
         # Without a backoff an autonomous client repeatedly submits the same
@@ -440,7 +443,7 @@ def _airborne(observation):
 
 def _record(client, index, observation, prompt, raw, status, error,
             latency_ms=0.0, proposal=None, outcome=None,
-            operator_approval=None, rationale=None, health=None):
+            operator_approval=None, reason_code=None, health=None):
     """Write the decision into the episode.
 
     Phase 10 requires model prompts and responses to be replayable alongside
@@ -456,8 +459,7 @@ def _record(client, index, observation, prompt, raw, status, error,
         "observation": observation,
         "prompt": prompt,
         "raw_response": raw if isinstance(raw, str) else None,
-        "rationale": rationale,
-        "rationale_class": "model_audit" if rationale else None,
+        "reason_code": reason_code,
         "validator_verdict": ("accepted" if proposal is not None
                                else "not_accepted"),
         "proposal": proposal,

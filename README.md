@@ -11,9 +11,10 @@ Gazebo environments, native simulated sensors, ArduPilot SITL integration,
 repeatable wind/fault scenarios, and tested Drone API, safety and local
 avoidance services. A simulator-only local-LLM DCM can propose typed actions in
 approval or closed-loop modes; it remains unapproved for unattended or physical
-flight. V3 is the default DCM context and adds reviewed SOUL/BODY/world context, enforced mission macros,
-sealed feedback artifacts and process-heartbeat recovery without giving the
-model a new control path.
+flight. Compact V3 is the default DCM context and adds one compiled mission
+contract, semantic live BODY facts, three reviewed operating principles,
+enforced mission macros, sealed feedback artifacts and process-heartbeat
+recovery without giving the model a new control path.
 
 ## Start Here
 
@@ -30,6 +31,20 @@ model a new control path.
    [simulation operator guide](docs/guides/SIMULATION-OPERATIONS.md).
 
 The complete documentation index is [docs/README.md](docs/README.md).
+
+## End-to-End Architecture
+
+![Icarus V2 Phase 1 prompt-to-motors architecture](docs/assets/icarus-v2-dcm-to-motors-architecture.png)
+
+The operator's mission text remains intact while deterministic code compiles
+reviewed references, completion evidence and one selected soft-skill macro into
+a single compact `MissionContract`. The model sees three operating principles,
+semantic live BODY facts, one freshness summary and the current state—not
+profile hashes, filesystem paths, empty world-fact prose or repeated action
+lists. The local DCM may propose one typed action; validation, authority,
+safety, flight control and motor mixing remain outside the language model.
+See the [V2 Phase 1 implementation](docs/architecture/V2-PHASE1-IMPLEMENTATION.md)
+for the corresponding evidence and limitations.
 
 ## Simulation and Control Entry Points
 
@@ -81,10 +96,10 @@ Phases 0–9 are reported complete; episode/replay, local Qwen DCM and closed-lo
 simulation paths are implemented, but no language model is approved for
 unattended flight. V2 Phase 1's AerialClaw-inspired candidate and AirSim
 ArduCopter track are implemented and tested. V3 is now the operator-selected
-default so live runs receive the complete reviewed context; `--context v2`
-remains available for baseline comparisons. This does not waive the frozen
-promotion result: V3 regressed timeout/latency and lacks paired live Gazebo
-evidence, so it is not approved for unattended flight. Simulation realism
-still requires as-built validation. See
+default so live runs receive the compact reviewed context; `--context v2`
+remains available for historical comparisons. This does not waive promotion:
+the earlier feedback prompt regressed timeout/latency, and the compact revision
+still needs frozen replay and paired live Gazebo evidence. It is not approved
+for unattended flight. Simulation realism still requires as-built validation. See
 [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import jsonschema
 
-from python.dcm.contract import ACTIONS, curate_v3, validate_decision
+from python.dcm.contract import ACTIONS, REASON_CODES, curate_v3, validate_decision
 from python.dcm.health import DcmHealthMachine
 from python.dcm.v2_context import MAX_CONTEXT_BYTES, build_context, load_macros
 from python.dcm.v2_feedback import aggregate, review_proposals
@@ -56,16 +56,23 @@ class V2AcceptanceTests(unittest.TestCase):
                 self.assertLessEqual(set(case["expected_actions"]),
                                      set(macro["allowed_actions"]))
 
-    def test_rationale_is_bounded_and_never_part_of_executable_arguments(self):
-        proposal, rationale = validate_decision(json.dumps(
+    def test_reason_code_is_closed_and_never_part_of_executable_arguments(self):
+        proposal, reason_code = validate_decision(json.dumps(
             {"action": "hold", "arguments": {"duration_ms": 1000},
-             "rationale": "fresh state; bounded hold"}), allow_rationale=True)
-        self.assertNotIn("rationale", proposal["arguments"])
-        self.assertEqual(rationale, "fresh state; bounded hold")
+             "reason_code": "SAFETY_HOLD"}), allow_reason_code=True)
+        self.assertNotIn("reason_code", proposal["arguments"])
+        self.assertEqual(reason_code, "SAFETY_HOLD")
         with self.assertRaises(ValueError):
             validate_decision(json.dumps(
                 {"action": "hold", "arguments": {},
-                 "rationale": "x" * 121}), allow_rationale=True)
+                 "reason_code": "MODEL_MADE_THIS_UP"}), allow_reason_code=True)
+
+    def test_live_trace_schema_reason_codes_cannot_drift_from_validator(self):
+        schema = json.loads((
+            ROOT / "config/dcm/schema/decision-trace-v3.schema.json").read_text())
+        schema_codes = set(schema["properties"]["reason_code"]["enum"])
+        schema_codes.remove(None)
+        self.assertEqual(schema_codes, set(REASON_CODES))
 
     def test_health_circuit_opens_and_resets_deterministically(self):
         machine = DcmHealthMachine()

@@ -62,8 +62,8 @@ class ScriptedRuntime:
 
     def propose(self, observation):
         decision = self.decide(observation)
-        if observation.get("context_version") == "dcm-context-v3-feedback":
-            decision["rationale"] = "Deterministic scripted baseline decision."
+        if observation.get("context_version") == "dcm-context-v3-compact":
+            decision["reason_code"] = "MISSION_OBJECTIVE_PENDING"
         return json.dumps(decision)
 
     def decide(self, observation):

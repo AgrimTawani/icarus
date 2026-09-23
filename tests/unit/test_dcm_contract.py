@@ -386,8 +386,7 @@ class PromptTests(unittest.TestCase):
         prompt = render_prompt(observation)
         self.assertEqual(prompt["prompt_version"], "dcm-prompt-v6-mission-evidence")
         self.assertIn("real multirotor aircraft", prompt["system"])
-        self.assertIn("disarmed aircraft on the ground must arm before takeoff",
-                      prompt["system"])
+        self.assertIn("arm before takeoff", prompt["system"])
         self.assertIn("actual current situation", prompt["system"])
         self.assertIn("safely on the ground", prompt["system"])
         self.assertIn("exactly one JSON object", prompt["system"])

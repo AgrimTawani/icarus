@@ -30,7 +30,7 @@ ACTION_NAMES = {
 PRIVATE_FIELDS = {"session_id", "control_lease_id", "client_id", "lease_id"}
 ROOT = Path(__file__).resolve().parents[2]
 DECISION_SCHEMA = json.loads(
-    (ROOT / "config/dcm/schema/decision-trace-v2.schema.json").read_text(
+    (ROOT / "config/dcm/schema/decision-trace-v3.schema.json").read_text(
         encoding="utf-8"))
 
 

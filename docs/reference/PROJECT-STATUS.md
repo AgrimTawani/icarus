@@ -27,15 +27,18 @@ Last updated: 2026-09-23
 ## V2 Phase 1 status
 
 The AerialClaw-inspired Phase-1 architecture is implemented in the default
-`dcm-contract-v3-feedback` CLI context: live deployment BODY, static SOUL/world
-facts, five enforced/auto-resolved reviewed macros, bounded rationale,
-automatically sealed feedback/review artifacts, suppressing circuit breaker,
-material state recheck, independent control-lease heartbeat and a frozen
-promotion scorecard. A paired 135-point
-offline Gazebo evaluation improved the recovery proxy but regressed timeouts
-and latency; the machine gate returned `retain-v1`, so V3 remains unapproved
-for unattended promotion despite being the model-context default. V2 remains
-available through `--context v2` for baseline comparisons.
+`dcm-contract-v3-compact` CLI context: one compiled mission contract, semantic
+live BODY, three compact SOUL principles, five enforced/auto-resolved reviewed
+macros, a closed reason-code vocabulary, automatically sealed feedback/review
+artifacts, suppressing circuit breaker, material state recheck, independent
+control-lease heartbeat and a frozen promotion scorecard. Audit hashes, paths,
+empty world-fact prose, macro prose and duplicate vocabulary/freshness fields
+no longer reach the model. The prior feedback prompt's paired 135-point
+offline Gazebo evaluation improved recovery but regressed timeouts and latency;
+the machine gate returned `retain-v1`. The compact revision requires a fresh
+paired evaluation and remains unapproved for unattended promotion despite being
+the model-context default. V2 remains available through `--context v2` for
+historical comparisons.
 
 The separate AirSim track runs pinned Blocks v1.8.0 headlessly with
 ArduCopter SITL, RGB/depth/LiDAR, the Icarus Drone API and a distinct C++ LiDAR

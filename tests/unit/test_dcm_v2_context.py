@@ -14,8 +14,10 @@ from python.dcm.v2_context import (
     MACRO_SCHEMA,
     bearing_sector,
     build_context,
+    compile_mission_contract,
     finalize_context,
     load_macros,
+    model_visible_payload,
     select_macro,
 )
 from python.dcm.v2_feedback import FEEDBACK_SCHEMA, aggregate
@@ -69,14 +71,35 @@ class V2ContextTests(unittest.TestCase):
             catalog, mission="Arm, inspect that building, hover and count people")
         self.assertEqual(selected["id"], "building-inspection")
         self.assertEqual(selected["selection_source"], "deterministic-intent")
+        self.assertTrue(selected["model_policy"]["phases"])
+
+    def test_mission_contract_replaces_repeated_reference_and_obligations(self):
+        macro = {"id": "building-inspection", "allowed_actions": ["goto", "hold"],
+                 "model_policy": {"phases": ["navigate", "stabilize"],
+                                  "recovery_actions": ["hold"],
+                                  "evidence_requirements": ["reviewed_target"]}}
+        reference = {"primary_target_id": "office", "known_landmarks": [{
+            "id": "office", "hover_waypoint": {
+                "north_m": 12, "east_m": -4, "altitude_agl_m": 15}}]}
+        obligations = {"requirements": [{"id": "building_hover",
+                                          "status": "pending",
+                                          "reviewed_waypoint": reference[
+                                              "known_landmarks"][0]["hover_waypoint"],
+                                          "duration_ms": 3000}]}
+        contract = compile_mission_contract(
+            "hover over that building", macro, reference, obligations)
+        self.assertEqual(contract["target"]["id"], "office")
+        self.assertEqual(contract["pending"], ["building_hover"])
+        self.assertEqual(contract["permitted_actions"], ["goto", "hold"])
 
     def test_final_hash_covers_late_model_visible_fields(self):
         context = build_context({"mission": "survey", "state": {},
                                  "perception": {}})
-        first = finalize_context({**context, "mission_obligations": {
-            "pending": ["flight"]}})
-        second = finalize_context({**context, "mission_obligations": {
-            "pending": ["return_home"]}})
+        first_contract = {**context["mission_contract"], "pending": ["flight"]}
+        second_contract = {**context["mission_contract"],
+                           "pending": ["return_home"]}
+        first = finalize_context({**context, "mission_contract": first_contract})
+        second = finalize_context({**context, "mission_contract": second_contract})
         self.assertNotEqual(first["context_sha256"], second["context_sha256"])
 
     def test_v3_curation_keeps_v1_allow_list_and_adds_profile_provenance(self):
@@ -93,16 +116,25 @@ class V2ContextTests(unittest.TestCase):
         self.assertIn("sha256", context["world_facts"])
         self.assertTrue(context["context_sha256"])
 
-    def test_v3_system_prompt_has_explicit_identity_and_capability_sections(self):
+    def test_v3_prompt_is_compact_and_hides_audit_only_profile_fields(self):
         context = curate_v3(
-            {"armed": False, "landed": True}, {}, None, "survey",
+            {"armed": False, "landed": True, "observed_at_unix_ms": 1000},
+            {"observed_at_unix_ms": 1000, "local_map_age_ms": 0,
+             "overall": "HEALTH_LEVEL_HEALTHY"}, None, "survey",
             {"seq": 1, "unix_ms": 1000}, history=[],
             runtime_body={"simulator": "airsim"})
         prompt = render_prompt(context)
-        self.assertIn("REVIEWED SOUL", prompt["system"])
-        self.assertIn("GENERATED BODY", prompt["system"])
-        self.assertIn("REVIEWED WORLD FACTS", prompt["system"])
-        self.assertIn('"simulator": "airsim"', prompt["system"])
+        self.assertIn("OPERATING PRINCIPLES", prompt["system"])
+        self.assertIn("LIVE BODY", prompt["system"])
+        self.assertNotIn("REVIEWED WORLD FACTS", prompt["system"])
+        self.assertNotIn("manifest_sha256", prompt["system"])
+        self.assertNotIn("allowed_actions", prompt["system"])
+        self.assertIn('"simulator":"airsim"', prompt["system"])
+        visible = model_visible_payload(context)
+        self.assertNotIn("source_evidence", visible["user"])
+        self.assertNotIn("mission_macro", visible["user"])
+        self.assertIn("mission_contract", visible["user"])
+        self.assertLess(len(prompt["system"]) + len(prompt["user"]), 7000)
 
     def test_v3_material_recheck_uses_compact_state_summary(self):
         before = {"state": {}, "state_summary": {

@@ -12,15 +12,18 @@ the current implementation state by themselves.
 ## V2 Phase-1 closeout — 2026-09-23
 
 Phase-1 implementation is complete, but promotion is intentionally not. The
-V3 feedback contract, five enforced/auto-resolved macros, live BODY,
-rationale trace, automatic sealed feedback queue, suppressing circuit breaker,
-independent control-lease heartbeat, AirSim/ArduPilot full stack and
-conformance tests are implemented. The frozen comparison returned `retain-v1`
-because V3 had 1.6% vs 0.8% timeouts and 1,216 ms vs 676 ms steady median
-latency, despite better recovery. V3 is now the CLI context default by explicit
-operator decision, with `--context v2` retained for comparison. Do not treat
-that default as unattended-flight promotion until it passes the committed
-scorecard including three paired live Gazebo episodes.
+compact V3 contract, five enforced/auto-resolved macros, semantic live BODY,
+one compiled mission contract, closed reason-code trace, automatic sealed
+feedback queue, suppressing circuit breaker, independent control-lease
+heartbeat, AirSim/ArduPilot full stack and conformance tests are implemented.
+The frozen comparison returned `retain-v1` because the earlier feedback prompt
+had 1.6% vs 0.8% timeouts and 1,216 ms vs 676 ms steady median latency, despite
+better recovery. The later compact prompt removed model-visible hashes, paths,
+empty facts, duplicate vocabulary and duplicate freshness/mission
+representations; its representative rendered size fell 41%. It has not
+inherited the old evaluation result. V3 is the CLI context default, with
+`--context v2` retained for comparison, but still needs the committed scorecard
+including three paired live Gazebo episodes.
 
 AirSim has passed a real Drone API takeoff/hold/land and stale-LiDAR refusal.
 The optional AerialVLN v2 archive is digest-pinned and all 25 external city

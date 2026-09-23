@@ -10,6 +10,10 @@ preconditions:
   - Obstacle clearance and estimator state are fresh.
 evidence_links:
   - config/dcm/macro_scenarios/inspection-orbit.json
+model_policy:
+  phases: [launch, stage, orbit, collect_evidence, recover]
+  recovery_actions: [hold, return_home, land]
+  evidence_requirements: [reviewed_orbit_geometry, requested_detection]
 ---
 # Inspection orbit
 

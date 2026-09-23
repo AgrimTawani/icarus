@@ -10,6 +10,10 @@ preconditions:
   - Senior safety policy has not already selected a stronger response.
 evidence_links:
   - config/dcm/macro_scenarios/degraded-position-return.json
+model_policy:
+  phases: [stabilize, recover]
+  recovery_actions: [hold, return_home, land]
+  evidence_requirements: [control_link_available, reviewed_home_solution]
 ---
 # Degraded-position return
 

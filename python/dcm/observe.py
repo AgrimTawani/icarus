@@ -25,6 +25,7 @@ from python.dcm.contract import (
     CONTRACT_VERSION_HISTORY,
     FRESHNESS_LIMITS,
     PROMPT_VERSION,
+    PROMPT_VERSION_CONTEXT,
     VOCABULARY_VERSION,
     DeadlineExceeded,
     ModelRuntime,
@@ -59,9 +60,9 @@ class MockRuntime:
     name = "mock-no-action"
 
     def propose(self, observation: dict) -> str:
-        if observation.get("context_version") == "dcm-context-v3-feedback":
+        if observation.get("context_version") == "dcm-context-v3-compact":
             return ('{"action":"none","arguments":{},'
-                    '"rationale":"Mock runtime requests no action."}')
+                    '"reason_code":"NO_SAFE_ACTION"}')
         return '{"action":"none","arguments":{}}'
 
 
@@ -144,7 +145,7 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     elapsed_ms=elapsed, **context_args)
                 raw = None
                 proposal = None
-                rationale = None
+                reason_code = None
                 error = None
                 stale = assess_freshness(observation)
                 if stale:
@@ -160,8 +161,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                         if elapsed_ms > timeout_ms:
                             status = "timeout"
                         else:
-                            proposal, rationale = validate_decision(
-                                raw, allow_rationale=context_version == "v3")
+                            proposal, reason_code = validate_decision(
+                                raw, allow_reason_code=context_version == "v3")
                             status = "valid"
                     except DeadlineExceeded as failure:
                         # The adapter enforced its own deadline and abandoned
@@ -213,8 +214,7 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     "recorded_action": recorded_action,
                     "proposal": proposal,
                     "raw_response": raw if isinstance(raw, str) else None,
-                    "rationale": rationale,
-                    "rationale_class": "model_audit" if rationale else None,
+                    "reason_code": reason_code,
                     "validator_verdict": ("accepted" if status == "valid"
                                            else "not_accepted"),
                     "status": status, "error": error,
@@ -240,7 +240,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
             # The runtime renders the prompt, so its descriptor is the
             # authority on which variant was actually used.
             "prompt_version": (descriptor.prompt_version if descriptor
-                               else PROMPT_VERSION),
+                               else PROMPT_VERSION_CONTEXT
+                               if context_version == "v3" else PROMPT_VERSION),
             "allowed_actions": list(ALLOWED_ACTIONS),
             "freshness_limits": dict(FRESHNESS_LIMITS),
         },

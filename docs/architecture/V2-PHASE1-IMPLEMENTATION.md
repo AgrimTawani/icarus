@@ -10,29 +10,37 @@ available through `--context v2` for compatibility and baseline comparisons.
 
 ## Delivered architecture
 
-![Icarus V2 DCM-to-motors architecture](../assets/icarus-v2-dcm-to-motors-architecture.png)
+![Icarus V2 Phase 1 prompt-to-motors architecture](../assets/icarus-v2-dcm-to-motors-architecture.png)
 
-The diagram distinguishes the model-visible cognitive loop from the
-authoritative C++ control path, shows the independent safety override, and
-keeps Gazebo, AirSim, and future physical-motor execution as separate device
-branches. Status update: the image's original “V2 default / V3 opt-in” label is
-historical; V3 is now the CLI default. The current AirSim multirotor is still
-not physically equivalent to the Gazebo Akshu airframe.
+The diagram follows the complete prompt path: the exact operator mission is
+combined with one deterministically compiled `MissionContract`, three compact
+SOUL principles, semantic live BODY facts and one canonical evidence-health
+summary; the resulting system/user messages reach the local DCM before its
+single typed proposal crosses schema, macro,
+freshness, approval and C++ authority boundaries. It also shows the separate
+semantic-vision loop, independent safety override, offline feedback lane and
+the distinct Gazebo, AirSim and future physical device branches. V3 is the CLI
+default. The current AirSim multirotor is still not physically equivalent to
+the Gazebo Akshu airframe.
 
-- `dcm-contract-v3-feedback` builds a deterministic, byte-bounded context from
+- `dcm-contract-v3-compact` builds a deterministic, byte-bounded context from
   the existing curated allow-list. It adds source freshness, sectorized
-  obstacles, bounded history/failure counters, profile/macro provenance and a
-  context hash without exposing raw sensors, truth or authority tokens.
-- BODY combines the checked action/freshness manifest with live Drone API,
-  simulator, firmware, parameter, camera, LiDAR and airframe introspection.
-  SOUL and world facts are static reviewed inputs and cannot be changed by a
-  model or active mission.
+  obstacles, bounded history/failure counters and a context hash without
+  exposing raw sensors, truth or authority tokens.
+- Model-visible context is deliberately smaller than the audit record. BODY
+  exposes only semantic deployment facts; action lists, freshness limits,
+  profile paths, revisions and hashes stay in sealed evidence. SOUL renders as
+  three reviewed principles. Empty world-facts text is not sent to the model.
 - Five YAML-front-matter mission macros have explicit action families,
   preconditions, evidence links and nominal/adverse/recovery fixtures.
 - Explicit `--macro-id` remains an override; otherwise distinctive mission
   intent deterministically selects a macro. Its action subset is enforced.
-- V3 output has action, arguments and a separate bounded rationale. Only the
-  validated action/arguments cross the control boundary.
+- Reviewed macro policy, mission references and completion evidence compile to
+  one `icarus.dcm.mission-contract.v1` object. Macro prose and provenance stay
+  audit-only, while the action subset remains enforced in code.
+- V3 output has action, arguments and one closed `reason_code`; free-form
+  rationale is no longer generated. Only validated action/arguments cross the
+  control boundary.
 - Decision traces are schema-validated before live recording. Episode sealing
   automatically creates hash-bound reliability and human-review artifacts;
   model hypotheses remain untrusted and cannot mutate policy.
@@ -46,6 +54,28 @@ not physically equivalent to the Gazebo Akshu airframe.
 - Control-lease renewal is the independent DCM-process heartbeat. If it stops
   while airborne, the C++ safety supervisor commands BRAKE and then RTL after
   the configured delay, even if the Python process is gone.
+
+## Compact prompt revision (2026-09-24)
+
+The first Phase-1 prompt represented mission meaning as raw text, obligations,
+reference data, macro prose and special-case system rules simultaneously. It
+also repeated action vocabulary and freshness/provenance fields. The compact
+revision preserves all deterministic safety layers but removes that semantic
+duplication from model input.
+
+For the same representative AirSim building mission and live BODY fixture, the
+rendered prompt changed from 8,482 to 5,026 characters. The existing
+conservative byte-to-token upper estimate changed from approximately 2,828 to
+1,676 tokens (41% lower). Actual tokenizer counts depend on the pinned model.
+The model-visible payload itself is 2,427 bytes in that fixture, below the new
+8,000-byte fail-closed ceiling. Together with the approximately 3,042-character
+fixed system message, the conservative upper estimate fits the default 4,096
+token runtime while leaving bounded response headroom. This measurement is a prompt-size regression
+check, not an autonomy-quality claim.
+
+The compact prompt has not inherited the earlier V3 promotion evidence. It
+must be replayed and flown through the same frozen scorecard before any claim
+that it improves mission performance, latency or unattended-flight readiness.
 
 ## Frozen Gazebo comparison
 
@@ -106,8 +136,8 @@ ArduPilot route and attaches a reviewed landmark reference to the session.
 
 Live AirSim RGB frames now feed the existing edge-vision boundaries. SmolVLM
 describes the primary building; YOLO supplies the visible-person count. Neither
-has flight authority. Deterministic mission obligations expose pending evidence
-without choosing the next action. Reviewed macro constraints and ordinary
+has flight authority. Deterministic completion evidence is compiled into the
+mission contract without choosing the next action. Reviewed macro constraints and ordinary
 argument/guardrail validation refuse actions outside the authorized envelope.
 
 The final prompt-driven scene-6 episode

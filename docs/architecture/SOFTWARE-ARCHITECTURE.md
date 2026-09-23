@@ -200,13 +200,15 @@ detector accuracy or any autonomous visual-flight capability.
 
 ## Model Runtime and Evaluation
 
-V2 Phase 1 adds a separately-versioned `dcm-contract-v3-feedback` context
+V2 Phase 1 adds a separately-versioned `dcm-contract-v3-compact` context
 builder. It begins with the existing curated allow-list, then adds deterministic
-failure/repetition facts, compact normalized obstacle sectors, live deployment
-capability facts, reviewed world facts, and an explicitly overridden or
-deterministically resolved reviewed mission macro. It is read-only while a
-mission runs, and the macro's action subset is enforced. Macro/profile/final
-context hashes travel with decision evidence; episode sealing automatically
+failure/repetition facts, compact normalized obstacle sectors and semantic live
+deployment facts. A reviewed macro, target reference and measured completion
+evidence compile into one `MissionContract`; macro prose, empty world-fact text,
+duplicate action/freshness fields, filesystem paths and hashes do not reach the
+model. It is read-only while a mission runs, and the macro's action subset is
+enforced. Full macro/profile provenance and the final visible-context hash
+travel with decision evidence; episode sealing automatically
 creates reliability and human-review artifacts but cannot write a live macro or
 safety policy. A renewable control lease also acts as the independent DCM
 process heartbeat monitored by the C++ safety supervisor. The legacy V1/

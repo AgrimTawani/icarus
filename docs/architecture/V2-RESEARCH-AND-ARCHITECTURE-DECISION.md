@@ -17,8 +17,8 @@ AirSim demonstration:
   DCM planning;
 - reviewed macros resolve deterministically from distinctive intent (with
   explicit ID override) and their action subsets are enforced;
-- BODY includes live connected deployment facts, and SOUL/BODY/world/macro are
-  explicit system-prompt sections;
+- BODY includes live connected deployment facts. SOUL/BODY/world/macro were
+  initially explicit sections and are now compacted as documented below;
 - the second observation check detects material aircraft/perception changes,
   not only timestamp age;
 - circuit-open state suppresses ordinary model calls and uses typed recovery;
@@ -33,6 +33,27 @@ AirSim demonstration:
 These changes do not constitute an unattended-flight promotion. The frozen
 Gazebo scorecard still governs deployment approval even though V3 now supplies
 the default model context.
+
+## Phase-1 prompt simplification implemented 2026-09-24
+
+The first feedback prompt proved the architecture but repeated mission meaning,
+freshness, action capability and safety prose. The default V3 implementation is
+now `dcm-contract-v3-compact`:
+
+- macro policy, reviewed target data and completion evidence compile into one
+  structured `MissionContract`;
+- three compact operating principles replace the full model-visible SOUL text;
+- BODY exposes semantic live deployment facts but not duplicate actions,
+  freshness limits, paths or hashes;
+- empty world-fact text and free-form macro prose remain audit-only;
+- one evidence-health structure replaces repeated timestamps and ages; and
+- a closed reason code replaces generated rationale prose.
+
+Every deterministic validator, freshness recheck, approval boundary, C++
+guardrail, safety supervisor and ArduPilot failsafe remains unchanged. A
+representative building mission prompt is 41% smaller by the repository's
+conservative byte-to-token estimate. This is not a promotion result: the
+compact contract requires a fresh frozen replay and paired live campaign.
 
 ## Executive decision
 

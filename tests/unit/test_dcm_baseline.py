@@ -45,13 +45,13 @@ class ContractComplianceTests(unittest.TestCase):
             with self.subTest(case=case["state"]["flight_phase"]):
                 validate_proposal(runtime.propose(case))
 
-    def test_v3_response_adds_the_required_bounded_rationale(self):
+    def test_v3_response_adds_a_bounded_reason_code(self):
         case = observation()
-        case["context_version"] = "dcm-context-v3-feedback"
-        proposal, rationale = validate_decision(
-            ScriptedRuntime().propose(case), allow_rationale=True)
+        case["context_version"] = "dcm-context-v3-compact"
+        proposal, reason_code = validate_decision(
+            ScriptedRuntime().propose(case), allow_reason_code=True)
         self.assertEqual(proposal["action"], "arm")
-        self.assertTrue(rationale)
+        self.assertEqual(reason_code, "MISSION_OBJECTIVE_PENDING")
 
     def test_it_never_reads_the_recorded_action(self):
         # A baseline that peeked would score perfectly and mean nothing.

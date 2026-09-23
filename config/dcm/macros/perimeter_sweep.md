@@ -10,6 +10,10 @@ preconditions:
   - State, position estimate, and local obstacle map are fresh.
 evidence_links:
   - config/dcm/macro_scenarios/perimeter-sweep.json
+model_policy:
+  phases: [launch, visit_reviewed_boundary, recover]
+  recovery_actions: [hold, return_home, land]
+  evidence_requirements: [reviewed_boundary, fresh_clearance]
 ---
 # Perimeter sweep
 

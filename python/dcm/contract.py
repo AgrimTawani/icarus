@@ -30,9 +30,9 @@ from typing import Protocol
 # every report so a result can never be read against the wrong contract.
 CONTRACT_VERSION = "dcm-contract-v1"
 CONTRACT_VERSION_HISTORY = "dcm-contract-v2-history"
-# V3 is opt-in while its prompt and macro experiments are evaluated. Existing
-# V1/V2 reports remain comparable and current callers keep their exact shapes.
-CONTRACT_VERSION_CONTEXT = "dcm-contract-v3-feedback"
+# V3 is the compact default context. Existing V1/V2 reports remain comparable
+# and their prompt/response shapes are retained for historical evaluation.
+CONTRACT_VERSION_CONTEXT = "dcm-contract-v3-compact"
 
 # How many completed actions the model may see. Bounded so a long mission
 # cannot crowd out the current state.
@@ -41,14 +41,22 @@ HISTORY_LIMIT = 12
 # presenting the payload as an abstract JSON exercise.  It is a model-visible
 # change and must therefore travel with every report.
 PROMPT_VERSION = "dcm-prompt-v6-mission-evidence"
-PROMPT_VERSION_CONTEXT = "dcm-prompt-v5-feedback"
+PROMPT_VERSION_CONTEXT = "dcm-prompt-v6-compact"
 # The optional ending variant adds extra terminal emphasis above the base v2
 # embodiment guidance. It remains separately versioned for fair comparison.
 PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
 # v2 adds goto and orbit. The version changes because a report scored
 # against a different action set is not comparable.
 VOCABULARY_VERSION = "dcm-actions-v4-vision-inspection"
-RATIONALE_MAX_CHARS = 120
+REASON_CODES = frozenset({
+    "MISSION_OBJECTIVE_PENDING",
+    "STATE_TRANSITION_REQUIRED",
+    "EVIDENCE_REQUIRED",
+    "SAFETY_HOLD",
+    "RECOVERY_REQUIRED",
+    "MISSION_COMPLETE",
+    "NO_SAFE_ACTION",
+})
 
 # The deliberately narrow first vocabulary. It is much smaller than the Drone
 # API on purpose: a model may only ask for what has been explicitly modelled
@@ -275,14 +283,14 @@ def validate_proposal(raw, actions=ACTIONS):
     return proposal
 
 
-def validate_decision(raw, actions=ACTIONS, allow_rationale=False):
-    """Validate an action and an optional non-authoritative rationale.
+def validate_decision(raw, actions=ACTIONS, allow_reason_code=False):
+    """Validate an action and an optional bounded audit reason code.
 
     V1/V2 remain byte-for-byte strict through :func:`validate_proposal`.
-    V3 may add one bounded string, which is removed before the action enters
-    any validator, guardrail, request builder, or executor.
+    Compact V3 adds one closed reason code, which is removed before the action
+    enters any validator, guardrail, request builder, or executor.
     """
-    if not allow_rationale:
+    if not allow_reason_code:
         return validate_proposal(raw, actions), None
     if not isinstance(raw, str):
         raise ValueError("decision must be JSON text")  # noqa: TRY004
@@ -291,19 +299,15 @@ def validate_decision(raw, actions=ACTIONS, allow_rationale=False):
     except (TypeError, ValueError) as error:
         raise ValueError("decision is not one JSON object") from error
     if not isinstance(decision, dict) or set(decision) != {
-            "action", "arguments", "rationale"}:
+            "action", "arguments", "reason_code"}:
         raise ValueError(
-            "V3 decision must contain only action, arguments, and rationale")
-    rationale = decision["rationale"]
-    if not isinstance(rationale, str):
-        raise ValueError("rationale must be text")  # noqa: TRY004
-    compact = " ".join(rationale.strip().split())
-    if rationale != compact or len(rationale) > RATIONALE_MAX_CHARS:
-        raise ValueError(
-            f"rationale must be normalized and at most {RATIONALE_MAX_CHARS} characters")
+            "V3 decision must contain only action, arguments, and reason_code")
+    reason_code = decision["reason_code"]
+    if reason_code not in REASON_CODES:
+        raise ValueError("reason_code is not allowed")
     action_text = json.dumps({"action": decision["action"],
                               "arguments": decision["arguments"]})
-    return validate_proposal(action_text, actions), rationale
+    return validate_proposal(action_text, actions), reason_code
 
 
 def _as_epoch_ms(value):
@@ -447,7 +451,7 @@ def curate_v3(state, perception, previous_result, mission, event, actions=ACTION
     return context
 
 
-SYSTEM_PROMPT = """\
+SYSTEM_PROMPT_LEGACY = """\
 You are the decision-making component of a real multirotor aircraft in a \
 physical or simulated 3-D environment. The state and perception data that \
 follow describe its actual current situation, not a hypothetical test case. \
@@ -503,6 +507,38 @@ Rules:
 {no_action}.{ending}\
 """
 
+
+SYSTEM_PROMPT_COMPACT = """\
+You are the decision-making component of a real multirotor aircraft in a \
+physical or simulated 3-D environment. The state and perception data that \
+follow are its actual current situation. You propose one bounded action; \
+independent safety software validates it and may reject it.
+
+Reply with exactly one JSON object and nothing else. No prose and no code \
+fences. {response_contract}
+
+Allowed actions:
+{vocabulary}
+
+Rules:
+- Choose exactly one action from the list above.
+- Treat ``mission_contract.objectives`` as completion criteria, not executable
+  commands. Independently choose the next legal action.
+- When ``mission_contract.permitted_actions`` exists, use only that subset;
+  hold, return_home, land and none remain available as safety exits.
+- "arguments" is always an object. Use {{}} when the action takes no arguments.
+- Never invent an action, an argument, or a unit.
+- Respect current flight state: arm before takeoff; never arm or take off while
+  airborne; navigate or land only after takeoff.
+- Use only reviewed coordinates in ``mission_contract.target`` or objectives.
+- Complete IDs in ``mission_contract.pending`` in objective order; verify history
+  before return_home, land or none.
+- If airborne evidence is unavailable or progress is unsafe, choose hold or
+  return_home. If landed with no pending objective, choose none.
+- If no action is appropriate or the situation is unclear, reply with \
+{no_action}.{ending}\
+"""
+
 ENDING_GUIDANCE = """
 - Terminal reminder: holding keeps the aircraft airborne and is not a way to \
 end a mission."""
@@ -529,36 +565,34 @@ def render_prompt(observation, actions=ACTIONS, ending_guidance=False):
     validator enforces, so a model cannot be invited to emit something that
     would then be rejected.
     """
-    v3 = observation.get("context_version") == "dcm-context-v3-feedback"
+    v3 = observation.get("context_version") == "dcm-context-v3-compact"
     response_contract = (
         'The object has exactly three keys: "action", "arguments", and '
-        f'"rationale". Rationale is one short normalized audit sentence of at most '
-        f'{RATIONALE_MAX_CHARS} characters and cannot supply action arguments. '
-        'All required numeric action arguments must still appear in "arguments". '
+        '"reason_code". reason_code is one of: '
+        + ", ".join(sorted(REASON_CODES)) + '. '
+        'All action arguments must appear in "arguments". '
         'Example: {"action":"takeoff","arguments":{"target_altitude_agl_m":3},'
-        '"rationale":"Armed on ground; mission requests 3 m."}'
+        '"reason_code":"STATE_TRANSITION_REQUIRED"}'
         if v3 else
         'The object has exactly two keys: "action" and "arguments".')
-    system = SYSTEM_PROMPT.format(
+    system_template = SYSTEM_PROMPT_COMPACT if v3 else SYSTEM_PROMPT_LEGACY
+    system = system_template.format(
             vocabulary=render_vocabulary(actions),
             response_contract=response_contract,
             no_action=('{"action":"none","arguments":{},'
-                       '"rationale":"No safe action is currently needed."}'
+                       '"reason_code":"NO_SAFE_ACTION"}'
                        if v3 else '{"action":"none","arguments":{}}'),
             ending=ENDING_GUIDANCE if ending_guidance else "")
     user_observation = observation
     if v3:
         from python.dcm.v2_context import model_visible_payload
         visible = model_visible_payload(observation)
-        soul = visible["profiles"]["soul"]
+        principles = visible["profiles"]["principles"]
         body = visible["profiles"]["body"]
-        world = visible["profiles"]["world_facts"]
-        macro = visible["profiles"]["mission_macro"]
-        system += "\n\nREVIEWED SOUL\n" + str(soul.get("text", "")).strip()
-        system += "\n\nGENERATED BODY\n" + json.dumps(body, sort_keys=True)
-        system += "\n\nREVIEWED WORLD FACTS\n" + str(world.get("text", "")).strip()
-        system += "\n\nREVIEWED MISSION MACRO\n" + (
-            json.dumps(macro, sort_keys=True) if macro else "No macro selected.")
+        system += "\n\nOPERATING PRINCIPLES\n- " + "\n- ".join(principles)
+        if body:
+            system += "\n\nLIVE BODY\n" + json.dumps(body, sort_keys=True,
+                                                        separators=(",", ":"))
         user_observation = visible["user"]
     return {
         "prompt_version": (PROMPT_VERSION_CONTEXT if v3 else

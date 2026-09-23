@@ -13,12 +13,12 @@ from pathlib import Path
 
 import yaml
 
-CONTEXT_VERSION = "dcm-context-v3-feedback"
+CONTEXT_VERSION = "dcm-context-v3-compact"
 MACRO_SCHEMA = "icarus.dcm.macro.v1"
 SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 _META = re.compile(r"<!-- icarus-macro-meta\n(.*?)\n-->", re.DOTALL)
 _FRONT_MATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-MAX_CONTEXT_BYTES = 24_000
+MAX_CONTEXT_BYTES = 8_000
 MAX_MACRO_GUIDANCE_CHARS = 4_000
 MAX_PROFILE_TEXT_CHARS = 3_000
 
@@ -142,12 +142,23 @@ def read_macro(path):
     guidance = text[match.end():].strip()
     if len(guidance) > MAX_MACRO_GUIDANCE_CHARS:
         raise ValueError(f"macro {source} guidance exceeds character budget")
+    policy = metadata.get("model_policy") or {}
+    if policy:
+        if not isinstance(policy, dict):
+            raise ValueError(f"macro {source} has invalid model_policy")
+        for field in ("phases", "recovery_actions", "evidence_requirements"):
+            values = policy.get(field)
+            if not isinstance(values, list) or not values or not all(
+                    isinstance(item, str) and item.strip() for item in values):
+                raise ValueError(
+                    f"macro {source} has invalid model_policy.{field}")
     return {"id": metadata["id"], "revision": metadata["revision"],
             "tags": list(metadata["tags"]),
             "allowed_actions": list(metadata["allowed_actions"]),
             "allowed_action_families": list(metadata.get("allowed_action_families", [])),
             "preconditions": list(metadata.get("preconditions", [])),
             "evidence_links": list(metadata.get("evidence_links", [])),
+            "model_policy": policy,
             "guidance": guidance,
             "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "path": str(source)}
@@ -161,6 +172,11 @@ def load_macros(directory, actions):
         unknown = sorted(set(macro["allowed_actions"]) - set(actions))
         if unknown:
             raise ValueError(f"macro {macro['id']} names unknown actions: {unknown}")
+        unknown_recovery = sorted(
+            set(macro["model_policy"].get("recovery_actions", ())) - set(actions))
+        if unknown_recovery:
+            raise ValueError(
+                f"macro {macro['id']} names unknown recovery actions: {unknown_recovery}")
         if any(item["id"] == macro["id"] for item in catalog):
             raise ValueError(f"duplicate macro id: {macro['id']}")
         catalog.append(macro)
@@ -202,8 +218,74 @@ def select_macro(catalog, mission_metadata=None, mission=""):
         macro = matches[0]
         source = "deterministic-intent"
     return {key: macro[key] for key in ("id", "revision", "allowed_actions",
-                                         "guidance", "sha256")} | {
+                                         "model_policy", "guidance", "sha256")} | {
                                              "selection_source": source}
+
+
+def compile_mission_contract(mission, macro=None, reference=None, obligations=None):
+    """Combine mission semantics into one compact model-visible contract.
+
+    Macro prose, profile provenance and simulator truth remain audit material.
+    The model receives only reviewed action constraints, structured phases,
+    completion evidence and an optional reviewed target.  This function never
+    chooses the next action.
+    """
+    macro = macro or {}
+    reference = reference or {}
+    obligations = obligations or {}
+    policy = macro.get("model_policy") or {}
+    contract = {
+        "schema": "icarus.dcm.mission-contract.v1",
+        "mission_type": macro.get("id", "unclassified"),
+        "objectives": [],
+        "pending": [],
+        "completed": [],
+    }
+    if macro:
+        contract["permitted_actions"] = list(macro.get("allowed_actions", []))
+    for key in ("phases", "recovery_actions", "evidence_requirements"):
+        if policy.get(key):
+            contract[key] = list(policy[key])
+
+    primary_id = reference.get("primary_target_id")
+    landmark = next((item for item in reference.get("known_landmarks", [])
+                     if item.get("id") == primary_id), None)
+    if primary_id:
+        target = {"id": primary_id}
+        if landmark and landmark.get("hover_waypoint"):
+            target["hover_waypoint"] = dict(landmark["hover_waypoint"])
+        contract["target"] = target
+
+    completion = {
+        "flight": "successful_takeoff",
+        "building_visual_inspection": "successful_inspect_scene",
+        "building_hover": "hold_at_reviewed_waypoint",
+        "person_count": "successful_detect_person",
+        "return_home": "landed_at_home",
+    }
+    for requirement in obligations.get("requirements", []):
+        if not isinstance(requirement, dict) or not requirement.get("id"):
+            continue
+        objective = {
+            "id": requirement["id"],
+            "completion": completion.get(requirement["id"], "reviewed_evidence"),
+        }
+        for key in ("target_altitude_agl_m", "reviewed_waypoint",
+                    "duration_ms", "detector_classes", "target_id"):
+            if requirement.get(key) is not None:
+                if key == "target_id" and requirement[key] == primary_id:
+                    continue
+                if key == "reviewed_waypoint" and contract.get(
+                        "target", {}).get("hover_waypoint") == requirement[key]:
+                    continue
+                objective[key] = requirement[key]
+        contract["objectives"].append(objective)
+        status_key = ("completed" if requirement.get("status") == "satisfied"
+                      else "pending")
+        contract[status_key].append(requirement["id"])
+    if not contract["objectives"] and not macro:
+        contract["operator_text_is_authoritative"] = True
+    return contract
 
 
 def build_context(observation, catalog=(), mission_metadata=None, body=None,
@@ -260,6 +342,8 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
         "failure_signals": failure_signals(history,
                                             observation.get("previous_result")),
         "mission_macro": selected,
+        "mission_contract": compile_mission_contract(
+            observation.get("mission", ""), selected),
         "body": body or {},
         "soul": soul or {},
         "world_facts": world_facts or {},
@@ -277,6 +361,62 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
     return finalize_context(context)
 
 
+def _model_body(body):
+    """Strip manifest and duplicated policy facts from model-visible BODY."""
+    deployment = dict((body or {}).get("deployment") or {})
+    deployment.pop("capabilities", None)  # the contract vocabulary is authoritative
+    cameras = deployment.get("cameras")
+    if isinstance(cameras, dict):
+        compact = {}
+        for camera_id, config in cameras.items():
+            captures = []
+            for item in (config or {}).get("CaptureSettings", []):
+                if not isinstance(item, dict):
+                    continue
+                captures.append({key: item[key] for key in
+                                 ("ImageType", "Width", "Height", "FOV_Degrees")
+                                 if key in item})
+            compact[camera_id] = {"captures": captures} if captures else {
+                "configured": True}
+        deployment["cameras"] = compact
+    return deployment
+
+
+def _model_state(context):
+    state = dict(context.get("state") or {})
+    state.pop("observed_at_unix_ms", None)
+    state.pop("sequence", None)
+    perception = dict(context.get("perception") or {})
+    perception.pop("observed_at_unix_ms", None)
+    perception.pop("local_map_age_ms", None)
+    perception.pop("sequence", None)
+    user = {key: value for key, value in context.items()
+            if key not in ("soul", "body", "world_facts", "mission_macro",
+                           "macro_catalog", "context_sha256", "context_budget",
+                           "source_evidence", "mission_reference",
+                           "mission_obligations", "previous_result",
+                           "contract_version", "vocabulary_version",
+                           "context_version", "source_event_seq",
+                           "observed_at_unix_ms")}
+    user["state"] = state
+    user["perception"] = perception
+    user["evidence_health"] = {
+        "state": ("fresh" if (context.get("source_evidence") or {}).get(
+            "state_observed_at_unix_ms") is not None else "unavailable"),
+        "perception": ("fresh" if (context.get("source_evidence") or {}).get(
+            "perception_observed_at_unix_ms") is not None and
+            (context.get("perception_summary") or {}).get("overall") not in
+            (None, "HEALTH_LEVEL_UNAVAILABLE") else "unavailable"),
+        "perception_age_ms": (context.get("perception_summary") or {}).get(
+            "local_map_age_ms"),
+    }
+    # Age and health now have one canonical location in the visible payload.
+    if isinstance(user.get("perception_summary"), dict):
+        user["perception_summary"] = dict(user["perception_summary"])
+        user["perception_summary"].pop("local_map_age_ms", None)
+    return user
+
+
 def model_visible_payload(context):
     """Return the semantic payload rendered into V3 system and user sections.
 
@@ -286,15 +426,14 @@ def model_visible_payload(context):
     """
     return {
         "profiles": {
-            "soul": context.get("soul") or {},
-            "body": context.get("body") or {},
-            "world_facts": context.get("world_facts") or {},
-            "mission_macro": context.get("mission_macro"),
+            "principles": [
+                "Safety outranks mission progress.",
+                "Never treat missing or stale evidence as safe.",
+                "Propose one bounded action; deterministic systems retain authority.",
+            ],
+            "body": _model_body(context.get("body")),
         },
-        "user": {key: value for key, value in context.items()
-                 if key not in ("soul", "body", "world_facts",
-                                "mission_macro", "macro_catalog",
-                                "context_sha256", "context_budget")},
+        "user": _model_state(context),
     }
 
 

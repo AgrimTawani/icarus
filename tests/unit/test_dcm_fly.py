@@ -285,7 +285,7 @@ class ExecutionGateTests(unittest.TestCase):
     def test_selected_macro_rejects_an_action_outside_its_permissions(self):
         def observation(client, memory, index, context_version):
             value = patched_observe(self.fly)(client, memory, index)
-            value["context_version"] = "dcm-context-v3-feedback"
+            value["context_version"] = "dcm-context-v3-compact"
             value["mission_macro"] = {
                 "id": "recovery", "allowed_actions": ["hold", "land"]}
             return value
@@ -293,7 +293,8 @@ class ExecutionGateTests(unittest.TestCase):
         with patch.object(self.fly, "_observe_for_context", observation):
             client = FakeClient()
             runtime = ScriptedRuntime(
-                '{"action":"arm","arguments":{},"rationale":"Start mission."}')
+                '{"action":"arm","arguments":{},'
+                '"reason_code":"STATE_TRANSITION_REQUIRED"}')
             result = fly_mission(
                 client, runtime, "test", mode="autonomous", context_version="v3",
                 echo=lambda *_: None, max_decisions=1)

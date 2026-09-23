@@ -93,9 +93,9 @@ def main():
     parser.add_argument("--ending-guidance", action="store_true",
                         help="prompt v2: state that a flight ends on the ground")
     parser.add_argument("--context", choices=("v2", "v3"), default="v3",
-                        help="context contract (default: v3 with live BODY, "
-                             "reviewed profiles and automatic macros; use v2 "
-                             "only for compatibility comparisons)")
+                        help="context contract (default: compact v3 mission "
+                             "contract, semantic live BODY and automatic "
+                             "macros; use v2 only for compatibility comparisons)")
     parser.add_argument("--macro-id",
                         help="explicit reviewed macro id (valid only with --context v3)")
     parser.add_argument("--max-decisions", type=int, default=40)
