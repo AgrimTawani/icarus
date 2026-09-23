@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Public pinned AirSim Blocks asset, intentionally visual/RPC smoke only.
+# Public pinned AirSim Blocks asset for the isolated ArduCopter track.
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 exec "${ROOT}/.venv/bin/python" "${ROOT}/scripts/simulation/airsim/fetch_blocks.py" "$@"

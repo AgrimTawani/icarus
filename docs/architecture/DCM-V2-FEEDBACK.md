@@ -12,8 +12,10 @@ reports. It does not change DCM authority or autonomous-promotion thresholds.
 | V3 contract entry | `python/dcm/contract.py:curate_v3` | Retains V1 allow-list, adds `dcm-contract-v3-feedback` context fields |
 | Generated BODY | `python/dcm/v2_profiles.py` | Factual action/freshness/authority manifest; never written during a mission |
 | Static SOUL/world facts | `config/dcm/profiles/` | Reviewed documents with SHA-256 provenance |
-| Mission macros | `config/dcm/macros/` | Markdown guidance plus JSON metadata; explicit selection only |
+| Mission macros | `config/dcm/macros/` | YAML front matter plus Markdown guidance; explicit selection only |
 | Reliability aggregation | `python/dcm/v2_feedback.py` | Offline report only; cannot write macros, prompts or policy |
+| Runtime health | `python/dcm/health.py` | Deterministic late/invalid/unavailable/stale/circuit-open state machine |
+| Promotion scorecard | `config/dcm/v2-scorecard.yaml` | Frozen non-relaxable offline + paired-live gates |
 
 ## Contract guarantees
 
@@ -29,8 +31,12 @@ reports. It does not change DCM authority or autonomous-promotion thresholds.
 5. Macro/profile hashes and a context SHA-256 make a decision reproducible.
    The context builder does not open a vehicle connection or write runtime
    state.
-6. Rationale, when a future runtime supplies it, is an audit artifact separate
-   from strict action JSON. It cannot add arguments or influence validation.
+6. V3 requires a bounded rationale as a third response field. Validation strips
+   it before the action reaches guardrails or execution; it cannot add an
+   argument or authorize anything.
+7. Three consecutive invalid/late/unavailable/stale responses open a circuit.
+   The model issues no recovery command: code selects typed `hold`, then
+   `return_home`, through the normal Drone API and safety layers.
 
 ## Feedback loop
 
@@ -48,17 +54,42 @@ knowledge.
 
 ## Current macros
 
-`perimeter-sweep` and `landing-site-survey` are initial reviewed composition
-examples. They introduce no new actions. Each says what it may recommend and
-what it cannot authorize. Add a macro only with a revision, allowed-action
-allow-list, scenario evidence and nominal/adverse/recovery tests.
+The reviewed set is `perimeter-sweep`, `landing-site-survey`,
+`inspection-orbit` and `degraded-position-return`. Every macro has an ID,
+revision, action families, action allow-list, preconditions, evidence link and
+nominal/adverse/recovery fixture. They introduce no new actions.
+
+## Measured promotion result
+
+The frozen 11-episode Gazebo corpus was replayed three times (135 decision
+points) through the same Qwen3-4B Q4 runtime.
+
+| Metric | Current V2-history | V3 feedback candidate |
+| --- | ---: | ---: |
+| Invalid | 0.0% | 0.0% |
+| Timeout | 0.8% | 1.6% |
+| Tool agreement | 71.9% | 71.7% |
+| Recovery proxy | 57.1% | 62.5% |
+| Steady median | 676 ms | 1,216 ms |
+| Peak VRAM | 4,069 MiB | 4,052 MiB |
+
+V3 improved only the recovery proxy and fixed the first V3 prompt's missing
+takeoff arguments, but missed the frozen timeout and latency gates and lacks
+three paired live Gazebo episodes. The machine decision is therefore
+`retain-v1`: V3 remains implemented and opt-in, while the current contract
+stays the default. This is the required evidence-based answer to whether the
+AerialClaw concepts improve the existing system—not an assumption that more
+context is automatically better.
 
 ## Verification
 
 ```bash
-.venv/bin/python -m unittest discover -s tests/unit -p 'test_dcm_v2_context.py' -v
+.venv/bin/python -m pytest -q tests/unit/test_dcm_v2_acceptance.py \
+  tests/unit/test_dcm_v2_promotion.py tests/unit/test_dcm_v2_context.py
+./scripts/evaluate-dcm-v2-promotion <v2-evaluation.json> <v3-evaluation.json> \
+  --baseline-live <v2-live.json> --candidate-live <v3-live.json>
 ```
 
-The test suite checks deterministic context hashes, curation non-leakage,
-sectorization, explicit macro selection, profile provenance and evidence-only
-aggregation.
+The tests also deliberately corrupt BODY, exercise all macro fixture classes,
+open/reset the circuit breaker, validate JSON schemas, reproduce feedback
+hashes and prove that missing live evidence fails promotion closed.

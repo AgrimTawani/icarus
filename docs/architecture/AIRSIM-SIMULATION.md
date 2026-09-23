@@ -1,7 +1,7 @@
 # AirSim Simulation Track
 
-Status: experimental V2 Phase 1. AirSim has no acceptance or autonomous
-promotion authority. Gazebo Harmonic remains the verified simulator.
+Status: V2 Phase-1 feasibility implementation complete; experimental and
+simulation-only. Gazebo Harmonic remains the promotion baseline.
 
 ## Purpose and boundary
 
@@ -31,7 +31,8 @@ Truth is valid only for post-hoc scoring/debugging.
 | Property | Gazebo Harmonic | AirSim |
 | --- | --- | --- |
 | Role | Acceptance and regression baseline | Visual/perception feasibility research |
-| Public start command | `./scripts/start-sim` | `./scripts/start-airsim --binary /path/to/Environment.sh` |
+| Full start command | `./scripts/start-sim` | `./scripts/start-airsim-stack --binary /path/to/Environment.sh` |
+| Drone API command | `./scripts/start-autonomy` | `./scripts/start-autonomy-airsim` |
 | Controller integration | Existing project Gazebo bridge + ArduPilot SITL | AirSim `ArduCopter` vehicle + matching ArduPilot SITL ports |
 | Scene assets | Project-owned, deterministic scenarios | External Unreal environment; digest/license must be recorded |
 | Session manifest | `logs/simulation/active_session.json` | `logs/simulation/airsim_active_session.json` |
@@ -50,33 +51,53 @@ The exact UE binary/container determines the compatible offscreen flags. Each
 experiment must retain the binary digest, GPU driver, settings file, AirSim
 revision, scene asset/license, ArduPilot revision/parameters and command line.
 
-### Reproducible smoke asset, and its hard limit
+### Pinned environment and verified boundary
 
 `./scripts/fetch-airsim-blocks` downloads the digest-pinned public AirSim
-Blocks v1.8.0 binary into ignored `third_party/airsim/`. A live launch was
-verified to open RPC 41451 with `NoDisplay` and `-RenderOffScreen`; the
-read-only `./scripts/airsim-smoke` checks RPC ping, vehicles and one scene
-image without arming or moving anything. The same binary logs `SimpleFlight`.
-It therefore has exactly one role: visual/RPC smoke evidence. The launcher
-terminates it by default and requires `--allow-simpleflight-smoke` to record a
-`visual-rpc-smoke-only` session. It cannot be used as evidence for ArduCopter,
-SITL, DCM decisions, safety evaluation, or promotion.
+Blocks v1.8.0 binary into ignored `third_party/airsim/`. Classic AirSim ignores
+a guessed `-settings` flag and reads `HOME/Documents/AirSim/settings.json`.
+The launcher therefore creates a private runtime HOME and copies the reviewed
+settings there. With that boundary the pinned binary reports the `Icarus`
+ArduCopter vehicle—not SimpleFlight—and supplies timestamped 256x144 RGB,
+256x144 depth and LiDAR samples under `NoDisplay`/`-RenderOffScreen`.
+
+The full stack starts pinned ArduPilot SITL in a named transient user service,
+retains binary/settings/parameter/revision hashes, and exposes MAVLink TCP
+5760. This local launcher requires a working `systemd --user` manager so SITL
+survives the short-lived setup command and can be stopped as an exact unit.
+The read-only msgpack client derives from AerialClaw's MIT adapter but
+contains no movement/pose calls. Its UDP sensor bridge carries only bounded
+finite LiDAR points into a distinct C++ `AirSimLidarAdapter` in body FRD.
 
 ## Bring-up sequence
 
-1. Acquire and license a compatible AirSim/UE environment outside Git.
+1. Run `./scripts/fetch-airsim-blocks` or supply another reviewed environment.
 2. Review `config/simulation/airsim/settings.arducopter.json`; retain the
    `ArduCopter` vehicle and do not substitute `SimpleFlight`.
-3. Start matching AirSim ArduPilot SITL with its documented sensor/control
-   ports. A launched Unreal RPC process alone is not a flight-ready stack.
-4. Run `./scripts/airsim-doctor --binary ...`, then start the isolated AirSim
-   process. Confirm camera, depth and LiDAR timestamps from the actual binary;
-   `./scripts/airsim-smoke` is only a read-only RPC/image prerequisite.
-5. Implement/pass adapter conformance before any DCM experiment: frames/units,
-   freshness, sensor metadata, action lifecycle, failsafe/link faults,
-   deterministic seed behaviour and a truth-nonleak test.
+3. Start the full dynamics/controller/sensor stack:
+   `./scripts/start-airsim-stack --binary <Environment.sh>`.
+4. In another terminal run `./scripts/start-autonomy-airsim`, then use the
+   unchanged `./scripts/run-mission` client. `start-airsim` alone is a low-level
+   Unreal/RPC diagnostic and is not flight-ready.
+5. Stop the exact recorded bridge, SITL service and Unreal group with
+   `./scripts/stop-airsim` after the Drone API exits.
 6. Compare frozen scenarios against Gazebo; only a non-regressing result can
    justify expanding AirSim use. Gazebo remains the promotion baseline.
+
+## Verified 2026-09-23
+
+- RPC, ArduCopter, RGB, depth, LiDAR and timestamps passed together.
+- A real Drone API mission armed, took off to 2 m, held three seconds, landed
+  and disarmed in 17.96 s through MAVLink/ArduPilot; no AirSim movement API was
+  used.
+- Killing the sensor bridge made `GetHealth` degraded and the next preflight
+  failed closed with `PERCEPTION_UNAVAILABLE`.
+- Native packet tests cover FRD conversion and malformed/truncated rejection;
+  Python tests cover finite-point filtering and truth/raw-image non-leakage.
+
+This proves the integration, not cross-simulator equivalence. Blocks has no
+project-owned deterministic weather/scene seed, so AirSim is not promoted as
+an acceptance replacement for Gazebo.
 
 Official reference material: [AirSim settings](https://microsoft.github.io/AirSim/settings/),
 [AirSim image APIs](https://microsoft.github.io/AirSim/image_apis/), and

@@ -42,12 +42,16 @@ def main():
                         help="show the model the actions already completed")
     parser.add_argument("--context", choices=("v2", "v3"), default="v2",
                         help="v3 adds reviewed feedback/macro context; v2 preserves historical comparisons")
+    parser.add_argument("--macro-id",
+                        help="explicit reviewed macro id (valid only with --context v3)")
     parser.add_argument("--skip-verify", action="store_true",
                         help="skip the artifact checksum check (not for evaluation)")
     parser.add_argument("--skip-guardrail-check", action="store_true",
                         help="do not check proposals against the real safety "
                              "policy (icarus-check-guardrail)")
     args = parser.parse_args()
+    if args.macro_id and args.context != "v3":
+        parser.error("--macro-id requires --context v3")
 
     root = Path(__file__).resolve().parents[2]
     runtime, descriptor = build_runtime(args)
@@ -57,6 +61,7 @@ def main():
             timeout_ms=args.timeout_ms, descriptor=descriptor,
             include_history=args.history,
             context_version=args.context,
+            mission_metadata={"macro_id": args.macro_id} if args.macro_id else None,
             check_proposal_guardrails=not args.skip_guardrail_check)
     finally:
         stop = getattr(runtime, "stop", None)

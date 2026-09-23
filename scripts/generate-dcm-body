@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Print, check or write the capability manifest; review writes explicitly.
+set -Eeuo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+exec "${ROOT}/.venv/bin/python" "${ROOT}/python/dcm/generate_body_cli.py" "$@"

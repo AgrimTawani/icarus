@@ -1,0 +1,9 @@
+{
+  "schema": "icarus.dcm.macro-tests.v1",
+  "macro_id": "perimeter-sweep",
+  "cases": [
+    {"kind": "nominal", "state": {"airborne": true, "fresh": true}, "expected_actions": ["goto", "orbit"]},
+    {"kind": "adverse", "state": {"airborne": true, "path_ahead_clear": false}, "expected_actions": ["hold", "return_home"]},
+    {"kind": "recovery", "state": {"airborne": true, "consecutive_failures": 2}, "expected_actions": ["hold", "return_home"]}
+  ]
+}

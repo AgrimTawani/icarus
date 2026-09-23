@@ -1,10 +1,13 @@
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "local_planner/local_planner.hpp"
+#include "perception/lidar/airsim_lidar_adapter.hpp"
 #include "perception/obstacle_map/obstacle_map.hpp"
 
 namespace {
@@ -127,6 +130,43 @@ void TestPitchedHorizontalBeamHitsTerrain() {
           "elevated wall return must remain after full attitude transform");
 }
 
+template <typename T>
+void AppendNative(std::vector<std::uint8_t>* bytes, T value) {
+  const auto start = bytes->size();
+  bytes->resize(start + sizeof(T));
+  std::memcpy(bytes->data() + start, &value, sizeof(T));
+}
+
+void TestAirSimPacketContract() {
+  std::vector<std::uint8_t> packet{'I', 'C', 'A', 'R'};
+  AppendNative<std::uint16_t>(&packet, 1);
+  AppendNative<std::uint16_t>(&packet, 2);
+  AppendNative<std::int64_t>(&packet, 1'700'000'000'000);
+  AppendNative<std::uint64_t>(&packet, 7);
+  AppendNative<float>(&packet, 3.0F);
+  AppendNative<float>(&packet, 1.0F);
+  AppendNative<float>(&packet, -0.2F);
+  AppendNative<float>(&packet, 5.0F);
+  AppendNative<float>(&packet, -2.0F);
+  AppendNative<float>(&packet, 0.0F);
+  icarus::perception::RangeScan scan;
+  Require(icarus::perception::AirSimLidarAdapter::DecodePacket(
+              packet.data(), packet.size(), &scan),
+          "valid AirSim sensor packet must decode");
+  Require(scan.sensor_id == "airsim-lidar" && scan.sequence == 7 &&
+              scan.frame == icarus::perception::SensorFrame::kBodyFrd &&
+              scan.points.size() == 2,
+          "AirSim packet must retain sensor identity, FRD frame and points");
+  packet[0] = 'X';
+  Require(!icarus::perception::AirSimLidarAdapter::DecodePacket(
+              packet.data(), packet.size(), &scan),
+          "wrong packet magic must fail closed");
+  packet[0] = 'I';
+  Require(!icarus::perception::AirSimLidarAdapter::DecodePacket(
+              packet.data(), packet.size() - 1, &scan),
+          "truncated packet must fail closed");
+}
+
 }  // namespace
 
 int main() {
@@ -135,6 +175,7 @@ int main() {
     TestCollisionFreePlanning();
     TestGroundReturnsDoNotBecomeFrontalObstacles();
     TestPitchedHorizontalBeamHitsTerrain();
+    TestAirSimPacketContract();
     std::cout << "Phase 9 perception and planning tests passed\n";
     return 0;
   } catch (const std::exception& error) {

@@ -29,6 +29,7 @@ from python.dataset_tools.replay import ReplayError
 from python.dcm.contract import (
     ALLOWED_ACTIONS,
     CONTRACT_VERSION,
+    CONTRACT_VERSION_CONTEXT,
     CONTRACT_VERSION_HISTORY,
 )
 from python.dcm.observe import observe_episode
@@ -234,7 +235,8 @@ def _aggregate(runs, key):
 def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
              descriptor=None, check_guardrails=True, progress=None,
              include_history=False, include_elapsed=False,
-             check_proposal_guardrails=True, context_version="v2"):
+             check_proposal_guardrails=True, context_version="v2",
+             mission_metadata=None):
     """Replay every episode `repeats` times and score the result.
 
     Returns (output_directory, report). Proposals are recorded, never executed.
@@ -273,6 +275,7 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
                         include_history=include_history,
                         include_elapsed=include_elapsed,
                         context_version=context_version,
+                        mission_metadata=mission_metadata,
                         check_proposal_guardrails=check_proposal_guardrails)
                 except (ReplayError, OSError, KeyError) as unusable:
                     # A corpus accumulates episodes that predate a schema
@@ -355,7 +358,8 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
         "mode": "observe",
         "executed_actions": 0,
         "runtime": runtime.name,
-        "contract_version": (CONTRACT_VERSION_HISTORY if include_history
+        "contract_version": (CONTRACT_VERSION_CONTEXT if context_version == "v3"
+                             else CONTRACT_VERSION_HISTORY if include_history
                              else CONTRACT_VERSION),
         "mission_elapsed_shown": include_elapsed,
         "prompt_version": (descriptor.prompt_version if descriptor

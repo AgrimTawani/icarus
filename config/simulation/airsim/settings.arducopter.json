@@ -17,7 +17,25 @@
       "UdpIp": "127.0.0.1",
       "UdpPort": 9003,
       "ControlPort": 9002,
-      "AutoCreate": true
+      "AutoCreate": true,
+      "Sensors": {
+        "Imu": {"SensorType": 2, "Enabled": true},
+        "Gps": {"SensorType": 3, "Enabled": true},
+        "Lidar1": {
+          "SensorType": 6,
+          "Enabled": true,
+          "NumberOfChannels": 1,
+          "PointsPerSecond": 5000,
+          "DrawDebugPoints": false,
+          "RotationsPerSecond": 10,
+          "VerticalFOVUpper": 0,
+          "VerticalFOVLower": 0,
+          "HorizontalFOVStart": 0,
+          "HorizontalFOVEnd": 359,
+          "DataFrame": "SensorLocalFrame",
+          "ExternalController": true
+        }
+      }
     }
   }
 }

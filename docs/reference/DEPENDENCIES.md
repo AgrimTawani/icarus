@@ -100,13 +100,12 @@ not require it.
 
 ### AirSim (optional V2 experiment)
 
-AirSim is not installed by `bootstrap` and is not a Gazebo replacement. An
-experimenter supplies a separately licensed/version-pinned Unreal environment
-and a matching AirSim/ArduPilot pair outside this repository. The only
-project-owned AirSim configuration is the `ArduCopter` template under
-`config/simulation/airsim/`; see `docs/architecture/AIRSIM-SIMULATION.md`.
-The small `msgpack` dependency in `requirements/core.txt` supports Icarus's
-read-only AirSim RPC/image smoke command; it does not grant a movement API.
+AirSim is not installed by `bootstrap` and is not a Gazebo replacement.
+`fetch-airsim-blocks` downloads a digest-pinned external Unreal asset into
+ignored `third_party/airsim/`; the archive remains governed by its upstream
+license. Project-owned settings, SITL overrides and launchers live under
+`config/simulation/airsim/` and `scripts/simulation/airsim/`. `msgpack`
+supports the read-only AirSim sensor RPC boundary; it grants no movement API.
 Do not substitute `SimpleFlight` or direct AirSim movement APIs for the
 Icarus Drone API/MAVLink route.
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Fetch the pinned public AirSim Blocks asset for visual/RPC smoke checks only.
+"""Fetch the pinned AirSim Blocks asset used by the isolated V2 stack.
 
-This does not install an ArduCopter-capable AirSim environment and it never
-changes the Gazebo path. The digest is verified before extraction.
+The digest is verified before extraction. The full ArduCopter path still
+requires ``start-airsim-stack``; downloading the Unreal asset alone does not
+start a controller or alter the independent Gazebo track.
 """
 
 import argparse
@@ -37,7 +38,7 @@ def main():
     entrypoint = extracted / pin["entrypoint"]
     destination.mkdir(parents=True, exist_ok=True)
     if args.force or not archive.is_file():
-        print("Downloading pinned AirSim Blocks smoke asset...")
+        print("Downloading pinned AirSim Blocks asset...")
         urllib.request.urlretrieve(pin["url"], archive)
     actual = digest(archive)
     if actual != pin["sha256"]:
@@ -52,7 +53,7 @@ def main():
         raise SystemExit(f"archive did not contain expected entrypoint: {entrypoint}")
     entrypoint.chmod(entrypoint.stat().st_mode | 0o111)
     print("Ready:", entrypoint)
-    print("Capability: visual/RPC smoke only (SimpleFlight); it is refused for ArduCopter tests.")
+    print("Capability: reviewed ArduCopter headless flight and sensor-conformance stack.")
 
 
 if __name__ == "__main__":

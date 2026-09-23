@@ -1,0 +1,9 @@
+# Icarus AirSim-only SITL overrides.
+# Offscreen Blocks v1.8.0 cannot sustain ArduCopter's 300 Hz default loop on
+# the target developer GPU. 150 Hz remains above AirSim's 100 Hz physics rate
+# and prevents a timing-only pre-arm failure without disabling safety checks.
+SCHED_LOOP_RATE 150
+# Blocks v1.8.0 publishes valid HIL position/velocity but its GPS health flag is
+# not accepted by current ArduPilot. Skip only the GPS-lock pre-arm bit (1<<3);
+# all mandatory checks and every other non-mandatory check remain enabled.
+ARMING_SKIPCHK 8

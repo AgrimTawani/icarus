@@ -39,7 +39,7 @@ def main():
             print("FAIL:", finding)
         raise SystemExit(1)
     print("AirSim configuration is structurally valid.")
-    print("Next: start ArduPilot AirSim SITL with matching ports, then run start.py.")
+    print("Next: run start-airsim-stack; it starts AirSim before lock-step ArduPilot SITL.")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ quickly establish the truth of the repository.
 6. [`architecture/SIMULATION-CONNECTIONS.md`](architecture/SIMULATION-CONNECTIONS.md)
    — Gazebo, SITL, MAVLink and sensor connections.
 7. [`architecture/AIRSIM-SIMULATION.md`](architecture/AIRSIM-SIMULATION.md) —
-   separate experimental AirSim visual-simulation track and its boundary.
+   separate experimental AirSim/ArduPilot track, commands and evidence.
 8. [`architecture/DRONE-API-V1.md`](architecture/DRONE-API-V1.md) — Phase 8
    command, authority, state and extension contract.
 9. [`simulation/PHASE-8-ACCEPTANCE.md`](simulation/PHASE-8-ACCEPTANCE.md) —
@@ -33,6 +33,8 @@ For the current data and DCM work, continue with
 [`architecture/DCM-MODEL-SELECTION.md`](architecture/DCM-MODEL-SELECTION.md).
 The implemented V2 planner-context and feedback architecture is documented in
 [`architecture/DCM-V2-FEEDBACK.md`](architecture/DCM-V2-FEEDBACK.md).
+Its measured Phase-1 result and AirSim end-to-end evidence are in
+[`architecture/V2-PHASE1-IMPLEMENTATION.md`](architecture/V2-PHASE1-IMPLEMENTATION.md).
 The V2 research decision, including the AerialClaw adoption boundary, AirSim
 feasibility plan and Laya System-1 experiment, is recorded in
 [`architecture/V2-RESEARCH-AND-ARCHITECTURE-DECISION.md`](architecture/V2-RESEARCH-AND-ARCHITECTURE-DECISION.md).

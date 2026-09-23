@@ -1,0 +1,14 @@
+schema: icarus.dcm.runtime-policy.v1
+circuit_breaker:
+  consecutive_failures: 3
+  recovery_probe_after_decisions: 2
+fallback:
+  opening_action_airborne: hold
+  circuit_open_action_airborne: return_home
+  landed_action: none
+failure_states:
+  timeout: late
+  invalid: invalid
+  error: unavailable
+  stale: stale-input
+  stale_after: stale-input

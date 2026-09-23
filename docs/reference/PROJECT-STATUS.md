@@ -24,6 +24,23 @@ claim.
 
 Last updated: 2026-09-23
 
+## V2 Phase 1 status
+
+The AerialClaw-inspired Phase-1 architecture is implemented behind the opt-in
+`dcm-contract-v3-feedback` contract: generated BODY, static SOUL/world facts,
+four reviewed macros, bounded rationale, deterministic feedback/review queue,
+runtime circuit breaker and a frozen promotion scorecard. A paired 135-point
+offline Gazebo evaluation improved the recovery proxy but regressed timeouts
+and latency; the machine gate returned `retain-v1`, so the existing DCM remains
+the default.
+
+The separate AirSim track now runs pinned Blocks v1.8.0 headlessly with
+ArduCopter SITL, RGB/depth/LiDAR, the Icarus Drone API and a distinct C++ LiDAR
+adapter. A real 2 m takeoff/hold/land passed, and sensor-bridge loss blocked
+preflight with `PERCEPTION_UNAVAILABLE`. It remains supplementary because
+cross-simulator frozen-scene/seed equivalence is not established. See
+[`../architecture/V2-PHASE1-IMPLEMENTATION.md`](../architecture/V2-PHASE1-IMPLEMENTATION.md).
+
 ## Executive Summary
 
 Icarus has a verified custom Gazebo/ArduPilot simulation foundation. Its
@@ -63,6 +80,8 @@ is yet exposed to the DCM and physical depth calibration remains open.
 | Low-battery preflight gate | Simulator API path verified | Scenario SOC 35% rejects Arm at the typed C++ guardrail; physical battery integration remains deferred |
 | DCM timeout containment | Simulator API path verified | One live deadline was retained, made zero action calls, and replayed successfully |
 | DCM/model integration | Live chat, observe, approval and simulator-only autonomous paths exist; evaluated Qwen/Llama candidates fail promotion thresholds | `python/dcm/fly.py`, `python/dcm/llama_runtime.py` |
+| V2 cognitive feedback | Implemented and opt-in; promotion gate retains current default | `python/dcm/v2_context.py`, `config/dcm/v2-scorecard.yaml` |
+| AirSim/ArduPilot track | Headless flight and sensor path verified; not a Gazebo replacement | `scripts/start-airsim-stack`, `perception/lidar/airsim_lidar_adapter.cpp` |
 | Semantic vision | Grounding-DINO supports bounded detection; calibrated downward depth assessment and Qwen2-VL qualitative `inspect_scene` are live-tested. Neither semantic boundary has flight authority. | `python/perception/vision.py`, `python/perception/landing_zone.py`, `python/perception/vlm.py` |
 | Dataset/evaluation system | Episodes, replay, corpus builder, live DCM provenance and offline decision evaluation implemented; Phase 12 promotion campaign remains open | `python/dcm/evaluate.py`, `scripts/fly-episode-corpus` |
 | Reproducible runtime | Complete | pinned sources/packages, bootstrap, containers and CI |

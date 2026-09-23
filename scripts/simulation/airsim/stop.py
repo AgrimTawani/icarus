@@ -4,10 +4,32 @@
 import json
 import os
 import signal
+import subprocess
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SESSION = ROOT / "logs/simulation/airsim_active_session.json"
+
+
+def _stop_group(pid):
+    if not isinstance(pid, int):
+        return
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def main():
@@ -17,10 +39,23 @@ def main():
     pid = session.get("pid")
     if not isinstance(pid, int):
         raise SystemExit("AirSim session has no valid pid")
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
+    _stop_group(session.get("sensor_bridge_pid"))
+    unit = session.get("sitl_systemd_unit")
+    if isinstance(unit, str) and unit.startswith("icarus-airsim-sitl-"):
+        # A lock-step SITL may not service SIGTERM while blocked on AirSim.
+        # Signal the exact transient unit, then bound shutdown with SIGKILL.
+        subprocess.run(["systemctl", "--user", "kill", "--signal=SIGTERM", unit],
+                       check=False, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+        time.sleep(0.5)
+        subprocess.run(["systemctl", "--user", "kill", "--signal=SIGKILL", unit],
+                       check=False, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+        subprocess.run(["systemctl", "--user", "reset-failed", unit], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        _stop_group(session.get("sitl_pid"))
+    _stop_group(pid)
     SESSION.unlink()
     print("Stopped recorded AirSim session")
 

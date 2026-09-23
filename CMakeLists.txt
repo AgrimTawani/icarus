@@ -11,6 +11,7 @@ find_package(OpenSSL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(gz-transport13 REQUIRED)
 find_package(gz-msgs10 REQUIRED)
+find_package(Threads REQUIRED)
 
 set(ICARUS_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/generated/cpp")
 if(NOT EXISTS "${ICARUS_GENERATED_DIR}/icarus/v1/drone_api.grpc.pb.cc")
@@ -67,10 +68,11 @@ if(EXISTS "${ICARUS_MAVLINK_INCLUDE}/ardupilotmega/mavlink.h")
   add_library(icarus_mission_runtime
     cpp/mission_executor/action_executor.cpp
     cpp/safety_supervisor/safety_supervisor.cpp
-    perception/lidar/gazebo_lidar_adapter.cpp)
+    perception/lidar/gazebo_lidar_adapter.cpp
+    perception/lidar/airsim_lidar_adapter.cpp)
   target_include_directories(icarus_mission_runtime PUBLIC cpp)
   target_link_libraries(icarus_mission_runtime PUBLIC icarus_mavlink_gateway
-    gz-transport13::gz-transport13 gz-msgs10::gz-msgs10)
+    gz-transport13::gz-transport13 gz-msgs10::gz-msgs10 Threads::Threads)
   target_compile_options(icarus_mission_runtime PRIVATE
     -Wall -Wextra -Wpedantic -Werror)
 
@@ -94,6 +96,9 @@ if(BUILD_TESTING)
   add_executable(phase9_perception_tests
     tests/unit/cpp/phase9_perception_tests.cpp)
   target_link_libraries(phase9_perception_tests PRIVATE icarus_phase8_core)
+  target_sources(phase9_perception_tests PRIVATE
+    perception/lidar/airsim_lidar_adapter.cpp)
+  target_link_libraries(phase9_perception_tests PRIVATE Threads::Threads)
   target_compile_options(phase9_perception_tests PRIVATE
     -Wall -Wextra -Wpedantic -Werror)
   add_test(NAME phase9_perception_tests COMMAND phase9_perception_tests)

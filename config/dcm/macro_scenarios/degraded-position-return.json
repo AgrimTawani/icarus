@@ -1,0 +1,9 @@
+{
+  "schema": "icarus.dcm.macro-tests.v1",
+  "macro_id": "degraded-position-return",
+  "cases": [
+    {"kind": "nominal", "state": {"airborne": true, "position": "degraded", "home_valid": true}, "expected_actions": ["hold", "return_home"]},
+    {"kind": "adverse", "state": {"airborne": true, "position": "invalid", "home_valid": false}, "expected_actions": ["hold", "land"]},
+    {"kind": "recovery", "state": {"airborne": true, "position": "recovered"}, "expected_actions": ["hold", "return_home"]}
+  ]
+}

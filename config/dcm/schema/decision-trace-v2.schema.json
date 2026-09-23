@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "icarus.dcm.decision-trace.v2",
+  "type": "object",
+  "required": ["decision", "observation", "status", "executed", "latency_ms"],
+  "properties": {
+    "decision": {"type": "integer", "minimum": 1},
+    "observation": {"type": "object"},
+    "proposal": {"type": ["object", "null"]},
+    "rationale": {"type": ["string", "null"], "maxLength": 120},
+    "rationale_class": {"enum": ["model_audit", null]},
+    "status": {"type": "string"},
+    "error": {"type": ["string", "null"]},
+    "validator_verdict": {"type": ["string", "null"]},
+    "guardrail": {"type": ["object", "null"]},
+    "executed": {"type": "boolean"},
+    "outcome": {"type": ["string", "object", "null"]},
+    "latency_ms": {"type": "number", "minimum": 0},
+    "mission_macro": {"type": ["object", "null"]},
+    "context_sha256": {"type": ["string", "null"]},
+    "health": {"type": ["object", "null"]}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,28 @@
+{
+  "body": {
+    "allowed_actions": [
+      "arm",
+      "assess_landing_zone",
+      "detect",
+      "goto",
+      "hold",
+      "inspect_scene",
+      "land",
+      "none",
+      "orbit",
+      "return_home",
+      "takeoff"
+    ],
+    "authority": "DCM proposals remain subordinate to guardrails, safety supervisor, and ArduPilot failsafes.",
+    "direct_mavlink": false,
+    "freshness_limits_ms": {
+      "perception_age_ms": 750,
+      "state_age_ms": 1000
+    },
+    "generated": true,
+    "raw_sensor_access": false,
+    "vocabulary_version": "dcm-actions-v4-vision-inspection"
+  },
+  "schema": "icarus.dcm.body.v1",
+  "source_sha256": "c3afc0291ae8207a6cc38c2653858b1aa9139f15a3ea17763697dfffbb7a56f3"
+}

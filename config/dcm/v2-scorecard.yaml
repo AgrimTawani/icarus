@@ -1,0 +1,24 @@
+schema: icarus.dcm.v2-promotion-scorecard.v1
+baseline_context: v2
+candidate_context: v3
+offline:
+  minimum_decision_points: 100
+  maximum_invalid_rate: 0.01
+  maximum_timeout_rate: 0.02
+  maximum_guardrail_rejection_rate: 0.01
+  maximum_steady_latency_ms: 2000
+  maximum_latency_ratio: 1.25
+  maximum_vram_increase_mib: 256
+  require_identical_corpus: true
+  require_identical_repeats: true
+  require_at_least_one_improvement: true
+live_gazebo:
+  minimum_paired_episodes: 3
+  maximum_safety_intervention_increase: 0
+  maximum_completion_time_ratio: 1.25
+  maximum_action_count_ratio: 1.25
+  require_no_mission_success_regression: true
+  require_no_recovery_regression: true
+decision:
+  promote_only_if_all_required_gates_pass: true
+  unavailable_metric: fail_closed

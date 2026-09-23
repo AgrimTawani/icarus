@@ -174,6 +174,23 @@ grpc::Status DroneApiServer::GetHealth(grpc::ServerContext*,
                                        v1::HealthReport* response) {
   if (!SessionValid(request->session_id())) return InvalidSession();
   *response = state_engine_.Health(guardrails_.policy().maximum_state_age_ms);
+  const auto perception = perception_.Summary();
+  auto* source = response->add_subsystems();
+  source->set_source_id("perception");
+  source->set_level(perception.overall());
+  source->set_sample_time_unix_ms(perception.observed_at_unix_ms());
+  source->set_age_ms(perception.local_map_age_ms());
+  source->set_quality(perception.local_map_available() ? 1.0 : 0.0);
+  source->set_detail(perception_.Healthy() ? "fresh local obstacle map"
+                                           : "local obstacle map unavailable or stale");
+  if (!perception_.Healthy()) {
+    response->set_ready_to_arm(false);
+    response->set_ready_to_navigate(false);
+    response->add_blocking_reason_codes("PERCEPTION_UNAVAILABLE");
+    if (response->overall() == v1::HEALTH_LEVEL_HEALTHY) {
+      response->set_overall(v1::HEALTH_LEVEL_DEGRADED);
+    }
+  }
   return grpc::Status::OK;
 }
 

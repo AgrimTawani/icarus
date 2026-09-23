@@ -1,9 +1,21 @@
-# Icarus Gazebo Simulation Connections and Data Flow
+# Icarus Simulation Connections and Data Flow
 
-This is the canonical overview of the **current Gazebo** simulator data flow.
+This is the canonical overview of the **Gazebo baseline** simulator data flow.
 Detailed bring-up evidence is retained in the `SIM-*` documents. The isolated
 experimental AirSim track is documented separately in
 [`AIRSIM-SIMULATION.md`](AIRSIM-SIMULATION.md); it has no promotion authority.
+
+The two tracks have different launchers and session manifests and cannot run
+concurrently. AirSim's full route is:
+
+```text
+start-airsim-stack -> Blocks/Unreal (NoDisplay) <-> ArduPilot airsim-copter
+start-autonomy-airsim -> Drone API -> MAVLink TCP 5760 -> ArduPilot
+AirSim read-only RPC -> bounded LiDAR UDP 41452 -> AirSimLidarAdapter
+```
+
+`start-airsim` alone starts only Unreal/RPC. It is deliberately not equivalent
+to `start-sim` or `start-airsim-stack`.
 
 ## Implemented Flight Path
 

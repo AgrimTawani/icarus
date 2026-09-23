@@ -1,8 +1,10 @@
 # Version 2 research and architecture decision
 
-Status: research complete on 2026-09-23. This is a design and experiment
-plan, not permission to relax a safety boundary or enable a new model in
-autonomous flight.
+Status: research complete and Phase-1 implementation executed on 2026-09-23.
+V3 remains opt-in because the frozen promotion experiment returned
+`retain-v1`. This document is not permission to relax a safety boundary or
+enable a new model in autonomous flight. Implementation evidence is in
+[`V2-PHASE1-IMPLEMENTATION.md`](V2-PHASE1-IMPLEMENTATION.md).
 
 ## Executive decision
 

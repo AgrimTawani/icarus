@@ -41,12 +41,14 @@ HISTORY_LIMIT = 12
 # presenting the payload as an abstract JSON exercise.  It is a model-visible
 # change and must therefore travel with every report.
 PROMPT_VERSION = "dcm-prompt-v4-state-sequence"
+PROMPT_VERSION_CONTEXT = "dcm-prompt-v5-feedback"
 # The optional ending variant adds extra terminal emphasis above the base v2
 # embodiment guidance. It remains separately versioned for fair comparison.
 PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
 # v2 adds goto and orbit. The version changes because a report scored
 # against a different action set is not comparable.
 VOCABULARY_VERSION = "dcm-actions-v4-vision-inspection"
+RATIONALE_MAX_CHARS = 120
 
 # The deliberately narrow first vocabulary. It is much smaller than the Drone
 # API on purpose: a model may only ask for what has been explicitly modelled
@@ -273,6 +275,37 @@ def validate_proposal(raw, actions=ACTIONS):
     return proposal
 
 
+def validate_decision(raw, actions=ACTIONS, allow_rationale=False):
+    """Validate an action and an optional non-authoritative rationale.
+
+    V1/V2 remain byte-for-byte strict through :func:`validate_proposal`.
+    V3 may add one bounded string, which is removed before the action enters
+    any validator, guardrail, request builder, or executor.
+    """
+    if not allow_rationale:
+        return validate_proposal(raw, actions), None
+    if not isinstance(raw, str):
+        raise ValueError("decision must be JSON text")  # noqa: TRY004
+    try:
+        decision = json.loads(raw)
+    except (TypeError, ValueError) as error:
+        raise ValueError("decision is not one JSON object") from error
+    if not isinstance(decision, dict) or set(decision) != {
+            "action", "arguments", "rationale"}:
+        raise ValueError(
+            "V3 decision must contain only action, arguments, and rationale")
+    rationale = decision["rationale"]
+    if not isinstance(rationale, str):
+        raise ValueError("rationale must be text")  # noqa: TRY004
+    compact = " ".join(rationale.strip().split())
+    if rationale != compact or len(rationale) > RATIONALE_MAX_CHARS:
+        raise ValueError(
+            f"rationale must be normalized and at most {RATIONALE_MAX_CHARS} characters")
+    action_text = json.dumps({"action": decision["action"],
+                              "arguments": decision["arguments"]})
+    return validate_proposal(action_text, actions), rationale
+
+
 def _as_epoch_ms(value):
     """Coerce a millisecond timestamp, or return None if it is not one.
 
@@ -366,6 +399,7 @@ def curate_v3(state, perception, previous_result, mission, event, actions=ACTION
 
     base = curate(state, perception, previous_result, mission, event,
                   actions=actions, history=history, elapsed_ms=elapsed_ms)
+    base["contract_version"] = CONTRACT_VERSION_CONTEXT
     root = Path(__file__).resolve().parents[2]
     directory = (Path(macro_directory) if macro_directory is not None else
                  root / "config" / "dcm" / "macros")
@@ -375,12 +409,6 @@ def curate_v3(state, perception, previous_result, mission, event, actions=ACTION
                             mission_metadata=mission_metadata,
                             body=body(), soul=static["soul"],
                             world_facts=static["world_facts"])
-    context["contract_version"] = CONTRACT_VERSION_CONTEXT
-    # The hash must describe the final, model-visible object including the
-    # contract identity. Recompute after its deliberate V2 version bump.
-    from python.dcm.v2_context import digest
-    context["context_sha256"] = digest(
-        {key: value for key, value in context.items() if key != "context_sha256"})
     return context
 
 
@@ -393,8 +421,8 @@ collision risk. A mission is complete only when the aircraft is safely on the \
 ground. You do not fly the aircraft; you propose one action, which independent \
 safety software then validates and may reject.
 
-Reply with exactly one JSON object and nothing else. No prose, no explanation, \
-no code fences. The object has exactly two keys: "action" and "arguments".
+Reply with exactly one JSON object and nothing else. No prose and no code \
+fences. {response_contract}
 
 Allowed actions:
 {vocabulary}
@@ -419,7 +447,7 @@ Rules:
 - Honor the operator's explicit task order. If a mission says to orbit and
   then count people, complete the orbit before requesting ``detect``.
 - If no action is appropriate or the situation is unclear, reply with \
-{{"action":"none","arguments":{{}}}}.{ending}\
+{no_action}.{ending}\
 """
 
 ENDING_GUIDANCE = """
@@ -448,14 +476,31 @@ def render_prompt(observation, actions=ACTIONS, ending_guidance=False):
     validator enforces, so a model cannot be invited to emit something that
     would then be rejected.
     """
+    v3 = observation.get("context_version") == "dcm-context-v3-feedback"
+    response_contract = (
+        'The object has exactly three keys: "action", "arguments", and '
+        f'"rationale". Rationale is one short normalized audit sentence of at most '
+        f'{RATIONALE_MAX_CHARS} characters and cannot supply action arguments. '
+        'All required numeric action arguments must still appear in "arguments". '
+        'Example: {"action":"takeoff","arguments":{"target_altitude_agl_m":3},'
+        '"rationale":"Armed on ground; mission requests 3 m."}'
+        if v3 else
+        'The object has exactly two keys: "action" and "arguments".')
     return {
-        "prompt_version": (PROMPT_VERSION_ENDING if ending_guidance
+        "prompt_version": (PROMPT_VERSION_CONTEXT if v3 else
+                           PROMPT_VERSION_ENDING if ending_guidance
                            else PROMPT_VERSION),
         "system": SYSTEM_PROMPT.format(
             vocabulary=render_vocabulary(actions),
+            response_contract=response_contract,
+            no_action=('{"action":"none","arguments":{},'
+                       '"rationale":"No safe action is currently needed."}'
+                       if v3 else '{"action":"none","arguments":{}}'),
             ending=ENDING_GUIDANCE if ending_guidance else ""),
         "user": ("Current situation:\n"
-                 + json.dumps(observation, indent=2, sort_keys=True)
+                 + json.dumps(observation, sort_keys=True,
+                              separators=(",", ":") if v3 else None,
+                              indent=None if v3 else 2)
                  + "\n\nRespond with one JSON object."),
     }
 

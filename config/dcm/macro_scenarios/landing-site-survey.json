@@ -1,0 +1,9 @@
+{
+  "schema": "icarus.dcm.macro-tests.v1",
+  "macro_id": "landing-site-survey",
+  "cases": [
+    {"kind": "nominal", "state": {"airborne": true, "downward_perception": "fresh"}, "expected_actions": ["hold", "assess_landing_zone", "land"]},
+    {"kind": "adverse", "state": {"airborne": true, "assessment": "unsuitable"}, "expected_actions": ["hold", "goto", "return_home"]},
+    {"kind": "recovery", "state": {"airborne": true, "assessment": "unavailable"}, "expected_actions": ["hold", "return_home"]}
+  ]
+}

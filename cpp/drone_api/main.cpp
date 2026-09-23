@@ -18,6 +18,7 @@
 #include "safety_supervisor/safety_supervisor.hpp"
 #include "state_engine/state_engine.hpp"
 #include "local_planner/local_planner.hpp"
+#include "perception/lidar/airsim_lidar_adapter.hpp"
 #include "perception/lidar/gazebo_lidar_adapter.hpp"
 #include "perception/perception_engine.hpp"
 
@@ -39,6 +40,8 @@ int main(int argc, char** argv) {
   std::uint32_t test_mavlink_fault_duration_ms = 0;
   std::uint32_t test_mavlink_fault_latency_ms = 0;
   double simulation_battery_percent = -1.0;
+  std::string perception_source = "gazebo";
+  std::uint16_t airsim_lidar_port = 41452;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     if (argument == "--listen" && index + 1 < argc) {
@@ -59,6 +62,14 @@ int main(int argc, char** argv) {
       test_mavlink_fault_latency_ms = static_cast<std::uint32_t>(std::stoul(argv[++index]));
     } else if (argument == "--simulation-battery-percent" && index + 1 < argc) {
       simulation_battery_percent = std::stod(argv[++index]);
+    } else if (argument == "--perception-source" && index + 1 < argc) {
+      perception_source = argv[++index];
+      if (perception_source != "gazebo" && perception_source != "airsim") {
+        std::cerr << "--perception-source must be gazebo or airsim\n";
+        return 2;
+      }
+    } else if (argument == "--airsim-lidar-port" && index + 1 < argc) {
+      airsim_lidar_port = static_cast<std::uint16_t>(std::stoi(argv[++index]));
     } else {
       std::cerr << "Usage: icarus-drone-api [--listen address] "
                    "[--mavlink-host host] [--mavlink-port port] "
@@ -66,7 +77,9 @@ int main(int argc, char** argv) {
                    "[--test-mavlink-fault-after-ms ms] "
                    "[--test-mavlink-fault-duration-ms ms] "
                    "[--test-mavlink-fault-latency-ms ms] "
-                   "[--simulation-battery-percent 0..100]\n";
+                   "[--simulation-battery-percent 0..100] "
+                   "[--perception-source gazebo|airsim] "
+                   "[--airsim-lidar-port port]\n";
       return 2;
     }
   }
@@ -99,8 +112,14 @@ int main(int argc, char** argv) {
 
     icarus::perception::PerceptionEngine perception(
         clock, state_engine, safety_policy.maximum_perception_age_ms);
-    icarus::perception::GazeboLidarAdapter lidar;
-    if (!lidar.Start([&perception](const icarus::perception::RangeScan& scan) {
+    std::unique_ptr<icarus::perception::RangeSource> lidar;
+    if (perception_source == "airsim") {
+      lidar = std::make_unique<icarus::perception::AirSimLidarAdapter>(
+          "127.0.0.1", airsim_lidar_port);
+    } else {
+      lidar = std::make_unique<icarus::perception::GazeboLidarAdapter>();
+    }
+    if (!lidar->Start([&perception](const icarus::perception::RangeScan& scan) {
           perception.Ingest(scan);
         })) {
       std::cerr << "Unable to subscribe to the normalized lidar source\n";
@@ -178,7 +197,7 @@ int main(int argc, char** argv) {
     shutdown_thread.join();
     safety_supervisor.Stop();
     executor.Stop();
-    lidar.Stop();
+    lidar->Stop();
     gateway.Disconnect();
   } catch (const std::exception& error) {
     std::cerr << "Drone API failure: " << error.what() << '\n';

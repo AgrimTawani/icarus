@@ -36,6 +36,14 @@ Review and comply with each upstream project's license. The supplied/custom
 mesh provenance is documented separately in the `VEHICLE-*` documents and
 `simulation/models/` metadata.
 
+## AerialClaw-derived code
+
+`python/simulation/airsim_rpc.py` derives its synchronous msgpack framing from
+`_reference/AerialClaw/adapters/airsim_rpc.py` at commit
+`e01adaa73c38fb10ec4bc5e8c0f71915cc7490a8`. AerialClaw is MIT licensed,
+Copyright (c) 2026 XDEI Group. Icarus retains only read-only sensor calls;
+AerialClaw movement and pose APIs are intentionally excluded.
+
 ## Edge vision provenance
 
 The experimental, simulation-only `edge-vision` profile uses

@@ -11,6 +11,7 @@ from pathlib import Path
 from python.dcm.contract import (
     CONTRACT_VERSION_CONTEXT,
     PROMPT_VERSION,
+    PROMPT_VERSION_CONTEXT,
     PROMPT_VERSION_ENDING,
     RuntimeDescriptor,
 )
@@ -37,6 +38,8 @@ def main():
                              " (contract v2) instead of only the last result")
     parser.add_argument("--context", choices=("v2", "v3"), default="v2",
                         help="v3 enables the reviewed Phase-1 feedback context")
+    parser.add_argument("--macro-id",
+                        help="explicit reviewed macro id (valid only with --context v3)")
     parser.add_argument("--elapsed", action="store_true",
                         help="show mission elapsed time in the observation")
     parser.add_argument("--ending-guidance", action="store_true",
@@ -47,6 +50,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0,
                         help="evaluate at most this many episodes")
     args = parser.parse_args()
+    if args.macro_id and args.context != "v3":
+        parser.error("--macro-id requires --context v3")
 
     root = Path(__file__).resolve().parents[2]
     episodes = args.episodes or sorted(
@@ -72,6 +77,7 @@ def main():
         }
         if args.context == "v3":
             overrides["contract_version"] = CONTRACT_VERSION_CONTEXT
+            overrides["prompt_version"] = PROMPT_VERSION_CONTEXT
         descriptor = RuntimeDescriptor.from_manifest(args.manifest, role=args.role, **overrides)
         runtime = LlamaCppRuntime(descriptor,
                                   ending_guidance=args.ending_guidance)
@@ -87,6 +93,7 @@ def main():
             include_history=args.history,
             include_elapsed=args.elapsed,
             context_version=args.context,
+            mission_metadata={"macro_id": args.macro_id} if args.macro_id else None,
             check_proposal_guardrails=not args.skip_guardrail_check)
     finally:
         stop = getattr(runtime, "stop", None)

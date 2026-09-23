@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+"""Build and run the Drone API against the isolated AirSim/ArduPilot stack."""
+
+import json
+import os
+import socket
+import subprocess
+import time
+from pathlib import Path
+
+root = Path(__file__).resolve().parent.parent
+if os.sys.argv[1:]:
+    raise SystemExit("usage: ./scripts/start-autonomy-airsim")
+session_path = root / "logs/simulation/airsim_active_session.json"
+if not session_path.is_file():
+    raise SystemExit("No active AirSim stack; run ./scripts/start-airsim-stack first")
+session = json.loads(session_path.read_text())
+if session.get("status") != "ready" or session.get("controller") != "ArduPilot-SITL":
+    raise SystemExit("AirSim session is not an ArduPilot-ready full stack")
+for key in ("pid", "sitl_pid"):
+    try:
+        os.kill(int(session[key]), 0)
+    except (KeyError, ValueError, ProcessLookupError) as error:
+        raise SystemExit(f"AirSim session has stale {key}; restart the stack") from error
+with socket.socket() as probe:
+    if probe.connect_ex(("127.0.0.1", 50051)) == 0:
+        raise SystemExit("Drone API port 50051 is already in use")
+
+generated = root / "build/generated/cpp/icarus/v1/drone_api.grpc.pb.cc"
+if not generated.is_file():
+    subprocess.run([str(root / "scripts/generate-proto")], check=True)
+subprocess.run([
+    "cmake", "-S", str(root), "-B", str(root / "build/phase8"),
+    "-G", "Ninja", "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+], check=True)
+subprocess.run(
+    ["cmake", "--build", str(root / "build/phase8"), "-j", "2"], check=True)
+binary = root / "build/phase8/icarus-drone-api"
+if not binary.is_file():
+    raise SystemExit("Drone API target unavailable")
+arguments = [
+    str(binary), "--listen", "127.0.0.1:50051",
+    "--mavlink-host", "127.0.0.1", "--mavlink-port", "5760",
+    "--safety-policy", str(root / "config/safety/v1.yaml"),
+    "--simulation-battery-percent", "100",
+    "--perception-source", "airsim",
+    "--airsim-lidar-port", str(session.get("lidar_udp_port", 41452)),
+]
+run_dir = root / Path(session["runtime_home"]).parent
+bridge_log = run_dir / "sensor-bridge.log"
+bridge_command = [str(root / "scripts/airsim-sensor-bridge")]
+with bridge_log.open("w", encoding="utf-8") as log:
+    bridge = subprocess.Popen(
+        bridge_command, cwd=root, start_new_session=True,
+        stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+os.sys.stdout.flush()
+time.sleep(0.25)
+if bridge.poll() is not None:
+    raise SystemExit("AirSim sensor bridge exited; inspect " + str(bridge_log))
+session["sensor_bridge_pid"] = bridge.pid
+session["sensor_bridge_command"] = bridge_command
+session["sensor_bridge_log"] = str(bridge_log.relative_to(root))
+session_path.write_text(json.dumps(session, indent=2) + "\n")
+os.chdir(root)
+os.execv(str(binary), arguments)

@@ -1,8 +1,10 @@
 # Icarus Gazebo Simulation Operator Guide
 
 This guide is for the verified Gazebo Harmonic track. AirSim is a separate V2
-visual-simulation experiment with its own session manifest and commands; it
-cannot run concurrently with Gazebo and has no promotion authority. See
+ArduCopter simulation track with its own session manifest and commands; it
+cannot run concurrently with Gazebo and has no promotion authority. Its
+equivalent two-terminal flow is `start-airsim-stack` followed by
+`start-autonomy-airsim`; the same `run-mission` client then connects. See
 [`../architecture/AIRSIM-SIMULATION.md`](../architecture/AIRSIM-SIMULATION.md)
 and [`../../scripts/simulation/airsim/README.md`](../../scripts/simulation/airsim/README.md).
 

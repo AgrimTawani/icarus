@@ -17,6 +17,7 @@ from python.dcm.contract import (
     CONTRACT_VERSION_CONTEXT,
     CONTRACT_VERSION_HISTORY,
     PROMPT_VERSION,
+    PROMPT_VERSION_CONTEXT,
     PROMPT_VERSION_ENDING,
     RuntimeDescriptor,
 )
@@ -63,7 +64,8 @@ def build_runtime(args):
         context_length=args.context_length,
         contract_version=(CONTRACT_VERSION_CONTEXT if args.context == "v3"
                           else CONTRACT_VERSION_HISTORY),
-        prompt_version=(PROMPT_VERSION_ENDING if args.ending_guidance
+        prompt_version=(PROMPT_VERSION_CONTEXT if args.context == "v3" else
+                        PROMPT_VERSION_ENDING if args.ending_guidance
                         else PROMPT_VERSION))
     runtime = LlamaCppRuntime(descriptor,
                               ending_guidance=args.ending_guidance)
@@ -92,12 +94,16 @@ def main():
                         help="prompt v2: state that a flight ends on the ground")
     parser.add_argument("--context", choices=("v2", "v3"), default="v2",
                         help="v3 adds reviewed feedback/macro context; it remains simulator/approval evaluation only")
+    parser.add_argument("--macro-id",
+                        help="explicit reviewed macro id (valid only with --context v3)")
     parser.add_argument("--max-decisions", type=int, default=40)
     parser.add_argument("--mission",
                         help="run one mission and exit instead of chatting")
     parser.add_argument("--json", action="store_true",
                         help="print the machine-readable result too")
     args = parser.parse_args()
+    if args.macro_id and args.context != "v3":
+        parser.error("--macro-id requires --context v3")
     if args.profile == "edge-vision":
         if args.manifest == DEFAULT_MANIFEST:
             args.manifest = EDGE_MANIFEST
@@ -159,7 +165,8 @@ def main():
 
             result = fly_mission(
                 client, runtime, mission, mode=mode, descriptor=descriptor,
-                max_decisions=args.max_decisions, context_version=args.context)
+                max_decisions=args.max_decisions, context_version=args.context,
+                macro_id=args.macro_id)
             if sampler:
                 result["resources"] = sampler.peaks()
             session_results.append(result)

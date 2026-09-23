@@ -20,7 +20,7 @@ controls the drone and the stack is not validated for physical autonomy.
    [agent handoff](docs/NEXT-STEPS.md).
 3. Understand the [software architecture](docs/architecture/SOFTWARE-ARCHITECTURE.md)
    and [simulation connections](docs/architecture/SIMULATION-CONNECTIONS.md).
-   The separate experimental AirSim visual-simulation track is documented in
+   The separate experimental AirSim ArduCopter simulation track is documented in
    [AirSim Simulation](docs/architecture/AIRSIM-SIMULATION.md); it does not
    replace Gazebo as the promotion baseline.
 4. Follow [getting started](docs/guides/GETTING-STARTED.md) and the
@@ -40,6 +40,11 @@ The complete documentation index is [docs/README.md](docs/README.md).
 
 # Legacy one-shot acceptance run
 ./scripts/sim --profile simulation-wind --gui
+
+# Separate AirSim track (after ./scripts/fetch-airsim-blocks)
+./scripts/start-airsim-stack --binary \
+  third_party/airsim/blocks-v1.8.0-linux/Blocks/LinuxNoEditor/Blocks.sh
+# second terminal: ./scripts/start-autonomy-airsim
 ```
 
 List every supported or reserved profile with
@@ -59,10 +64,11 @@ gets direct motor, MAVLink, shell or unrestricted operating-system access.
 
 ## Project State
 
-Phases 0–9 are reported complete. Phase 10 simulation episode capture/replay
-is implemented but its full exit gate is open. Phase 11 has only an offline
-observe-mode mock slice; Qwen, mission orchestration and closed-loop LLM
-simulation remain next. Simulation realism will be audited later against
-as-built measurements. See
+Phases 0–9 are reported complete; episode/replay, local Qwen DCM and closed-loop
+simulation paths are implemented, but no language model is approved for
+unattended flight. V2 Phase 1's AerialClaw-inspired candidate and AirSim
+ArduCopter track are implemented and tested. The frozen promotion scorecard
+retains the current DCM because V3 regressed timeout/latency and lacks paired
+live Gazebo evidence. Simulation realism still requires as-built validation. See
 [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

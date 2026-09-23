@@ -5,6 +5,6 @@
   "archive": "Blocks-v1.8.0-linux.zip",
   "extract_dir": "blocks-v1.8.0-linux",
   "entrypoint": "Blocks/LinuxNoEditor/Blocks.sh",
-  "capability": "visual-rpc-smoke-only",
-  "reason": "The public prebuilt Blocks asset reports SimpleFlight. It is intentionally excluded from ArduCopter/SITL validation."
+  "capability": "arducopter-headless-flight-and-sensor-conformance",
+  "reason": "With the reviewed settings installed at the isolated runtime HOME/Documents/AirSim/settings.json, Blocks runs the ArduCopter vehicle with RGB, depth and LiDAR while Icarus controls it only through ArduPilot SITL."
 }

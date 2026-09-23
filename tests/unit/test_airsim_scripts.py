@@ -58,6 +58,9 @@ class AirSimScriptTests(unittest.TestCase):
     def test_public_wrappers_and_track_readmes_exist(self):
         for path in (
             ROOT / "scripts/start-airsim", ROOT / "scripts/stop-airsim",
+            ROOT / "scripts/start-airsim-stack",
+            ROOT / "scripts/start-autonomy-airsim",
+            ROOT / "scripts/airsim-sensor-bridge",
             ROOT / "scripts/airsim-doctor", ROOT / "scripts/fetch-airsim-blocks",
             ROOT / "scripts/airsim-smoke", ROOT / "scripts/simulation/airsim/README.md",
             ROOT / "scripts/simulation/gazebo/README.md", ROOT / "scripts/README.md",

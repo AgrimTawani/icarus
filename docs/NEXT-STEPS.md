@@ -9,6 +9,22 @@ not a claim that Phase 10 or Phase 11 has passed its full exit gate.
 The historical sections below describe the route taken; they do not describe
 the current implementation state by themselves.
 
+## V2 Phase-1 closeout — 2026-09-23
+
+Phase-1 implementation is complete, but promotion is intentionally not. The
+opt-in V3 feedback contract, four macros, generated BODY, rationale trace,
+deterministic feedback queue, circuit breaker, AirSim/ArduPilot full stack and
+conformance tests are implemented. The frozen comparison returned `retain-v1`
+because V3 had 1.6% vs 0.8% timeouts and 1,216 ms vs 676 ms steady median
+latency, despite better recovery. Do not make V3 the default until it passes
+the committed scorecard including three paired live Gazebo episodes.
+
+AirSim has passed a real Drone API takeoff/hold/land and stale-LiDAR refusal.
+Its next research task is a frozen Gazebo/AirSim scenario subset with pinned
+environment conditions; it must not replace Gazebo promotion evidence. The
+full closeout is
+[`architecture/V2-PHASE1-IMPLEMENTATION.md`](architecture/V2-PHASE1-IMPLEMENTATION.md).
+
 ## Edge-vision V1 closeout — 2026-09-23
 
 The simulation-only edge-vision implementation is complete and has a dedicated

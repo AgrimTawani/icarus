@@ -11,10 +11,16 @@ import json
 import re
 from pathlib import Path
 
+import yaml
+
 CONTEXT_VERSION = "dcm-context-v3-feedback"
 MACRO_SCHEMA = "icarus.dcm.macro.v1"
 SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 _META = re.compile(r"<!-- icarus-macro-meta\n(.*?)\n-->", re.DOTALL)
+_FRONT_MATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+MAX_CONTEXT_BYTES = 24_000
+MAX_MACRO_GUIDANCE_CHARS = 4_000
+MAX_PROFILE_TEXT_CHARS = 3_000
 
 
 def _canonical(value):
@@ -104,26 +110,45 @@ def read_macro(path):
     """Read one reviewed macro document without executing or mutating it."""
     source = Path(path)
     text = source.read_text(encoding="utf-8")
-    match = _META.search(text)
+    match = _FRONT_MATTER.search(text)
+    legacy = False
     if not match:
-        raise ValueError(f"macro {source} has no icarus metadata")
+        match = _META.search(text)
+        legacy = True
+    if not match:
+        raise ValueError(f"macro {source} has no YAML front matter")
     try:
-        metadata = json.loads(match.group(1))
-    except json.JSONDecodeError as error:
-        raise ValueError(f"macro {source} metadata is not JSON") from error
-    required = {"schema", "id", "revision", "allowed_actions", "tags"}
+        metadata = (json.loads(match.group(1)) if legacy
+                    else yaml.safe_load(match.group(1)))
+    except (json.JSONDecodeError, yaml.YAMLError) as error:
+        raise ValueError(f"macro {source} metadata is invalid") from error
+    required = {"schema", "id", "revision", "allowed_actions", "tags",
+                "preconditions", "evidence_links"}
+    if legacy:
+        required -= {"preconditions", "evidence_links"}
     if not isinstance(metadata, dict) or set(metadata) < required:
         raise ValueError(f"macro {source} has incomplete metadata")
     if metadata["schema"] != MACRO_SCHEMA:
         raise ValueError(f"macro {source} has unsupported schema")
-    if not all(isinstance(item, str) for item in metadata["allowed_actions"]):
-        raise ValueError(f"macro {source} has invalid allowed_actions")
-    if not all(isinstance(item, str) for item in metadata["tags"]):
-        raise ValueError(f"macro {source} has invalid tags")
+    for field in ("allowed_actions", "tags", "allowed_action_families",
+                  "preconditions", "evidence_links"):
+        value = metadata.get(field, [])
+        if not isinstance(value, list) or not value or not all(
+                isinstance(item, str) and item.strip() for item in value):
+            if legacy and field in ("allowed_action_families", "preconditions",
+                                     "evidence_links"):
+                continue
+            raise ValueError(f"macro {source} has invalid {field}")
+    guidance = text[match.end():].strip()
+    if len(guidance) > MAX_MACRO_GUIDANCE_CHARS:
+        raise ValueError(f"macro {source} guidance exceeds character budget")
     return {"id": metadata["id"], "revision": metadata["revision"],
             "tags": list(metadata["tags"]),
             "allowed_actions": list(metadata["allowed_actions"]),
-            "guidance": text[match.end():].strip(),
+            "allowed_action_families": list(metadata.get("allowed_action_families", [])),
+            "preconditions": list(metadata.get("preconditions", [])),
+            "evidence_links": list(metadata.get("evidence_links", [])),
+            "guidance": guidance,
             "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "path": str(source)}
 
@@ -136,6 +161,8 @@ def load_macros(directory, actions):
         unknown = sorted(set(macro["allowed_actions"]) - set(actions))
         if unknown:
             raise ValueError(f"macro {macro['id']} names unknown actions: {unknown}")
+        if any(item["id"] == macro["id"] for item in catalog):
+            raise ValueError(f"duplicate macro id: {macro['id']}")
         catalog.append(macro)
     return catalog
 
@@ -167,7 +194,17 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
     perception = observation.get("perception") or {}
     history = observation.get("actions_completed") or []
     selected = select_macro(catalog, mission_metadata)
-    context = dict(observation)
+    # Keep the model-visible physical facts once. V1's complete curated state
+    # and perception objects overlap heavily with the V3 summaries; retaining
+    # both doubled prefill cost without adding evidence.
+    context = {key: value for key, value in observation.items()
+               if key not in ("state", "perception", "allowed_actions")}
+    context["state"] = {key: state.get(key) for key in (
+        "sequence", "observed_at_unix_ms", "local_position_ned", "mavlink",
+        "manual_override_active", "geofence_breached") if key in state}
+    context["perception"] = {key: perception.get(key) for key in (
+        "sequence", "observed_at_unix_ms", "local_map_available",
+        "local_map_age_ms") if key in perception}
     context.update({
         "context_version": CONTEXT_VERSION,
         "state_summary": {
@@ -185,6 +222,14 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
             "local_map_age_ms": perception.get("local_map_age_ms"),
             "obstacle_sectors": obstacle_sectors(perception),
         },
+        "source_evidence": {
+            "state_observed_at_unix_ms": state.get("observed_at_unix_ms"),
+            "perception_observed_at_unix_ms": perception.get(
+                "observed_at_unix_ms"),
+            "perception_age_ms": perception.get("local_map_age_ms"),
+            "perception_health": perception.get("overall"),
+            "confidence_source": "normalized_deterministic_contract",
+        },
         "failure_signals": failure_signals(history,
                                             observation.get("previous_result")),
         "mission_macro": selected,
@@ -194,5 +239,22 @@ def build_context(observation, catalog=(), mission_metadata=None, body=None,
         "macro_catalog": [{key: macro[key] for key in ("id", "revision", "tags")}
                           for macro in catalog],
     })
+    # Profile text remains useful, but no reviewed document can grow without
+    # bound and silently crowd the current physical state out of the prompt.
+    for profile_name in ("soul", "world_facts"):
+        record = context.get(profile_name)
+        if isinstance(record, dict) and isinstance(record.get("text"), str):
+            record = dict(record)
+            record["text"] = record["text"][:MAX_PROFILE_TEXT_CHARS]
+            context[profile_name] = record
+    encoded = _canonical(context).encode("utf-8")
+    if len(encoded) > MAX_CONTEXT_BYTES:
+        raise ValueError(
+            f"V3 context is {len(encoded)} bytes, limit {MAX_CONTEXT_BYTES}")
+    context["context_budget"] = {
+        "max_bytes": MAX_CONTEXT_BYTES,
+        "payload_bytes": len(encoded),
+        "estimated_tokens_upper_bound": (len(encoded) + 2) // 3,
+    }
     context["context_sha256"] = digest(context)
     return context

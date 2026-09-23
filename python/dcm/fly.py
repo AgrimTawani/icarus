@@ -31,8 +31,9 @@ from python.dcm.contract import (
     curate,
     curate_v3,
     render_prompt,
-    validate_proposal,
+    validate_decision,
 )
+from python.dcm.health import DcmHealthMachine
 
 MODES = ("approval", "autonomous")
 MAX_DECISIONS = 40
@@ -48,8 +49,9 @@ class MissionMemory:
     rather than convenience.
     """
 
-    def __init__(self, mission):
+    def __init__(self, mission, macro_id=None):
         self.mission = mission
+        self.mission_metadata = ({"macro_id": macro_id} if macro_id else None)
         self.completed = []
         self.rejected = 0
 
@@ -89,8 +91,10 @@ def observe(client, memory, decision_index, context_version="v2"):
     if context_version not in ("v2", "v3"):
         raise ValueError("context_version must be v2 or v3")
     builder = curate_v3 if context_version == "v3" else curate
+    kwargs = ({"mission_metadata": memory.mission_metadata}
+              if context_version == "v3" else {})
     observation = builder(state, perception, None, memory.mission, event,
-                         history=memory.as_history())
+                         history=memory.as_history(), **kwargs)
     reference = getattr(client, "mission_reference", dict)()
     if reference:
         observation["mission_reference"] = reference
@@ -132,7 +136,7 @@ def _describe(proposal):
 
 def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 max_decisions=MAX_DECISIONS, stream=sys.stdin, echo=print,
-                context_version="v2"):
+                context_version="v2", macro_id=None):
     """Run one mission to termination. Returns a summary dict."""
     if mode not in MODES:
         raise ValueError("mode must be one of " + ", ".join(MODES))
@@ -146,7 +150,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         if set_model is not None:
             set_model(descriptor.as_record())
 
-    memory = MissionMemory(mission)
+    memory = MissionMemory(mission, macro_id=macro_id)
+    health = DcmHealthMachine()
     executed = []
     counts = {"proposed": 0, "invalid": 0, "stale": 0, "timeout": 0,
               "declined": 0, "executed": 0, "failed": 0}
@@ -156,17 +161,32 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         stale = assess_freshness(observation)
         if stale:
             counts["stale"] += 1
+            transition = health.transition("stale", airborne=_airborne(observation))
             echo(f"[{index}] refused before asking: {stale}")
-            _record(client, index, observation, None, None, "stale", stale)
+            if transition.fallback_action:
+                fallback = {"action": transition.fallback_action, "arguments": {}}
+                outcome, detail = _execute(client, action_pb2, fallback, index, echo)
+                counts["executed"] += 1
+                counts["failed"] += outcome != "SUCCEEDED"
+                memory.remember(fallback["action"], outcome)
+                executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
+                _record(client, index, observation, None, None,
+                        "fallback_executed", stale, proposal=fallback,
+                        outcome=outcome, health=health.record())
+            else:
+                _record(client, index, observation, None, None, "stale", stale,
+                        health=health.record())
             time.sleep(0.5)
             continue
 
         prompt = render_prompt(observation)
         started = time.monotonic()
         raw = None
+        rationale = None
         try:
             raw = runtime.propose(observation)
-            proposal = validate_proposal(raw)
+            proposal, rationale = validate_decision(
+                raw, allow_rationale=context_version == "v3")
             status = "valid"
             error = None
         except DeadlineExceeded as expired:
@@ -179,9 +199,21 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         counts["proposed"] += 1
 
         if proposal is None:
+            transition = health.transition(status, airborne=_airborne(observation))
             echo(f"[{index}] {status}: {error}")
-            _record(client, index, observation, prompt, raw, status, error,
-                    latency_ms)
+            if transition.fallback_action:
+                fallback = {"action": transition.fallback_action, "arguments": {}}
+                outcome, detail = _execute(client, action_pb2, fallback, index, echo)
+                counts["executed"] += 1
+                counts["failed"] += outcome != "SUCCEEDED"
+                memory.remember(fallback["action"], outcome)
+                executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
+                _record(client, index, observation, prompt, raw,
+                        "fallback_executed", error, latency_ms, fallback, outcome,
+                        rationale=rationale, health=health.record())
+            else:
+                _record(client, index, observation, prompt, raw, status, error,
+                        latency_ms, rationale=rationale, health=health.record())
             continue
 
         # The world may have moved while the model was thinking. Offline
@@ -198,9 +230,10 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         echo(f"[{index}] proposes {_describe(proposal)}"
              f"  ({latency_ms:.0f} ms)")
         if proposal["action"] == "none":
+            health.transition("none")
             echo("      model proposes no action; mission ends")
             _record(client, index, observation, prompt, raw, "none", None,
-                    latency_ms)
+                    latency_ms, rationale=rationale, health=health.record())
             break
 
         if not approve(proposal, mode, stream,
@@ -209,10 +242,13 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             memory.rejected += 1
             echo("      declined")
             _record(client, index, observation, prompt, raw, "declined", None,
-                    latency_ms, proposal, operator_approval=False)
+                    latency_ms, proposal, operator_approval=False,
+                    rationale=rationale, health=health.record())
             continue
 
         outcome, detail = _execute(client, action_pb2, proposal, index, echo)
+        health.transition("executed" if outcome == "SUCCEEDED" else "error",
+                          airborne=_airborne(observation))
         memory.remember(proposal["action"], outcome,
                         detail if proposal["action"] in
                         ("detect", "inspect_scene", "assess_landing_zone") and outcome == "SUCCEEDED"
@@ -227,7 +263,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
             counts["failed"] += 1
         _record(client, index, observation, prompt, raw, "executed", detail,
                 latency_ms, proposal, outcome,
-                operator_approval=(True if mode == "approval" else None))
+                operator_approval=(True if mode == "approval" else None),
+                rationale=rationale, health=health.record())
 
         # A faulted command path can recover a fraction of a second later.
         # Without a backoff an autonomous client repeatedly submits the same
@@ -317,9 +354,14 @@ def _state_name(value):
     return action_pb2.ActionState.Name(value).replace("ACTION_STATE_", "")
 
 
+def _airborne(observation):
+    state = observation.get("state") or {}
+    return state.get("landed") is False and state.get("armed") is True
+
+
 def _record(client, index, observation, prompt, raw, status, error,
             latency_ms=0.0, proposal=None, outcome=None,
-            operator_approval=None):
+            operator_approval=None, rationale=None, health=None):
     """Write the decision into the episode.
 
     Phase 10 requires model prompts and responses to be replayable alongside
@@ -335,6 +377,10 @@ def _record(client, index, observation, prompt, raw, status, error,
         "observation": observation,
         "prompt": prompt,
         "raw_response": raw if isinstance(raw, str) else None,
+        "rationale": rationale,
+        "rationale_class": "model_audit" if rationale else None,
+        "validator_verdict": ("accepted" if proposal is not None
+                               else "not_accepted"),
         "proposal": proposal,
         "status": status,
         "error": error,
@@ -346,6 +392,9 @@ def _record(client, index, observation, prompt, raw, status, error,
         # pre-execution refusal). This is annotation data, not authority.
         "operator_approval": operator_approval,
         "allowed_actions": list(ALLOWED_ACTIONS),
+        "mission_macro": observation.get("mission_macro"),
+        "context_sha256": observation.get("context_sha256"),
+        "health": health,
     })
 
 

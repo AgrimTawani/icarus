@@ -8,8 +8,10 @@ configuration before this command can be considered flight-ready.
 """
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -36,6 +38,14 @@ def _port_open(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.settimeout(0.2)
         return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _terminate(process):
@@ -107,17 +117,29 @@ def main():
                               "--settings", str(args.settings)], check=False)
     if checked.returncode:
         raise SystemExit(checked.returncode)
-    command = [str(args.binary), f"-settings={args.settings}"]
+    # Classic AirSim does not consume a ``-settings=`` command-line option.
+    # It reads $HOME/Documents/AirSim/settings.json. Give every launch a
+    # private HOME so the reviewed file is guaranteed to be the file used and
+    # the operator's real settings are never read or overwritten.
+    started_ms = int(time.time() * 1000)
+    runtime_home = LOG_ROOT / f"run-{started_ms}" / "home"
+    settings_target = runtime_home / "Documents" / "AirSim" / "settings.json"
+    settings_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(args.settings, settings_target)
+    command = [str(args.binary)]
     if args.nullrhi:
         command.append("-nullrhi")
     elif not args.no_render_offscreen:
         command.append("-RenderOffScreen")
     command.extend(args.extra)
     LOG_ROOT.mkdir(parents=True, exist_ok=True)
-    log_path = LOG_ROOT / f"{int(time.time() * 1000)}.log"
+    log_path = runtime_home.parent / "airsim.log"
     log_handle = log_path.open("w", encoding="utf-8")
+    environment = dict(os.environ)
+    environment["HOME"] = str(runtime_home)
     process = subprocess.Popen(command, cwd=args.binary.parent, start_new_session=True,
-                               stdout=log_handle, stderr=subprocess.STDOUT)
+                               stdout=log_handle, stderr=subprocess.STDOUT,
+                               env=environment)
     log_handle.close()
     deadline = time.monotonic() + args.startup_timeout
     while time.monotonic() < deadline:
@@ -141,10 +163,13 @@ def main():
                 "schema": "icarus.simulation.airsim-session.v1",
                 "pid": process.pid, "rpc_port": args.port,
                 "settings": settings_path,
+                "settings_sha256": _sha256(args.settings),
+                "binary_sha256": _sha256(args.binary),
+                "runtime_home": str(runtime_home.relative_to(ROOT)),
                 "rendering": "disabled" if args.nullrhi else "offscreen",
                 "capability": "visual-rpc-smoke-only" if simpleflight else "arducopter-candidate",
                 "log": str(log_path.relative_to(ROOT)),
-                "started_unix_ms": int(time.time() * 1000),
+                "started_unix_ms": started_ms,
                 "command": command,
             }, indent=2) + "\n")
             print("AirSim RPC is ready on port", args.port)

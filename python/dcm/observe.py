@@ -34,6 +34,7 @@ from python.dcm.contract import (
     curate_v3,
     is_flight_action,
     render_prompt,
+    validate_decision,
     validate_proposal,
 )
 from python.dcm.guardrail_check import GuardrailUnavailable, check_proposal
@@ -75,7 +76,8 @@ def _sha256(path):
 def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     check_guardrails=True, descriptor=None,
                     include_history=False, include_elapsed=False,
-                    check_proposal_guardrails=True, context_version="v2"):
+                    check_proposal_guardrails=True, context_version="v2",
+                    mission_metadata=None):
     """Replay a sealed episode at its recorded pre-action decision points.
 
     `check_guardrails` (existing) replays the episode's *recorded* actions
@@ -130,12 +132,16 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                 if include_elapsed and episode_started_ms is not None:
                     elapsed = event["unix_ms"] - episode_started_ms
                 build_context = curate_v3 if context_version == "v3" else curate
+                context_args = {}
+                if context_version == "v3":
+                    context_args["mission_metadata"] = mission_metadata
                 observation = build_context(
                     payload["state"], perception, previous_result,
                     manifest["mission"], event, history=completed,
-                    elapsed_ms=elapsed)
+                    elapsed_ms=elapsed, **context_args)
                 raw = None
                 proposal = None
+                rationale = None
                 error = None
                 stale = assess_freshness(observation)
                 if stale:
@@ -151,7 +157,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                         if elapsed_ms > timeout_ms:
                             status = "timeout"
                         else:
-                            proposal = validate_proposal(raw)
+                            proposal, rationale = validate_decision(
+                                raw, allow_rationale=context_version == "v3")
                             status = "valid"
                     except DeadlineExceeded as failure:
                         # The adapter enforced its own deadline and abandoned
@@ -203,11 +210,17 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     "recorded_action": recorded_action,
                     "proposal": proposal,
                     "raw_response": raw if isinstance(raw, str) else None,
+                    "rationale": rationale,
+                    "rationale_class": "model_audit" if rationale else None,
+                    "validator_verdict": ("accepted" if status == "valid"
+                                           else "not_accepted"),
                     "status": status, "error": error,
                     "latency_ms": round(elapsed_ms, 3),
                     "guardrail": guardrail,
                     "runtime_stats": runtime_stats,
                     "executed": False,
+                    "mission_macro": observation.get("mission_macro"),
+                    "context_sha256": observation.get("context_sha256"),
                 }, sort_keys=True) + "\n")
     summary = {
         "schema": SCHEMA, "mode": "observe", "executed_actions": 0,

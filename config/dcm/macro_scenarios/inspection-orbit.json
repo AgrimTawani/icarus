@@ -1,0 +1,9 @@
+{
+  "schema": "icarus.dcm.macro-tests.v1",
+  "macro_id": "inspection-orbit",
+  "cases": [
+    {"kind": "nominal", "state": {"airborne": true, "orbit_defined": true}, "expected_actions": ["goto", "orbit", "inspect_scene", "detect"]},
+    {"kind": "adverse", "state": {"airborne": true, "path_ahead_clear": false}, "expected_actions": ["hold", "return_home"]},
+    {"kind": "recovery", "state": {"airborne": true, "equivalent_failures": 2}, "expected_actions": ["hold", "return_home", "land"]}
+  ]
+}

@@ -958,6 +958,14 @@ different, simpler flight-dynamics path from the Gazebo/PX4 SITL stack
 described above, and switching between them in AerialClaw means switching
 adapters, not just worlds.
 
+> Icarus V2 implementation note (2026-09-23): the paragraph above describes
+> AerialClaw's OpenFly deployment, not a limitation of the public Blocks
+> binary. Icarus now installs its reviewed settings in classic AirSim's actual
+> `$HOME/Documents/AirSim/settings.json` location and has verified Blocks
+> v1.8.0 with ArduCopter SITL, RGB/depth/LiDAR, Drone API takeoff/land and stale
+> perception fail-closed behavior. Icarus still does not copy AerialClaw's
+> SimpleFlight/pose-control route.
+
 The practical implication: **cloning the AerialClaw repository does not get
 you the dense-city environment shown in its own README.** It gets you the
 RPC client code capable of *talking to* such an environment, plus
@@ -991,8 +999,8 @@ sim/real parity investment (ADR-0002) and ArduPilot/Gazebo Harmonic stack:
 - **For true photorealistic, UE4-grade high-rise density** matching the
   README GIF specifically, the honest path is outside anything AerialClaw's
   own repository provides: either a UE4/AirSim-based city (which would mean
-  adopting AirSim's SimpleFlight or bridging it to ArduPilot separately,
-  a real architectural fork from the current stack) or higher-fidelity
+  using the now-implemented separate AirSim/ArduPilot adapter track (without
+  SimpleFlight), or higher-fidelity
   Gazebo/Ignition city content from elsewhere (existing "city" world packs,
   OpenStreetMap-derived procedural building generation, or CARLA-exported
   meshes converted for Gazebo) layered onto the ArduPilot/Gazebo Harmonic

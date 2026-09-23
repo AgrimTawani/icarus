@@ -2,4 +2,5 @@
 # Read-only AirSim RPC/image verification; never arms or sends movement.
 set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 exec "${ROOT}/.venv/bin/python" "${ROOT}/scripts/simulation/airsim/smoke.py" "$@"
