@@ -8,7 +8,7 @@ import argparse
 import json
 from pathlib import Path
 
-from python.dcm.contract import RuntimeDescriptor
+from python.dcm.contract import CONTRACT_VERSION_CONTEXT, RuntimeDescriptor
 from python.dcm.observe import MockRuntime, observe_episode
 
 DEFAULT_MANIFEST = Path.home() / "models/qwen/MANIFEST.json"
@@ -19,8 +19,10 @@ def build_runtime(args):
     if args.runtime == "mock":
         return MockRuntime(), None
     from python.dcm.llama_runtime import LlamaCppRuntime
-    descriptor = RuntimeDescriptor.from_manifest(
-        args.manifest, role=args.role, deadline_ms=args.timeout_ms)
+    overrides = {"deadline_ms": args.timeout_ms}
+    if args.context == "v3":
+        overrides["contract_version"] = CONTRACT_VERSION_CONTEXT
+    descriptor = RuntimeDescriptor.from_manifest(args.manifest, role=args.role, **overrides)
     return LlamaCppRuntime(descriptor, verify_artifact=not args.skip_verify), descriptor
 
 

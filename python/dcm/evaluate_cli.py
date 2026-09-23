@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from python.dcm.contract import (
+    CONTRACT_VERSION_CONTEXT,
     PROMPT_VERSION,
     PROMPT_VERSION_ENDING,
     RuntimeDescriptor,
@@ -64,10 +65,14 @@ def main():
         runtime = ScriptedRuntime()
     else:
         from python.dcm.llama_runtime import LlamaCppRuntime
-        descriptor = RuntimeDescriptor.from_manifest(
-            args.manifest, role=args.role, deadline_ms=args.timeout_ms,
-            prompt_version=(PROMPT_VERSION_ENDING if args.ending_guidance
-                            else PROMPT_VERSION))
+        overrides = {
+            "deadline_ms": args.timeout_ms,
+            "prompt_version": (PROMPT_VERSION_ENDING if args.ending_guidance
+                               else PROMPT_VERSION),
+        }
+        if args.context == "v3":
+            overrides["contract_version"] = CONTRACT_VERSION_CONTEXT
+        descriptor = RuntimeDescriptor.from_manifest(args.manifest, role=args.role, **overrides)
         runtime = LlamaCppRuntime(descriptor,
                                   ending_guidance=args.ending_guidance)
 

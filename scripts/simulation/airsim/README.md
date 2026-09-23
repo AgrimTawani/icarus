@@ -33,15 +33,27 @@ their transport, sensors and timing must not be accidentally mixed.
 4. Copy/review the settings template. Pin binary digest, environment license,
    AirSim revision, ArduPilot revision and parameters in the experiment log.
 
+For a reproducible *visual/RPC-only* check, Icarus can fetch a pinned public
+Blocks asset. It is deliberately not an ArduCopter candidate: the asset logs
+`SimpleFlight`, and the normal launcher refuses it.
+
 ## Commands
 
 ```bash
 # Structural configuration check; no simulator starts.
 ./scripts/airsim-doctor --binary /path/to/Environment.sh
 
+# Optional: fetch a digest-verified public visual/RPC smoke asset into ignored
+# third_party/. This does not make a controller-valid simulation.
+./scripts/fetch-airsim-blocks
+
 # Start the Unreal process with NoDisplay and offscreen rendering. This opens
 # an RPC port but does not claim that SITL/sensors are flight-ready.
 ./scripts/start-airsim --binary /path/to/Environment.sh
+
+# The public Blocks asset is smoke-only and needs explicit acknowledgement.
+./scripts/start-airsim --binary third_party/airsim/blocks-v1.8.0-linux/Blocks/LinuxNoEditor/Blocks.sh --allow-simpleflight-smoke
+./scripts/airsim-smoke
 
 # Stop only the recorded AirSim process.
 ./scripts/stop-airsim

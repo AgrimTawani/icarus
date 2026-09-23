@@ -50,6 +50,18 @@ The exact UE binary/container determines the compatible offscreen flags. Each
 experiment must retain the binary digest, GPU driver, settings file, AirSim
 revision, scene asset/license, ArduPilot revision/parameters and command line.
 
+### Reproducible smoke asset, and its hard limit
+
+`./scripts/fetch-airsim-blocks` downloads the digest-pinned public AirSim
+Blocks v1.8.0 binary into ignored `third_party/airsim/`. A live launch was
+verified to open RPC 41451 with `NoDisplay` and `-RenderOffScreen`; the
+read-only `./scripts/airsim-smoke` checks RPC ping, vehicles and one scene
+image without arming or moving anything. The same binary logs `SimpleFlight`.
+It therefore has exactly one role: visual/RPC smoke evidence. The launcher
+terminates it by default and requires `--allow-simpleflight-smoke` to record a
+`visual-rpc-smoke-only` session. It cannot be used as evidence for ArduCopter,
+SITL, DCM decisions, safety evaluation, or promotion.
+
 ## Bring-up sequence
 
 1. Acquire and license a compatible AirSim/UE environment outside Git.
@@ -58,7 +70,8 @@ revision, scene asset/license, ArduPilot revision/parameters and command line.
 3. Start matching AirSim ArduPilot SITL with its documented sensor/control
    ports. A launched Unreal RPC process alone is not a flight-ready stack.
 4. Run `./scripts/airsim-doctor --binary ...`, then start the isolated AirSim
-   process. Confirm camera, depth and LiDAR timestamps from the actual binary.
+   process. Confirm camera, depth and LiDAR timestamps from the actual binary;
+   `./scripts/airsim-smoke` is only a read-only RPC/image prerequisite.
 5. Implement/pass adapter conformance before any DCM experiment: frames/units,
    freshness, sensor metadata, action lifecycle, failsafe/link faults,
    deterministic seed behaviour and a truth-nonleak test.

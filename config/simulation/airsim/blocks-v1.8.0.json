@@ -1,0 +1,10 @@
+{
+  "name": "AirSim Blocks Linux v1.8.0",
+  "url": "https://github.com/microsoft/AirSim/releases/download/v1.8.0-linux/Blocks.zip",
+  "sha256": "cc2abef151ce5f9c35cbd1af6e425e153a0c42803f851e52a146dbc215dc91a0",
+  "archive": "Blocks-v1.8.0-linux.zip",
+  "extract_dir": "blocks-v1.8.0-linux",
+  "entrypoint": "Blocks/LinuxNoEditor/Blocks.sh",
+  "capability": "visual-rpc-smoke-only",
+  "reason": "The public prebuilt Blocks asset reports SimpleFlight. It is intentionally excluded from ArduCopter/SITL validation."
+}

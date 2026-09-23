@@ -105,6 +105,8 @@ experimenter supplies a separately licensed/version-pinned Unreal environment
 and a matching AirSim/ArduPilot pair outside this repository. The only
 project-owned AirSim configuration is the `ArduCopter` template under
 `config/simulation/airsim/`; see `docs/architecture/AIRSIM-SIMULATION.md`.
+The small `msgpack` dependency in `requirements/core.txt` supports Icarus's
+read-only AirSim RPC/image smoke command; it does not grant a movement API.
 Do not substitute `SimpleFlight` or direct AirSim movement APIs for the
 Icarus Drone API/MAVLink route.
 
