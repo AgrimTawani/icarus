@@ -8,6 +8,15 @@ Decision: implementation complete; retain the current DCM default.
 
 ## Delivered architecture
 
+![Icarus V2 DCM-to-motors architecture](../assets/icarus-v2-dcm-to-motors-architecture.png)
+
+The diagram distinguishes the model-visible cognitive loop from the
+authoritative C++ control path, shows the independent safety override, and
+keeps Gazebo, AirSim, and future physical-motor execution as separate device
+branches. The status callouts are intentional: V3 remains opt-in, and the
+current AirSim multirotor is not physically equivalent to the Gazebo Akshu
+airframe.
+
 - `dcm-contract-v3-feedback` builds a deterministic, byte-bounded context from
   the existing curated allow-list. It adds source freshness, sectorized
   obstacles, bounded history/failure counters, profile/macro provenance and a
