@@ -38,6 +38,8 @@ def main():
                         help="hard per-decision deadline for the llama runtime")
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed")
+    parser.add_argument("--context", choices=("v2", "v3"), default="v2",
+                        help="v3 adds reviewed feedback/macro context; v2 preserves historical comparisons")
     parser.add_argument("--skip-verify", action="store_true",
                         help="skip the artifact checksum check (not for evaluation)")
     parser.add_argument("--skip-guardrail-check", action="store_true",
@@ -52,6 +54,7 @@ def main():
             args.episode, runtime, root / "logs/dcm/observe",
             timeout_ms=args.timeout_ms, descriptor=descriptor,
             include_history=args.history,
+            context_version=args.context,
             check_proposal_guardrails=not args.skip_guardrail_check)
     finally:
         stop = getattr(runtime, "stop", None)

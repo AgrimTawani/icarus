@@ -14,6 +14,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "build/generated/python"))
 
 from python.dcm.contract import (
+    CONTRACT_VERSION_CONTEXT,
+    CONTRACT_VERSION_HISTORY,
     PROMPT_VERSION,
     PROMPT_VERSION_ENDING,
     RuntimeDescriptor,
@@ -59,6 +61,8 @@ def build_runtime(args):
     descriptor = RuntimeDescriptor.from_manifest(
         args.manifest, role=args.role, deadline_ms=args.timeout_ms,
         context_length=args.context_length,
+        contract_version=(CONTRACT_VERSION_CONTEXT if args.context == "v3"
+                          else CONTRACT_VERSION_HISTORY),
         prompt_version=(PROMPT_VERSION_ENDING if args.ending_guidance
                         else PROMPT_VERSION))
     runtime = LlamaCppRuntime(descriptor,
@@ -86,6 +90,8 @@ def main():
                              "fits alongside Gazebo on the 6 GB GPU")
     parser.add_argument("--ending-guidance", action="store_true",
                         help="prompt v2: state that a flight ends on the ground")
+    parser.add_argument("--context", choices=("v2", "v3"), default="v2",
+                        help="v3 adds reviewed feedback/macro context; it remains simulator/approval evaluation only")
     parser.add_argument("--max-decisions", type=int, default=40)
     parser.add_argument("--mission",
                         help="run one mission and exit instead of chatting")
@@ -153,7 +159,7 @@ def main():
 
             result = fly_mission(
                 client, runtime, mission, mode=mode, descriptor=descriptor,
-                max_decisions=args.max_decisions)
+                max_decisions=args.max_decisions, context_version=args.context)
             if sampler:
                 result["resources"] = sampler.peaks()
             session_results.append(result)

@@ -70,7 +70,7 @@ arbitrary MAVLink messages, shell commands or filesystem/network operations.
 | Local planner | `cpp/local_planner` | Short-horizon collision-safe motion planning; effective clearance is `max(policy minimum, action-request minimum)` |
 | Autonomy core | `cpp/autonomy_core` | Composition root and service lifecycle |
 | Perception | `perception/` | Sensor adapters, calibration, detections and obstacle map |
-| DCM | `python/dcm` | Model-facing reasoning loop and action selection |
+| DCM | `python/dcm` | Model-facing reasoning loop and action selection; V2 adds an opt-in, versioned feedback context and reviewed mission macros without expanding authority |
 | Model runtime | `python/model_runtime` | Qwen/Llama/provider abstraction and resource controls |
 | Evaluation | `python/evaluation` | Frozen campaigns, metrics and comparisons |
 | Dataset tools | `python/dataset_tools` | Episode validation, curation, export and replay preparation |
@@ -199,6 +199,16 @@ and image hash, but no PPM/JPEG/PNG file. This proves the boundary wiring, not
 detector accuracy or any autonomous visual-flight capability.
 
 ## Model Runtime and Evaluation
+
+V2 Phase 1 adds a separately-versioned `dcm-contract-v3-feedback` context
+builder. It begins with the existing curated allow-list, then adds deterministic
+failure/repetition facts, compact normalized obstacle sectors, generated
+capability facts, reviewed world facts, and an explicitly selected reviewed
+mission macro. It is read-only while a mission runs. Macro/profile/context
+hashes travel with the decision evidence; an offline reliability aggregator may
+propose a change but cannot write a live macro or safety policy. The legacy V1/
+V2 contracts remain available for fair comparisons. See
+[`DCM-V2-FEEDBACK.md`](DCM-V2-FEEDBACK.md).
 
 All model providers implement the same interface: load a named immutable model
 revision, consume a bounded prompt/state bundle, return one schema-constrained

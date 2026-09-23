@@ -234,7 +234,7 @@ def _aggregate(runs, key):
 def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
              descriptor=None, check_guardrails=True, progress=None,
              include_history=False, include_elapsed=False,
-             check_proposal_guardrails=True):
+             check_proposal_guardrails=True, context_version="v2"):
     """Replay every episode `repeats` times and score the result.
 
     Returns (output_directory, report). Proposals are recorded, never executed.
@@ -272,6 +272,7 @@ def evaluate(episodes, runtime, output_root, repeats=3, timeout_ms=5000,
                         check_guardrails=check_guardrails, descriptor=descriptor,
                         include_history=include_history,
                         include_elapsed=include_elapsed,
+                        context_version=context_version,
                         check_proposal_guardrails=check_proposal_guardrails)
                 except (ReplayError, OSError, KeyError) as unusable:
                     # A corpus accumulates episodes that predate a schema

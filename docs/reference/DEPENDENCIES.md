@@ -98,6 +98,16 @@ Pixhawk firmware work begins.
 ROS 2 is intentionally excluded. The initial ArduPilot Gazebo integration does
 not require it.
 
+### AirSim (optional V2 experiment)
+
+AirSim is not installed by `bootstrap` and is not a Gazebo replacement. An
+experimenter supplies a separately licensed/version-pinned Unreal environment
+and a matching AirSim/ArduPilot pair outside this repository. The only
+project-owned AirSim configuration is the `ArduCopter` template under
+`config/simulation/airsim/`; see `docs/architecture/AIRSIM-SIMULATION.md`.
+Do not substitute `SimpleFlight` or direct AirSim movement APIs for the
+Icarus Drone API/MAVLink route.
+
 ## Optional Local LLM Inference
 
 - A model runtime such as Ollama (not installed by the Phase 7 bootstrap)

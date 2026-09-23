@@ -34,6 +34,8 @@ def main():
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed"
                              " (contract v2) instead of only the last result")
+    parser.add_argument("--context", choices=("v2", "v3"), default="v2",
+                        help="v3 enables the reviewed Phase-1 feedback context")
     parser.add_argument("--elapsed", action="store_true",
                         help="show mission elapsed time in the observation")
     parser.add_argument("--ending-guidance", action="store_true",
@@ -79,6 +81,7 @@ def main():
             descriptor=descriptor, progress=progress,
             include_history=args.history,
             include_elapsed=args.elapsed,
+            context_version=args.context,
             check_proposal_guardrails=not args.skip_guardrail_check)
     finally:
         stop = getattr(runtime, "stop", None)

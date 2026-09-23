@@ -1,4 +1,10 @@
-# Icarus Simulation Operator Guide
+# Icarus Gazebo Simulation Operator Guide
+
+This guide is for the verified Gazebo Harmonic track. AirSim is a separate V2
+visual-simulation experiment with its own session manifest and commands; it
+cannot run concurrently with Gazebo and has no promotion authority. See
+[`../architecture/AIRSIM-SIMULATION.md`](../architecture/AIRSIM-SIMULATION.md)
+and [`../../scripts/simulation/airsim/README.md`](../../scripts/simulation/airsim/README.md).
 
 ## The Three Normal Operator Commands
 

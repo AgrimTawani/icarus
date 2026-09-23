@@ -20,6 +20,9 @@ controls the drone and the stack is not validated for physical autonomy.
    [agent handoff](docs/NEXT-STEPS.md).
 3. Understand the [software architecture](docs/architecture/SOFTWARE-ARCHITECTURE.md)
    and [simulation connections](docs/architecture/SIMULATION-CONNECTIONS.md).
+   The separate experimental AirSim visual-simulation track is documented in
+   [AirSim Simulation](docs/architecture/AIRSIM-SIMULATION.md); it does not
+   replace Gazebo as the promotion baseline.
 4. Follow [getting started](docs/guides/GETTING-STARTED.md) and the
    [simulation operator guide](docs/guides/SIMULATION-OPERATIONS.md).
 

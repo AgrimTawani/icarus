@@ -1,7 +1,9 @@
-# Icarus Simulation Connections and Data Flow
+# Icarus Gazebo Simulation Connections and Data Flow
 
-This is the canonical overview of the current simulator data flow. Detailed
-bring-up evidence is retained in the `SIM-*` documents.
+This is the canonical overview of the **current Gazebo** simulator data flow.
+Detailed bring-up evidence is retained in the `SIM-*` documents. The isolated
+experimental AirSim track is documented separately in
+[`AIRSIM-SIMULATION.md`](AIRSIM-SIMULATION.md); it has no promotion authority.
 
 ## Implemented Flight Path
 

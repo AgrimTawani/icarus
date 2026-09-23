@@ -1,4 +1,4 @@
-# Icarus Simulation Workspace
+# Icarus Gazebo Simulation Workspace
 
 All project-owned Gazebo assets live here. Nothing in `third_party/` may be
 edited to implement an Icarus vehicle, world, parameter, scenario, or test.
@@ -28,3 +28,8 @@ Validate every SDF file with:
 Phase 5 scenarios are described in [scenarios/README.md](scenarios/README.md).
 Generate a deterministic world with `scripts/simulation/build_phase5_world.py`
 or run it through `./scripts/sim --scenario <name>`.
+
+AirSim assets are intentionally not placed here: they are externally licensed
+Unreal environments managed through `config/simulation/airsim/` and
+`scripts/simulation/airsim/`. See
+[`docs/architecture/AIRSIM-SIMULATION.md`](../docs/architecture/AIRSIM-SIMULATION.md).

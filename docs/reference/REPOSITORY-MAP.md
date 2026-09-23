@@ -7,7 +7,7 @@ Icarus/
 ├── python/                DCM, model, evaluation and dataset code (scaffolds)
 ├── perception/            Sensor/perception modules (scaffolds)
 ├── simulation/            Vehicle models, worlds, scenarios, parameters, plugins
-├── config/                Safety and simulation configuration
+├── config/                Safety, DCM profile/macro, and simulation configuration
 ├── tests/                 Cross-component test layout (currently scaffolds)
 ├── scripts/               Stable operator/bootstrap entry points and builders
 ├── docs/                  Canonical handbook, evidence and history
@@ -34,8 +34,8 @@ The following are recreated locally and must not be committed:
 
 - Never modify `third_party/` to implement Icarus behavior.
 - Edit scenario declarations or builders, not generated scenario assets.
-- Keep simulator/hardware details behind adapters; do not import Gazebo concepts
-  into mission or model contracts.
+- Keep simulator/hardware details behind adapters; do not import Gazebo or
+  AirSim concepts into mission or model contracts.
 - Component-local `README.md` files may stay beside code for immediate operating
   details. Canonical cross-project documentation belongs under `docs/`.
 - Large raw recordings belong in external artifact storage once that system is

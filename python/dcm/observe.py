@@ -21,9 +21,9 @@ from python.dataset_tools.replay import replay
 from python.dcm.contract import (
     ALLOWED_ACTIONS,
     CONTRACT_VERSION,
+    CONTRACT_VERSION_CONTEXT,
     CONTRACT_VERSION_HISTORY,
     FRESHNESS_LIMITS,
-    is_flight_action,
     PROMPT_VERSION,
     VOCABULARY_VERSION,
     DeadlineExceeded,
@@ -31,6 +31,8 @@ from python.dcm.contract import (
     RuntimeDescriptor,
     assess_freshness,
     curate,
+    curate_v3,
+    is_flight_action,
     render_prompt,
     validate_proposal,
 )
@@ -73,7 +75,7 @@ def _sha256(path):
 def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                     check_guardrails=True, descriptor=None,
                     include_history=False, include_elapsed=False,
-                    check_proposal_guardrails=True):
+                    check_proposal_guardrails=True, context_version="v2"):
     """Replay a sealed episode at its recorded pre-action decision points.
 
     `check_guardrails` (existing) replays the episode's *recorded* actions
@@ -85,6 +87,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
     episode = Path(episode)
     if not isinstance(timeout_ms, int) or timeout_ms <= 0:
         raise ValueError("timeout_ms must be positive")
+    if context_version not in ("v2", "v3"):
+        raise ValueError("context_version must be v2 or v3")
     verified = replay(episode, check_guardrails=check_guardrails)
     manifest = json.loads((episode / "manifest.json").read_text())
     stream_path = episode / "events.jsonl"
@@ -125,7 +129,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                 elapsed = None
                 if include_elapsed and episode_started_ms is not None:
                     elapsed = event["unix_ms"] - episode_started_ms
-                observation = curate(
+                build_context = curate_v3 if context_version == "v3" else curate
+                observation = build_context(
                     payload["state"], perception, previous_result,
                     manifest["mission"], event, history=completed,
                     elapsed_ms=elapsed)
@@ -212,7 +217,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
         "decision_points": proposals, "counts": counts,
         "guardrail_counts": guardrail_counts,
         "contract": {
-            "contract_version": (CONTRACT_VERSION_HISTORY if include_history
+            "contract_version": (CONTRACT_VERSION_CONTEXT if context_version == "v3"
+                                 else CONTRACT_VERSION_HISTORY if include_history
                                  else CONTRACT_VERSION),
             "vocabulary_version": VOCABULARY_VERSION,
             # The runtime renders the prompt, so its descriptor is the

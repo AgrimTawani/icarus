@@ -29,6 +29,7 @@ from python.dcm.contract import (
     DeadlineExceeded,
     assess_freshness,
     curate,
+    curate_v3,
     render_prompt,
     validate_proposal,
 )
@@ -62,7 +63,7 @@ class MissionMemory:
         return list(self.completed)
 
 
-def observe(client, memory, decision_index):
+def observe(client, memory, decision_index, context_version="v2"):
     """Build the bounded observation from live state and perception.
 
     Absent perception yields an empty dict rather than an exception, because
@@ -85,12 +86,22 @@ def observe(client, memory, decision_index):
         perception = {}
     now = int(time.time() * 1000)
     event = {"seq": decision_index, "unix_ms": now}
-    observation = curate(state, perception, None, memory.mission, event,
+    if context_version not in ("v2", "v3"):
+        raise ValueError("context_version must be v2 or v3")
+    builder = curate_v3 if context_version == "v3" else curate
+    observation = builder(state, perception, None, memory.mission, event,
                          history=memory.as_history())
-    reference = getattr(client, "mission_reference", lambda: {})()
+    reference = getattr(client, "mission_reference", dict)()
     if reference:
         observation["mission_reference"] = reference
     return observation
+
+
+def _observe_for_context(client, memory, decision_index, context_version):
+    """Preserve the legacy three-argument observation seam for V1/V2 callers."""
+    if context_version == "v2":
+        return observe(client, memory, decision_index)
+    return observe(client, memory, decision_index, context_version)
 
 
 def approve(proposal, mode, stream=sys.stdin, out=None):
@@ -120,10 +131,13 @@ def _describe(proposal):
 
 
 def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
-                max_decisions=MAX_DECISIONS, stream=sys.stdin, echo=print):
+                max_decisions=MAX_DECISIONS, stream=sys.stdin, echo=print,
+                context_version="v2"):
     """Run one mission to termination. Returns a summary dict."""
     if mode not in MODES:
         raise ValueError("mode must be one of " + ", ".join(MODES))
+    if context_version not in ("v2", "v3"):
+        raise ValueError("context_version must be v2 or v3")
     from icarus.v1 import action_pb2
 
     episode = getattr(client, "episode", None)
@@ -138,7 +152,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
               "declined": 0, "executed": 0, "failed": 0}
 
     for index in range(1, max_decisions + 1):
-        observation = observe(client, memory, index)
+        observation = _observe_for_context(client, memory, index, context_version)
         stale = assess_freshness(observation)
         if stale:
             counts["stale"] += 1
@@ -172,7 +186,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
 
         # The world may have moved while the model was thinking. Offline
         # replay could not surface this; a 13 s cold start can.
-        confirm = observe(client, memory, index)
+        confirm = _observe_for_context(client, memory, index, context_version)
         moved = assess_freshness(confirm)
         if moved:
             counts["stale"] += 1

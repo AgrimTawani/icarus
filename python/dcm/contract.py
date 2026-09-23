@@ -30,6 +30,9 @@ from typing import Protocol
 # every report so a result can never be read against the wrong contract.
 CONTRACT_VERSION = "dcm-contract-v1"
 CONTRACT_VERSION_HISTORY = "dcm-contract-v2-history"
+# V3 is opt-in while its prompt and macro experiments are evaluated. Existing
+# V1/V2 reports remain comparable and current callers keep their exact shapes.
+CONTRACT_VERSION_CONTEXT = "dcm-contract-v3-feedback"
 
 # How many completed actions the model may see. Bounded so a long mission
 # cannot crowd out the current state.
@@ -345,6 +348,40 @@ def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
         # actually supports.
         observation["mission_elapsed_ms"] = elapsed_ms
     return observation
+
+
+def curate_v3(state, perception, previous_result, mission, event, actions=ACTIONS,
+              history=None, elapsed_ms=None, macro_directory=None,
+              mission_metadata=None):
+    """Build the Phase-1 V2 context without changing the legacy contract.
+
+    The source is first curated by the existing allow-list, then enriched by
+    read-only context/macro/profile artifacts. No raw sensor payload, truth,
+    profile write, or execution interface reaches this function.
+    """
+    from pathlib import Path
+
+    from python.dcm.v2_context import build_context, load_macros
+    from python.dcm.v2_profiles import body, profiles
+
+    base = curate(state, perception, previous_result, mission, event,
+                  actions=actions, history=history, elapsed_ms=elapsed_ms)
+    root = Path(__file__).resolve().parents[2]
+    directory = (Path(macro_directory) if macro_directory is not None else
+                 root / "config" / "dcm" / "macros")
+    catalog = load_macros(directory, actions)
+    static = profiles()
+    context = build_context(base, catalog=catalog,
+                            mission_metadata=mission_metadata,
+                            body=body(), soul=static["soul"],
+                            world_facts=static["world_facts"])
+    context["contract_version"] = CONTRACT_VERSION_CONTEXT
+    # The hash must describe the final, model-visible object including the
+    # contract identity. Recompute after its deliberate V2 version bump.
+    from python.dcm.v2_context import digest
+    context["context_sha256"] = digest(
+        {key: value for key, value in context.items() if key != "context_sha256"})
+    return context
 
 
 SYSTEM_PROMPT = """\

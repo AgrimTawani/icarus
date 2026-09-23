@@ -14,21 +14,25 @@ quickly establish the truth of the repository.
    — component boundaries, authority and deployment design.
 6. [`architecture/SIMULATION-CONNECTIONS.md`](architecture/SIMULATION-CONNECTIONS.md)
    — Gazebo, SITL, MAVLink and sensor connections.
-7. [`architecture/DRONE-API-V1.md`](architecture/DRONE-API-V1.md) — Phase 8
+7. [`architecture/AIRSIM-SIMULATION.md`](architecture/AIRSIM-SIMULATION.md) —
+   separate experimental AirSim visual-simulation track and its boundary.
+8. [`architecture/DRONE-API-V1.md`](architecture/DRONE-API-V1.md) — Phase 8
    command, authority, state and extension contract.
-8. [`simulation/PHASE-8-ACCEPTANCE.md`](simulation/PHASE-8-ACCEPTANCE.md) —
+9. [`simulation/PHASE-8-ACCEPTANCE.md`](simulation/PHASE-8-ACCEPTANCE.md) —
    Drone API flight and injected-failure exit-gate evidence.
-9. [`simulation/PHASE-9-ACCEPTANCE.md`](simulation/PHASE-9-ACCEPTANCE.md) —
+10. [`simulation/PHASE-9-ACCEPTANCE.md`](simulation/PHASE-9-ACCEPTANCE.md) —
    headless live-LiDAR obstacle-avoidance evidence.
-10. [`guides/GETTING-STARTED.md`](guides/GETTING-STARTED.md) — recreate the local
+11. [`guides/GETTING-STARTED.md`](guides/GETTING-STARTED.md) — recreate the local
    environment.
-11. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
+12. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
    test and stop scenarios.
 
 For the current data and DCM work, continue with
 [`simulation/PHASE-10-EPISODES.md`](simulation/PHASE-10-EPISODES.md),
 [`architecture/DCM-OBSERVE-V1.md`](architecture/DCM-OBSERVE-V1.md) and
 [`architecture/DCM-MODEL-SELECTION.md`](architecture/DCM-MODEL-SELECTION.md).
+The implemented V2 planner-context and feedback architecture is documented in
+[`architecture/DCM-V2-FEEDBACK.md`](architecture/DCM-V2-FEEDBACK.md).
 The V2 research decision, including the AerialClaw adoption boundary, AirSim
 feasibility plan and Laya System-1 experiment, is recorded in
 [`architecture/V2-RESEARCH-AND-ARCHITECTURE-DECISION.md`](architecture/V2-RESEARCH-AND-ARCHITECTURE-DECISION.md).
