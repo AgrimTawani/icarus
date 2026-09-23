@@ -62,7 +62,8 @@ class AirSimScriptTests(unittest.TestCase):
             ROOT / "scripts/start-autonomy-airsim",
             ROOT / "scripts/airsim-sensor-bridge",
             ROOT / "scripts/airsim-doctor", ROOT / "scripts/fetch-airsim-blocks",
-            ROOT / "scripts/airsim-smoke", ROOT / "scripts/simulation/airsim/README.md",
+            ROOT / "scripts/airsim-smoke", ROOT / "scripts/view-airsim-camera",
+            ROOT / "scripts/simulation/airsim/README.md",
             ROOT / "scripts/simulation/gazebo/README.md", ROOT / "scripts/README.md",
             ROOT / "config/simulation/airsim/blocks-v1.8.0.json",
         ):

@@ -76,12 +76,14 @@ finite LiDAR points into a distinct C++ `AirSimLidarAdapter` in body FRD.
    `ArduCopter` vehicle and do not substitute `SimpleFlight`.
 3. Start the full dynamics/controller/sensor stack:
    `./scripts/start-airsim-stack --binary <Environment.sh>`.
-4. In another terminal run `./scripts/start-autonomy-airsim`, then use the
+4. Optionally open the passive RGB/depth ground view in another terminal with
+   `./scripts/view-airsim-camera`.
+5. In another terminal run `./scripts/start-autonomy-airsim`, then use the
    unchanged `./scripts/run-mission` client. `start-airsim` alone is a low-level
    Unreal/RPC diagnostic and is not flight-ready.
-5. Stop the exact recorded bridge, SITL service and Unreal group with
+6. Stop the exact recorded bridge, SITL service and Unreal group with
    `./scripts/stop-airsim` after the Drone API exits.
-6. Compare frozen scenarios against Gazebo; only a non-regressing result can
+7. Compare frozen scenarios against Gazebo; only a non-regressing result can
    justify expanding AirSim use. Gazebo remains the promotion baseline.
 
 ## Verified 2026-09-23

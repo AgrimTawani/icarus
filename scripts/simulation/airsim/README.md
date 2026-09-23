@@ -52,6 +52,7 @@ caused the binary to fall back to SimpleFlight.
 # Full ArduPilot stack, then Drone API in a second terminal.
 ./scripts/start-airsim-stack --binary third_party/airsim/blocks-v1.8.0-linux/Blocks/LinuxNoEditor/Blocks.sh
 ./scripts/airsim-smoke
+./scripts/view-airsim-camera
 ./scripts/start-autonomy-airsim
 ./scripts/run-mission --mission takeoff_hover_land --altitude 2 --hover-seconds 3
 
@@ -63,6 +64,12 @@ caused the binary to fall back to SimpleFlight.
 the main viewport. Do not pass `--nullrhi` for RGB/depth/segmentation tests:
 it disables rendering and image APIs. It is accepted only with `--no-vision`
 for explicitly non-visual throughput experiments.
+
+`./scripts/view-airsim-camera` opens a passive live grid with forward RGB and
+colorized planar depth from the off-screen AirSim API. Run it in its own
+terminal while the stack is active; press `q`, Escape, or Ctrl+C to close it.
+For a non-GUI capture test use
+`./scripts/view-airsim-camera --no-window --frames 3 --output /tmp/airsim-camera.png`.
 
 The adapter/conformance suite covers frames, units, timestamps, metadata,
 malformed packets, stale-sensor fail-closed behavior and proof that truth/raw
