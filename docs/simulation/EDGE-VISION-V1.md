@@ -1,6 +1,6 @@
 # Edge Autonomous Vision V1
 
-**Status:** implementation complete; simulation-only and experimental.  This
+**Status:** Phase-1 hardening complete; simulation-only and experimental. This
 document records the Version 1 boundary, operator workflow, verification, and
 known failures. It is not a real-aircraft readiness claim.
 
@@ -14,7 +14,8 @@ RTX 4050 Laptop GPU (6 GB VRAM) and 16 GB system RAM. It combines:
 - the existing Qwen3 4B Q4 GGUF through llama.cpp at a fixed 4096-token
   context for simulator-only DCM proposals;
 - pinned YOLO11n detection and per-camera IoU tracking;
-- on-demand SmolVLM-256M-Instruct qualitative inspection;
+- on-demand Qwen2-VL-2B-Instruct Q4 qualitative inspection, forced to CPU on
+  the 6 GB development host;
 - a passive, local forward/downward RGB-D camera grid; and
 - sealed episode evidence, deterministic replay, and an edge evidence report.
 
@@ -31,13 +32,13 @@ Run once, or again after an interrupted model/asset setup:
 ```
 
 It keeps all non-Git artifacts beneath `~/models/edge/` and writes
-`~/models/edge/MANIFEST.json`. The manifest pins the Qwen Q4 reuse, YOLO11n,
-the complete SmolVLM snapshot, and the local Gazebo actor asset by SHA-256.
+`~/models/edge/MANIFEST.json`. The manifest pins the Qwen flight-model Q4,
+YOLO11n, Qwen2-VL model/projector and local Gazebo actor asset by SHA-256.
 The actor is Fuel model `Mingfei/actor`, version 1, CC-BY-4.0; runtime worlds
 reference the pinned local copy and never download a Fuel resource.
 
 YOLO11n is an Ultralytics AGPL-3.0 dependency and is research-only pending a
-commercial-license or replacement decision. SmolVLM is Apache-2.0. See
+commercial-license or replacement decision. Qwen2-VL is Apache-2.0. See
 [`../reference/THIRD-PARTY.md`](../reference/THIRD-PARTY.md).
 
 ## Deterministic scenario and coordinate contract
@@ -64,8 +65,8 @@ The headless simulator publishes both mounted RGB-D image feeds:
 
 | Feed | Gazebo topic | RTP port | V1 role |
 | --- | --- | --- | --- |
-| Forward RGB-D | `/icarus/sensors/rgbd/image` | base port (default `5600`) | operator grid, supplemental YOLO coverage |
-| Downward RGB-D | `/icarus/sensors/rgbd_down/image` | base port + 1 (default `5601`) | operator grid, YOLO person-count source, landing geometry |
+| Forward RGB-D | `/icarus/sensors/rgbd/image` | base port (default `5600`) | operator grid, VLM inspection and primary YOLO count view |
+| Downward RGB-D | `/icarus/sensors/rgbd_down/image` | base port + 1 (default `5601`) | operator grid, supplemental YOLO coverage and landing geometry |
 
 `./scripts/view-camera` composes both RTP/H.264 feeds into a labeled passive
 grid. It sends no vehicle command and retains no recording.
@@ -79,9 +80,11 @@ the largest same-frame person observation from one camera. It never sums feeds
 or claims cross-camera re-identification. Observer evidence includes camera
 identity; pixels are never written into episode logs.
 
-SmolVLM accepts one bounded qualitative question, one image at a time, at most
-once every five seconds. It loads, infers, and releases CUDA memory by default.
-It has no routing, landing, or other flight authority.
+Qwen2-VL accepts one bounded qualitative question, one image at a time, at most
+once every five seconds. It loads, infers and releases the process per request.
+The edge profile explicitly disables CUDA and projector offload so it cannot
+evict or starve the flight DCM on this host. It has no routing, landing, or
+other flight authority.
 
 ## Operator workflow
 
@@ -100,7 +103,8 @@ Use four terminals after `SIMULATOR READY` is printed:
 # Terminal 4
 ./scripts/dcm-fly --runtime llama --role primary --mode autonomous \
   --profile edge-vision --context-length 4096 \
-  --mission "Arm, take off to 5 metres, fly to the known north building, orbit it at 7 metres, count unique people visible below for 20 seconds, return home, and land." \
+  --max-decisions 24 \
+  --mission "Arm, take off to 5 metres, fly north to the building, visually inspect it, orbit it, count all visible people, hover for 5 seconds, then return home and land." \
   --json
 ```
 
@@ -127,6 +131,15 @@ this distinction matters. Its flight actions completed and Phase 10 replay
 passed, but it had no `detect` action, observed zero people against four
 targets, and also requested an unsupported visual building count. It is a
 sealed integrity/safety artifact, **not** edge-mission acceptance evidence.
+
+The final acceptance episode `20260927T041123_0a62e3f27053` completed all nine
+actions. Qwen2-VL described the building, the reviewed orbit completed from the
+nearest safe entry point, and YOLO observed the scenario's four people from the
+forward feed across 44 frames. The requested hold and RTL completed, the edge
+report marked flight and semantic success, and strict complete replay covered
+3,367 records. Alternative prompt wording, building-hover-only and gusting-wind
+missions also passed in episodes `20260927T042122_6ecfa541aa24`,
+`20260927T042555_f1235131da86` and `20260927T043110_1dad8ed23b68`.
 
 ## Verification record
 
@@ -162,6 +175,14 @@ PYTHONPATH="$PWD" ./.venv/bin/python scripts/simulation/build_phase5_world.py ed
 # Episode integrity/replay of the retained historical episode
 ./scripts/test-phase10 logs/episodes/20260923T005945_3b38847cc6de
 # Result: passed; this verifies integrity/replay only, not semantic success.
+
+# Final Phase-1 hardening regression (2026-09-27)
+PYTHONPATH="$PWD" ./.venv/bin/python -m pytest -q tests/unit
+# Result: 294 passed, 161 subtests passed
+ctest --test-dir build/phase8 --output-on-failure
+# Result: 2/2 C++ suites passed
+./scripts/test-phase10 logs/episodes/20260927T041123_0a62e3f27053
+# Result: complete deterministic replay passed; 3,367 records
 ```
 
 A clean headless `edge-vision` session was also observed at V1 closeout. Its
@@ -169,14 +190,15 @@ active-session record named both RTP streams, and its `camera_stream.json`
 reported `ready`, zero invalid/push-failure frames, and approximately 14.2 FPS
 for each 640×480 feed. Gazebo, ArduPilot SITL, sensor recorder, and the
 dual-camera bridge were all supervised by the launcher. This is camera-stream
-readiness evidence; it is not a post-fix autonomous person-count result.
+readiness evidence. The retained 2026-09-27 acceptance episode above supplies
+the separate post-fix autonomous person-count result.
 
 A preflight on the actual GPU found an RTX 4050 Laptop GPU with 6,141 MiB
 VRAM and 5,008 MiB free. The prior combined Qwen Q4 + YOLO profile recorded
 4,413 MiB peak VRAM and 1,667.1 MiB peak RAM in the retained episode. Those
 numbers are measured historical evidence, not a guarantee for every driver or
-desktop workload. No post-coordinate-fix end-to-end autonomous count result is
-claimed until the operator reruns the acceptance workflow above.
+desktop workload. VLM CPU-only scheduling now avoids the earlier combined
+CUDA out-of-memory failure at the cost of longer qualitative-inspection latency.
 
 ## V1 limits and next evidence
 

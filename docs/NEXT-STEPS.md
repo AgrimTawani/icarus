@@ -1,10 +1,10 @@
 # Next Steps / Agent Handoff
 
-Status originally written 2026-09-19; current addendum 2026-09-21. Read this with [`MASTER-PLAN.md`](MASTER-PLAN.md) and
+Status originally written 2026-09-19; current addendum 2026-09-27. Read this with [`MASTER-PLAN.md`](MASTER-PLAN.md) and
 [`reference/PROJECT-STATUS.md`](reference/PROJECT-STATUS.md). This is a handoff,
 not a claim that Phase 10 or Phase 11 has passed its full exit gate.
 
-## Current addendum — 2026-09-21
+## Current addendum — 2026-09-27
 
 The historical sections below describe the route taken; they do not describe
 the current implementation state by themselves.
@@ -22,8 +22,12 @@ better recovery. The later compact prompt removed model-visible hashes, paths,
 empty facts, duplicate vocabulary and duplicate freshness/mission
 representations; its representative rendered size fell 41%. It has not
 inherited the old evaluation result. V3 is the CLI context default, with
-`--context v2` retained for comparison, but still needs the committed scorecard
-including three paired live Gazebo episodes.
+`--context v2` retained for comparison. Hardened prompt v8 now limits progress
+vocabulary to the active objective, enforces mission completion after inference
+and has passing live Gazebo evidence for alternative wording, visual building
+inspection, nearest-entry orbit, four-person forward-camera detection, building
+hover, gusting wind and strict replay. The larger frozen promotion campaign is
+still required before unattended use.
 
 AirSim has passed a real Drone API takeoff/hold/land and stale-LiDAR refusal.
 The optional AerialVLN v2 archive is digest-pinned and all 25 external city
@@ -39,11 +43,12 @@ evidence. The full closeout is
 
 The simulation-only edge-vision implementation is complete and has a dedicated
 closeout record at [`simulation/EDGE-VISION-V1.md`](simulation/EDGE-VISION-V1.md).
-It adds Qwen Q4/4096 edge configuration, pinned YOLO11n and SmolVLM artifacts,
+It adds Qwen Q4/4096 edge configuration, pinned YOLO11n and Qwen2-VL artifacts,
 the deterministic north-building/person scenario, sealed edge evidence,
 dual-camera grid streaming, and targeted tests. The retained early episode is
-replay-valid but semantic-count-invalid; rerun the documented acceptance mission
-after the ENU↔NED landmark correction before treating V1 as an acceptance pass.
+replay-valid but semantic-count-invalid. The corrected acceptance mission now
+passes in `20260927T041123_0a62e3f27053`; rerun the documented workflow after
+any material prompt, model, scenario or camera change.
 
 | Area | Current state | What remains before promotion |
 | --- | --- | --- |

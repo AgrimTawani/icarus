@@ -4,8 +4,8 @@
 
 The RTX 4050/6 GB profile is available as `edge-vision`. It reuses the pinned
 Qwen3 4B Q4 GGUF at a 4096 context, adds YOLO11n at 640 px and at most 5 FPS,
-and uses SmolVLM-256M-Instruct only on demand (one request per 5 seconds,
-load/infer/release by default). YOLO and VLM are structured evidence only;
+and uses Qwen2-VL-2B Q4 only on demand (one request per 5 seconds,
+CPU-only load/infer/release on this host). YOLO and VLM are structured evidence only;
 neither can command flight, select a landing site, or bypass the typed Drone
 API, guardrails, planner, safety supervisor, or Phase 10-12 evaluation gates.
 
@@ -17,12 +17,13 @@ depth/LiDAR/geometry. This profile makes no real-world-readiness claim.
 V1 closeout is recorded in
 [`../simulation/EDGE-VISION-V1.md`](../simulation/EDGE-VISION-V1.md). It
 documents the operator flow, model/asset provenance, ENU↔NED landmark mapping,
-dual-camera grid, total YOLO scheduling cap, test results, and retained failed
-count episode. The profile implementation is complete; a post-coordinate-fix
-end-to-end person-count acceptance result is still required before any success
-claim.
+dual-camera grid, total YOLO scheduling cap, test results and both failed and
+passing count evidence. The post-coordinate-fix end-to-end mission now passes:
+building inspection, reviewed orbit, four-person forward-camera detection,
+hold, RTL and strict replay completed in episode
+`20260927T041123_0a62e3f27053`.
 
-Last updated: 2026-09-23
+Last updated: 2026-09-27
 
 ## V2 Phase 1 status
 
@@ -33,12 +34,18 @@ macros, a closed reason-code vocabulary, automatically sealed feedback/review
 artifacts, suppressing circuit breaker, material state recheck, independent
 control-lease heartbeat and a frozen promotion scorecard. Audit hashes, paths,
 empty world-fact prose, macro prose and duplicate vocabulary/freshness fields
-no longer reach the model. The prior feedback prompt's paired 135-point
+no longer reach the model. Hardened `dcm-prompt-v8-active-vocabulary` exposes
+only the active objective's progress action plus bounded safety exits. Native
+heading confirmation, nearest-entry orbiting, a repeated-failure breaker and
+debounced launcher health close the observed live-loop failure modes. The
+prior feedback prompt's paired 135-point
 offline Gazebo evaluation improved recovery but regressed timeouts and latency;
 the machine gate returned `retain-v1`. The compact revision requires a fresh
-paired evaluation and remains unapproved for unattended promotion despite being
-the model-context default. V2 remains available through `--context v2` for
-historical comparisons.
+full paired promotion evaluation and remains unapproved for unattended
+promotion despite being the model-context default. It now has passing live
+Gazebo evidence across alternative wording, visual inspection, reviewed orbit,
+person count, building hover, gusting wind and strict replay. V2 remains
+available through `--context v2` for historical comparisons.
 
 The separate AirSim track runs pinned Blocks v1.8.0 headlessly with
 ArduCopter SITL, RGB/depth/LiDAR, the Icarus Drone API and a distinct C++ LiDAR
@@ -46,7 +53,7 @@ adapter. A real 2 m takeoff/hold/land passed, and sensor-bridge loss blocked
 preflight with `PERCEPTION_UNAVAILABLE`. The optional digest-pinned AirVLN v2
 install now adds all 25 CC-BY-NC city scenes. Default scene 6 executed the full
 prompt-driven building-inspection/hover/detection/RTL mission with live
-SmolVLM and YOLO evidence; episode `20260923T212718_6bf94baf9b39` is retained
+Qwen2-VL and YOLO evidence; episode `20260923T212718_6bf94baf9b39` is retained
 as integration proof, not count-accuracy proof, because the scene lacks reviewed
 crowd truth. It remains supplementary because cross-simulator
 frozen-scene/seed equivalence is not established. See
@@ -83,8 +90,9 @@ meet the defined unattended-flight threshold. Phase 12 now has replay-verified
 simulator MAVLink loss and latency evidence; the full scenario campaign and
 model-promotion gate are still open. Bounded semantic detection and a
 conservative downward depth landing assessment are implemented. Qwen2-VL-2B
-Q4 and its f16 visual projector are installed and load-tested, but no VLM tool
-is yet exposed to the DCM and physical depth calibration remains open.
+Q4 and its f16 visual projector are installed, exposed through the bounded
+`inspect_scene` action and live-tested on CPU; physical depth calibration
+remains open.
 
 | Capability | State | Evidence or source |
 | --- | --- | --- |
@@ -137,12 +145,12 @@ is yet exposed to the DCM and physical depth calibration remains open.
   `20260921T233529_6654203b2abc` passed integrity and guardrail replay, but its
   mission outcome is correctly **failed** because the requested orbit was not
   completed. This is safety/recovery evidence, not orbit-mission success.
-- Interactive semantic inspection is integrated into the DCM contract, but the
-  laptop's 6 GB GPU could not host Gazebo, the Qwen flight runtime and either
-  Grounding-DINO or Qwen2-VL together. Both semantic calls failed safely with
-  CUDA out-of-memory and no flight action. The current laptop requires a
-  CPU/offload scheduling policy for combined interactive vision tests, or a
-  larger cloud/onboard GPU.
+- An early interactive semantic run failed safely because the laptop's 6 GB
+  GPU could not host Gazebo, the Qwen flight runtime and Qwen2-VL together.
+  The edge profile now forces the VLM model and projector to CPU. The later
+  combined mission completed building inspection and four-person detection
+  without CUDA contention; the CPU VLM latency is accepted only for this
+  qualitative, rate-limited simulation tool.
 
 - The component-derived/single-sensor-model regression passed five consecutive
   flights with 0.967–0.984 real-time factor and clean teardown.
@@ -272,7 +280,8 @@ Latency: cold starts of 4257, 9370 and 13259 ms across sessions, against a
 cannot be accommodated by choosing a deadline; a deployed loop must warm itself
 before the mission begins.
 
-The Python unit suite, both C++ suites and the Phase 10 replay gate have passed
+The final Phase-1 hardening gate passed 294 Python tests plus 161 subtests, both
+C++ suites and complete deterministic replay of the 3,367-record visual mission
 against the current codebase. Phase 10's full physical-data exit gate and the
 Phase 11/12 model-promotion gates remain open. See
 [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the current handoff.

@@ -41,11 +41,15 @@ def build_request(action_pb2, action, arguments, context):
     if action == "return_home":
         return action_pb2.ReturnHomeRequest(context=context), 120
     if action == "goto":
+        heading = (action_pb2.HeadingPolicy(
+            mode=action_pb2.HEADING_MODE_ABSOLUTE,
+            heading_deg=arguments["heading_deg"])
+            if "heading_deg" in arguments else keep_heading)
         return action_pb2.GotoRequest(
             context=context,
             destination=local_position(action_pb2, arguments),
             acceptance_radius_m=1.5,
-            heading=keep_heading,
+            heading=heading,
             limits=action_pb2.ActionLimits(
                 maximum_ground_speed_mps=3.0,
                 minimum_clearance_m=2.5,

@@ -61,6 +61,8 @@ def main():
         raise RuntimeError("Could not subscribe to depth topic: " + args.topic)
     if not received.wait(args.timeout):
         raise TimeoutError("Timed out waiting for a depth frame")
+    node.unsubscribe(args.topic)
+    time.sleep(0.05)
     if "error" in result:
         raise RuntimeError(result["error"])
     args.output.parent.mkdir(parents=True, exist_ok=True)

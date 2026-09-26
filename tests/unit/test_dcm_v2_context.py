@@ -73,6 +73,14 @@ class V2ContextTests(unittest.TestCase):
         self.assertEqual(selected["selection_source"], "deterministic-intent")
         self.assertTrue(selected["model_policy"]["phases"])
 
+    def test_orbit_intent_uses_the_more_specific_macro(self):
+        root = Path(__file__).resolve().parents[2]
+        catalog = load_macros(root / "config/dcm/macros", ACTIONS)
+        selected = select_macro(
+            catalog,
+            mission="Inspect the north building, orbit it, and count four people")
+        self.assertEqual(selected["id"], "inspection-orbit")
+
     def test_mission_contract_replaces_repeated_reference_and_obligations(self):
         macro = {"id": "building-inspection", "allowed_actions": ["goto", "hold"],
                  "model_policy": {"phases": ["navigate", "stabilize"],
@@ -91,6 +99,35 @@ class V2ContextTests(unittest.TestCase):
         self.assertEqual(contract["target"]["id"], "office")
         self.assertEqual(contract["pending"], ["building_hover"])
         self.assertEqual(contract["permitted_actions"], ["goto", "hold"])
+        self.assertEqual(contract["active_objective_id"], "building_hover")
+        self.assertEqual(contract["objectives"][0]["allowed_progress_actions"],
+                         ["goto"])
+
+    def test_mission_contract_carries_reviewed_orbit_geometry(self):
+        orbit = {"center_north_m": 18, "center_east_m": 0, "radius_m": 5,
+                 "altitude_agl_m": 7, "revolutions": 1}
+        contract = compile_mission_contract(
+            "orbit the building", {"id": "inspection-orbit",
+                                    "allowed_actions": ["orbit"]},
+            {"primary_target_id": "north_building", "known_landmarks": [{
+                "id": "north_building", "orbit": orbit}]},
+            {"requirements": [{"id": "inspection_orbit", "status": "pending",
+                               "reviewed_orbit": orbit}]})
+        self.assertEqual(contract["objectives"][0]["reviewed_orbit"], orbit)
+        self.assertEqual(contract["objectives"][0]["allowed_progress_actions"],
+                         ["orbit"])
+
+    def test_staged_visual_objective_exposes_one_unambiguous_progress_action(self):
+        waypoint = {"north_m": 4, "east_m": 0, "altitude_agl_m": 4}
+        contract = compile_mission_contract(
+            "inspect building", None, {}, {"requirements": [{
+                "id": "building_visual_inspection", "status": "pending",
+                "reviewed_waypoint": waypoint,
+                "staged_at_reviewed_waypoint": True}]})
+        self.assertEqual(contract["active_objective_id"],
+                         "building_visual_inspection")
+        self.assertEqual(contract["objectives"][0]["allowed_progress_actions"],
+                         ["inspect_scene"])
 
     def test_final_hash_covers_late_model_visible_fields(self):
         context = build_context({"mission": "survey", "state": {},
@@ -135,6 +172,22 @@ class V2ContextTests(unittest.TestCase):
         self.assertNotIn("mission_macro", visible["user"])
         self.assertIn("mission_contract", visible["user"])
         self.assertLess(len(prompt["system"]) + len(prompt["user"]), 7000)
+
+    def test_v3_prompt_hides_actions_that_cannot_advance_active_objective(self):
+        context = curate_v3(
+            {"armed": True, "landed": False, "observed_at_unix_ms": 1000},
+            {"observed_at_unix_ms": 1000, "local_map_age_ms": 0,
+             "overall": "HEALTH_LEVEL_HEALTHY"}, None, "count people",
+            {"seq": 1, "unix_ms": 1000}, history=[])
+        context["mission_contract"] = {
+            "active_objective_id": "person_count",
+            "objectives": [{
+                "id": "person_count", "allowed_progress_actions": ["goto"]}]}
+        prompt = render_prompt(context)
+        self.assertIn('- "goto":', prompt["system"])
+        self.assertIn('- "return_home":', prompt["system"])
+        self.assertNotIn('- "detect":', prompt["system"])
+        self.assertNotIn('- "takeoff":', prompt["system"])
 
     def test_v3_material_recheck_uses_compact_state_summary(self):
         before = {"state": {}, "state_summary": {

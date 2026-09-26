@@ -41,7 +41,7 @@ HISTORY_LIMIT = 12
 # presenting the payload as an abstract JSON exercise.  It is a model-visible
 # change and must therefore travel with every report.
 PROMPT_VERSION = "dcm-prompt-v6-mission-evidence"
-PROMPT_VERSION_CONTEXT = "dcm-prompt-v6-compact"
+PROMPT_VERSION_CONTEXT = "dcm-prompt-v8-active-vocabulary"
 # The optional ending variant adds extra terminal emphasis above the base v2
 # embodiment guidance. It remains separately versioned for fair comparison.
 PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
@@ -90,6 +90,9 @@ ACTIONS = {
         },
         "altitude_agl_m": {
             "kind": "number", "required": True, "minimum": 0.5, "maximum": 25.0,
+        },
+        "heading_deg": {
+            "kind": "number", "required": False, "minimum": 0.0, "maximum": 360.0,
         },
     },
     "orbit": {
@@ -524,15 +527,20 @@ Rules:
 - Choose exactly one action from the list above.
 - Treat ``mission_contract.objectives`` as completion criteria, not executable
   commands. Independently choose the next legal action.
-- When ``mission_contract.permitted_actions`` exists, use only that subset;
-  hold, return_home, land and none remain available as safety exits.
+- When ``mission_contract.permitted_actions`` exists, use only that subset.
+  Recovery actions remain available only when live evidence makes progress unsafe.
 - "arguments" is always an object. Use {{}} when the action takes no arguments.
 - Never invent an action, an argument, or a unit.
 - Respect current flight state: arm before takeoff; never arm or take off while
   airborne; navigate or land only after takeoff.
 - Use only reviewed coordinates in ``mission_contract.target`` or objectives.
-- Complete IDs in ``mission_contract.pending`` in objective order; verify history
-  before return_home, land or none.
+- Work only on ``mission_contract.active_objective_id``. First move to its
+  reviewed waypoint when ``staged_at_reviewed_waypoint`` is false; semantic
+  tools inspect only the camera view at the aircraft's current pose.
+- Use only the active objective's ``allowed_progress_actions`` while evidence
+  is safe. For a building inspection ask about the structure, not object counts.
+- A terminal action (return_home, land, or none) is invalid while an earlier
+  objective remains pending unless live evidence requires safety recovery.
 - If airborne evidence is unavailable or progress is unsafe, choose hold or
   return_home. If landed with no pending objective, choose none.
 - If no action is appropriate or the situation is unclear, reply with \
@@ -566,18 +574,32 @@ def render_prompt(observation, actions=ACTIONS, ending_guidance=False):
     would then be rejected.
     """
     v3 = observation.get("context_version") == "dcm-context-v3-compact"
+    prompt_actions = actions
+    if v3:
+        contract = observation.get("mission_contract") or {}
+        active_id = contract.get("active_objective_id")
+        active = next((item for item in contract.get("objectives", [])
+                       if item.get("id") == active_id), {})
+        progress = set(active.get("allowed_progress_actions") or ())
+        if progress:
+            # The validator and mission gate still own enforcement. Showing
+            # only the current progress vocabulary plus explicit safety exits
+            # prevents the model from fixating on a later semantic action and
+            # also removes irrelevant prompt tokens.
+            visible = progress | {"none", "hold", "return_home", "land"}
+            prompt_actions = {name: specification
+                              for name, specification in actions.items()
+                              if name in visible}
     response_contract = (
         'The object has exactly three keys: "action", "arguments", and '
         '"reason_code". reason_code is one of: '
         + ", ".join(sorted(REASON_CODES)) + '. '
-        'All action arguments must appear in "arguments". '
-        'Example: {"action":"takeoff","arguments":{"target_altitude_agl_m":3},'
-        '"reason_code":"STATE_TRANSITION_REQUIRED"}'
+        'All action arguments must appear in "arguments".'
         if v3 else
         'The object has exactly two keys: "action" and "arguments".')
     system_template = SYSTEM_PROMPT_COMPACT if v3 else SYSTEM_PROMPT_LEGACY
     system = system_template.format(
-            vocabulary=render_vocabulary(actions),
+            vocabulary=render_vocabulary(prompt_actions),
             response_contract=response_contract,
             no_action=('{"action":"none","arguments":{},'
                        '"reason_code":"NO_SAFE_ACTION"}'

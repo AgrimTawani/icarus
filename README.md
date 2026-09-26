@@ -14,7 +14,9 @@ approval or closed-loop modes; it remains unapproved for unattended or physical
 flight. Compact V3 is the default DCM context and adds one compiled mission
 contract, semantic live BODY facts, three reviewed operating principles,
 enforced mission macros, sealed feedback artifacts and process-heartbeat
-recovery without giving the model a new control path.
+recovery without giving the model a new control path. The hardened V3 prompt
+shows the model only the current objective's progress action plus bounded
+safety exits, while deterministic code verifies mission order and completion.
 
 ## Start Here
 
@@ -42,10 +44,11 @@ The complete documentation index is [docs/README.md](docs/README.md).
 The operator's mission text remains intact while deterministic code compiles
 reviewed references, completion evidence and one selected soft-skill macro into
 a single compact `MissionContract`. The model sees three operating principles,
-semantic live BODY facts, one freshness summary and the current state—not
-profile hashes, filesystem paths, empty world-fact prose or repeated action
-lists. The local DCM may propose one typed action; validation, authority,
-safety, flight control and motor mixing remain outside the language model.
+semantic live BODY facts, one freshness summary, current state and only the
+active objective's action vocabulary—not profile hashes, filesystem paths,
+empty world-fact prose or repeated action lists. The local DCM may propose one
+typed action; validation, authority, safety, flight control and motor mixing
+remain outside the language model.
 See the [V2 Phase 1 implementation](docs/architecture/V2-PHASE1-IMPLEMENTATION.md)
 for the corresponding evidence and limitations.
 
@@ -104,8 +107,12 @@ unattended flight. V2 Phase 1's AerialClaw-inspired candidate and AirSim
 ArduCopter track are implemented and tested. V3 is now the operator-selected
 default so live runs receive the compact reviewed context; `--context v2`
 remains available for historical comparisons. This does not waive promotion:
-the earlier feedback prompt regressed timeout/latency, and the compact revision
-still needs frozen replay and paired live Gazebo evidence. It is not approved
-for unattended flight. Simulation realism still requires as-built validation. See
+the earlier feedback prompt regressed timeout/latency. The hardened compact
+revision now has live Gazebo evidence for building inspection, reviewed orbit,
+four-person detection from the forward camera, hover, RTL, gusting wind and
+strict deterministic replay. It is still not approved for unattended or
+physical flight; the full frozen promotion campaign remains open. AirSim's
+packaged city uses a generic pawn, while custom Icarus7 Unreal compilation and
+wind acceptance remain open. Simulation realism still requires as-built validation. See
 [PROJECT-STATUS.md](docs/reference/PROJECT-STATUS.md) for exact evidence and
 known limitations.

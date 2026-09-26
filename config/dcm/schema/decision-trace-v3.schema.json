@@ -16,6 +16,7 @@
     },
     "status": {"type": "string"},
     "error": {"type": ["string", "null"]},
+    "result": {"type": ["string", "object", "null"]},
     "validator_verdict": {"type": ["string", "null"]},
     "guardrail": {"type": ["object", "null"]},
     "executed": {"type": "boolean"},

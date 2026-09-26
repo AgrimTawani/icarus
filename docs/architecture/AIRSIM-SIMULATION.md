@@ -101,7 +101,7 @@ Each calibrated city scene has a separate reviewed mission-reference JSON. It
 names a primary building and an explicit local-NED hover waypoint. A prompt such as “check that building, hover
 over it, and count no. of people” must produce successful `inspect_scene`,
 `goto`, `hold` and `detect(["person"])` evidence in the requested order before
-landing. SmolVLM supplies the qualitative building description and YOLO11n
+landing. Qwen2-VL supplies the qualitative building description and YOLO11n
 supplies the visible-person count. Both are read-only perception tools.
 
 AirVLN scenes are visually rich research worlds, not deterministic crowd

@@ -10,8 +10,8 @@
   "wind": {"enabled": false, "speed_m_s": 0, "direction_deg": 0, "rise_time_s": 0, "gust_amplitude_fraction": 0, "gust_period_s": 0, "direction_swing_deg": 0, "direction_period_s": 0, "operational_limit_m_s": 6},
   "obstacles": [
     {"name": "north_building", "type": "building", "center_m": [0, 18, 3], "size_m": [8, 8, 6]},
-    {"name": "north_wall_west", "type": "wall", "center_m": [-8, 12, 1.5], "size_m": [7, 0.4, 3]},
-    {"name": "north_tree_east", "type": "tree", "center_m": [8, 25, 0], "radius_m": 0.35, "height_m": 5, "canopy_radius_m": 2, "canopy_collision": "enabled"}
+    {"name": "north_wall_west", "type": "wall", "center_m": [-16, 10, 1.5], "size_m": [7, 0.4, 3]},
+    {"name": "north_tree_east", "type": "tree", "center_m": [15, 30, 0], "radius_m": 0.35, "height_m": 5, "canopy_radius_m": 2, "canopy_collision": "enabled"}
   ],
   "targets": [
     {"id": "person_01", "class": "person", "center_m": [-5, 12, 0], "height_m": 1.8, "radius_m": 0.28, "animated": false, "visual_asset": "gazebo_actor_v1"},
@@ -28,5 +28,5 @@
   "mission": {"type": "takeoff_hover_land", "altitude_m": 3, "hover_s": 10},
   "maximum_duration_s": 240,
   "success": {"expected_outcome": "pass", "maximum_drift_m": 0.30, "maximum_tilt_deg": 10, "minimum_real_time_factor": 0.8},
-  "ground_truth": {"known_landmarks": [{"id": "north_building", "local_ned_m": [18, 0, -3], "semantic_source": "scenario_commit"}], "unique_person_count": 4, "count_window_s": 20, "routes": [{"name": "safe_north", "clearance_m": 3, "waypoints_enu_m": [[0, 0, 5], [0, 8, 5], [0, 14, 7], [0, 18, 7]]}]}
+  "ground_truth": {"primary_target_id": "north_building", "known_landmarks": [{"id": "north_building", "local_ned_m": [18, 0, -3], "inspection_waypoint": {"north_m": 4, "east_m": 0, "altitude_agl_m": 4, "heading_deg": 0}, "person_observation_waypoint": {"north_m": 4, "east_m": 0, "altitude_agl_m": 4, "heading_deg": 0}, "hover_waypoint": {"north_m": 18, "east_m": 0, "altitude_agl_m": 9}, "orbit": {"center_north_m": 18, "center_east_m": 0, "radius_m": 10, "altitude_agl_m": 7, "revolutions": 1}, "semantic_source": "scenario_commit"}], "unique_person_count": 4, "count_window_s": 20, "routes": [{"name": "safe_north", "clearance_m": 3, "waypoints_enu_m": [[0, 0, 5], [0, 4, 4], [0, 8, 5], [0, 14, 7], [0, 18, 7]]}]}
 }

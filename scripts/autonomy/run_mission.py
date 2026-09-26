@@ -42,20 +42,45 @@ TERMINAL = {
 
 def _asks_count_of(text, noun):
     """Match an explicit count request, not a nearby unrelated noun."""
-    return bool(re.search(r"\bcount(?:\s+(?:the|a|an))?(?:\s+(?:number|amount|no\.?))?(?:\s+of)?(?:\s+unique)?\s+"
-                          + re.escape(noun) + r"\b", text.lower()))
+    normalized = re.sub(r"\bno\.", "number", text.lower())
+    # Natural operator requests often insert useful qualifiers ("all visible",
+    # "unique", "in front of the building") between the counting verb and
+    # noun. Keep the match within one clause so an unrelated noun in a later
+    # instruction cannot silently create a detector obligation.
+    direct = (r"\b(?:count|determine|identify|report)\b"
+              r"[^.!?;,]{0,80}\b" + re.escape(noun) + r"\b")
+    how_many = r"\bhow\s+many\s+" + re.escape(noun) + r"\b"
+    return bool(re.search(direct, normalized) or re.search(how_many, normalized))
+
+
+def _asks_person_detection(text):
+    return bool(re.search(
+        r"\bdetect\b[^.!?;,]{0,50}\b(?:people|person)\b", text.lower()))
 
 
 def _asks_building_inspection(text):
-    return bool(re.search(
-        r"\b(?:check|inspect|examine|observe|survey|look\s+at)\b[^.]{0,80}"
-        r"\b(?:building|structure|tower)\b", text.lower()))
+    normalized = text.lower()
+    inspection = re.search(
+        r"\b(?:check|detect|inspect|examine|observe|survey|look\s+at)\b",
+        normalized)
+    target = re.search(r"\b(?:building|structure|tower)\b", normalized)
+    # Resolve a simple reviewed-target pronoun such as "fly to the building,
+    # visually inspect it". The target still has to be named by the operator;
+    # this does not infer arbitrary scene objects.
+    return bool(inspection and target)
 
 
 def _asks_hover_over_building(text):
     return bool(re.search(
         r"\bhover\b[^.]{0,50}\b(?:over|above)\b[^.]{0,30}"
         r"\b(?:it|building|structure|tower)\b", text.lower()))
+
+
+def _requested_hold_duration_ms(text):
+    match = re.search(
+        r"\b(?:hold(?:\s+position)?(?:\s+there)?|hover(?:\s+there)?)\s+for\s+"
+        r"(\d+(?:\.\d+)?)\s*seconds?\b", text.lower())
+    return int(float(match.group(1)) * 1000) if match else None
 
 
 class MissionClient:
@@ -153,8 +178,10 @@ class MissionClient:
                     "detector_classes": ["person"],
                     "known_landmarks_are_not_detector_classes": True,
                 }}
-        if reference.get("primary_target_id"):
-            result["primary_target_id"] = reference["primary_target_id"]
+        primary_target_id = reference.get(
+            "primary_target_id", truth.get("primary_target_id"))
+        if primary_target_id:
+            result["primary_target_id"] = primary_target_id
         return result
 
     def mission_obligations(self, mission, history, observation):
@@ -180,10 +207,19 @@ class MissionClient:
                                  "target_altitude_agl_m":
                                      float(altitude.group(1)) if altitude else None})
         if _asks_building_inspection(mission):
+            waypoint = (primary or {}).get("inspection_waypoint")
+            goto_index = next((index for index, item in enumerate(successful_items)
+                               if self._reached_waypoint(item, waypoint)), None)
+            inspected = any(
+                item.get("action") == "inspect_scene" and
+                (not waypoint or (goto_index is not None and index > goto_index))
+                for index, item in enumerate(successful_items))
             requirements.append({"id": "building_visual_inspection",
-                                 "status": "satisfied" if "inspect_scene" in successful
-                                 else "pending", "target_id": reference.get(
-                                     "primary_target_id")})
+                                 "status": "satisfied" if inspected else "pending",
+                                 "target_id": reference.get("primary_target_id"),
+                                 "reviewed_waypoint": waypoint,
+                                 "staged_at_reviewed_waypoint":
+                                     goto_index is not None if waypoint else None})
         if _asks_hover_over_building(mission):
             waypoint = (primary or {}).get("hover_waypoint")
             def reached_reviewed_waypoint(item):
@@ -203,6 +239,8 @@ class MissionClient:
             requirements.append({"id": "building_hover",
                                  "status": "satisfied" if hold_after else "pending",
                                  "reviewed_waypoint": waypoint,
+                                 "staged_at_reviewed_waypoint":
+                                     goto_index is not None if waypoint else None,
                                  "duration_ms": int(float(seconds.group(1)) * 1000)
                                  if seconds else 3000})
             evidence_start = (next((index for index, action in enumerate(successful)
@@ -210,13 +248,45 @@ class MissionClient:
                                     and index > goto_index), -1) + 1)
         else:
             evidence_start = 0
+        if re.search(r"\borbit\b", mission.lower()):
+            orbit = (primary or {}).get("orbit")
+            orbit_index = next((index for index, item in enumerate(successful_items)
+                                if item.get("action") == "orbit"), None)
+            requirements.append({"id": "inspection_orbit",
+                                 "status": "satisfied" if orbit_index is not None
+                                 else "pending", "reviewed_orbit": orbit})
+            if orbit_index is not None:
+                evidence_start = max(evidence_start, orbit_index + 1)
         asks_people = (_asks_count_of(mission, "people") or
-                       _asks_count_of(mission, "person"))
+                       _asks_count_of(mission, "person") or
+                       _asks_person_detection(mission))
         if asks_people:
+            waypoint = (primary or {}).get("person_observation_waypoint")
+            staging_index = next(
+                (index for index, item in enumerate(successful_items)
+                 if index >= evidence_start and self._reached_waypoint(item, waypoint)),
+                None)
+            count_start = (staging_index + 1 if staging_index is not None
+                           else evidence_start if not waypoint else len(successful_items))
             requirements.append({"id": "person_count",
                                  "status": "satisfied"
-                                 if "detect" in successful[evidence_start:] else "pending",
-                                 "detector_classes": ["person"]})
+                                 if "detect" in successful[count_start:] else "pending",
+                                 "detector_classes": ["person"],
+                                 "reviewed_waypoint": waypoint,
+                                 "staged_at_reviewed_waypoint":
+                                     staging_index is not None if waypoint else None})
+        hold_duration_ms = _requested_hold_duration_ms(mission)
+        if hold_duration_ms is not None:
+            hold_start = next(
+                (index + 1 for index, item in enumerate(successful_items)
+                 if item.get("action") == "detect"), 0) if asks_people else 0
+            held = any(item.get("action") == "hold" and
+                       int((item.get("arguments") or {}).get("duration_ms", 0)) >=
+                       hold_duration_ms
+                       for item in successful_items[hold_start:])
+            requirements.append({"id": "hold_position",
+                                 "status": "satisfied" if held else "pending",
+                                 "duration_ms": hold_duration_ms})
         if re.search(r"\breturn\s+(?:to\s+)?home\b", mission.lower()):
             requirements.append({"id": "return_home",
                                  "status": "satisfied" if "return_home" in successful
@@ -228,6 +298,15 @@ class MissionClient:
                 "pending": [item["id"] for item in requirements
                             if item["status"] == "pending"],
                 "authority": "completion_evidence_only"}
+
+    @staticmethod
+    def _reached_waypoint(item, waypoint, tolerance_m=1.0):
+        if not waypoint or item.get("action") != "goto":
+            return False
+        arguments = item.get("arguments") or {}
+        return all(type(arguments.get(key)) in (int, float) and
+                   abs(float(arguments[key]) - float(waypoint[key])) <= tolerance_m
+                   for key in ("north_m", "east_m", "altitude_agl_m"))
 
     # Compatibility for older callers; semantics are now obligation-only.
     mission_guidance = mission_obligations
@@ -288,15 +367,18 @@ class MissionClient:
         return profile
 
     def assess_mission_completion(self, mission, executed):
-        """Score requested edge evidence after landing without exposing it to the model."""
-        if not self.simulation_session or self.vision_profile != "edge-vision":
+        """Score requested evidence after landing without exposing it to the model."""
+        if not self.simulation_session:
             return None
         text = mission.lower()
-        asks_people = _asks_count_of(text, "people") or _asks_count_of(text, "person")
+        asks_people = (_asks_count_of(text, "people") or
+                       _asks_count_of(text, "person") or
+                       _asks_person_detection(text))
         asks_buildings = _asks_count_of(text, "building") or _asks_count_of(text, "buildings")
         asks_building_inspection = _asks_building_inspection(text)
         asks_hover_over_building = _asks_hover_over_building(text)
         asks_return_home = bool(re.search(r"\breturn\s+(?:to\s+)?home\b", text))
+        hold_duration_ms = _requested_hold_duration_ms(text)
         report = {"required": [], "satisfied": [], "reasons": []}
         person_results = [item.get("result") for item in executed
                           if item["action"] == "detect" and item["outcome"] == "SUCCEEDED"
@@ -335,31 +417,64 @@ class MissionClient:
                     report["verification"] = "inconclusive_no_airsim_ground_truth"
                     report["reasons"].append(
                         "AirSim person count cannot be verified without reviewed scene ground truth")
+            reference = self.mission_reference()
+            primary = next((item for item in reference.get("known_landmarks", [])
+                            if item.get("id") == reference.get("primary_target_id")), None)
+            observation_waypoint = (primary or {}).get("person_observation_waypoint")
+            detect_index = max((index for index, item in enumerate(executed)
+                                if item["action"] == "detect" and
+                                item["outcome"] == "SUCCEEDED" and
+                                "person" in item.get("arguments", {}).get("classes", [])),
+                               default=None)
+            if observation_waypoint:
+                report["required"].append("person_observation_waypoint")
+                orbit_before = max((index for index, item in enumerate(executed)
+                                    if item["action"] == "orbit" and
+                                    item["outcome"] == "SUCCEEDED"), default=-1)
+                stage_index = next((index for index, item in enumerate(executed)
+                                    if item.get("outcome") == "SUCCEEDED" and
+                                    index > orbit_before and
+                                    self._reached_waypoint(item, observation_waypoint)), None)
+                if stage_index is not None and detect_index is not None and \
+                        detect_index > stage_index:
+                    report["satisfied"].append("person_observation_waypoint")
+                else:
+                    report["reasons"].append(
+                        "person count was not collected after the reviewed camera waypoint")
             if "orbit" in text:
+                report["required"].append("inspection_orbit")
                 orbit_index = next((index for index, item in enumerate(executed)
                                     if item["action"] == "orbit" and item["outcome"] == "SUCCEEDED"), None)
-                detect_index = next((index for index, item in enumerate(executed)
-                                     if item["action"] == "detect" and item["outcome"] == "SUCCEEDED"
-                                     and "person" in item.get("arguments", {}).get("classes", [])), None)
                 if orbit_index is None or detect_index is None or detect_index < orbit_index:
                     report["reasons"].append("requested person count must be collected after the requested orbit")
+                else:
+                    report["satisfied"].append("inspection_orbit")
         if asks_buildings:
             report["required"].append("visual_building_count")
             report["reasons"].append(
                 "stock YOLO11n has no building class; use a committed building landmark instead")
         if asks_building_inspection:
             report["required"].append("building_visual_inspection")
-            inspected = [item.get("result") for item in executed
-                         if item["action"] == "inspect_scene"
-                         and item["outcome"] == "SUCCEEDED"]
-            if inspected:
+            reference = self.mission_reference()
+            primary = next((item for item in reference.get("known_landmarks", [])
+                            if item.get("id") == reference.get("primary_target_id")), None)
+            waypoint = (primary or {}).get("inspection_waypoint")
+            goto_index = next((index for index, item in enumerate(executed)
+                               if item.get("outcome") == "SUCCEEDED" and
+                               self._reached_waypoint(item, waypoint)), None)
+            inspect_index = next((index for index, item in enumerate(executed)
+                                  if item["action"] == "inspect_scene" and
+                                  item["outcome"] == "SUCCEEDED" and
+                                  (not waypoint or (goto_index is not None and
+                                                    index > goto_index))), None)
+            if inspect_index is not None:
                 report["satisfied"].append("building_visual_inspection")
             else:
                 report["reasons"].append(
-                    "requested building inspection has no successful inspect_scene evidence")
+                    "requested building inspection lacks inspect_scene evidence at its reviewed waypoint")
         if asks_hover_over_building:
             report["required"].append("building_hover")
-            reference = self.simulation_session.get("mission_reference", {})
+            reference = self.mission_reference()
             primary_id = reference.get("primary_target_id")
             primary = next((item for item in reference.get("known_landmarks", [])
                             if item.get("id") == primary_id), None)
@@ -393,6 +508,21 @@ class MissionClient:
                         if not detect_after:
                             report["reasons"].append(
                                 "requested person count was not observed after the building hover")
+        if hold_duration_ms is not None:
+            report["required"].append("hold_position")
+            detect_index = max((index for index, item in enumerate(executed)
+                                if item["action"] == "detect" and
+                                item["outcome"] == "SUCCEEDED"), default=-1)
+            held = any(index > detect_index and item["action"] == "hold" and
+                       item["outcome"] == "SUCCEEDED" and
+                       int(item.get("arguments", {}).get("duration_ms", 0)) >=
+                       hold_duration_ms
+                       for index, item in enumerate(executed))
+            if held:
+                report["satisfied"].append("hold_position")
+            else:
+                report["reasons"].append(
+                    f"requested {hold_duration_ms} ms hold did not complete after evidence collection")
         if asks_return_home:
             report["required"].append("return_home")
             if any(item["action"] == "return_home" and item["outcome"] == "SUCCEEDED"
@@ -410,10 +540,19 @@ class MissionClient:
                        "--output", str(output), "--camera", camera]
             source = "airsim_ephemeral_capture"
         else:
+            topics = {
+                "0": ("forward_rgbd", "/icarus/sensors/rgbd/image"),
+                "forward_rgbd": ("forward_rgbd", "/icarus/sensors/rgbd/image"),
+                "3": ("downward_rgbd", "/icarus/sensors/rgbd_down/image"),
+                "downward_rgbd": ("downward_rgbd", "/icarus/sensors/rgbd_down/image"),
+            }
+            if camera not in topics:
+                raise ValueError("Gazebo camera must be 0/forward_rgbd or 3/downward_rgbd")
+            camera_id, topic = topics[camera]
             command = [str(ROOT / "scripts/capture-camera-frame"),
                        "--output", str(output),
-                       "--topic", "/icarus/sensors/rgbd_down/image"]
-            source = "gazebo_ephemeral_capture"
+                       "--topic", topic]
+            source = f"gazebo_{camera_id}_ephemeral_capture"
         subprocess.run(command, cwd=ROOT, check=True, timeout=15,
                        capture_output=True, text=True)
         return source
@@ -608,11 +747,17 @@ class MissionClient:
             output = Path(temporary) / ("frame" + suffix)
             source = self._capture_rgb(output)
             if self.vision_profile == "edge-vision":
-                from python.perception.edge_vision import RateLimiter, inspect_smolvlm
+                from python.perception.edge_vision import RateLimiter
                 if self.edge_vlm_limiter is None:
                     self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
-                result = inspect_smolvlm(output, question, Path.home() / "models/edge/MANIFEST.json",
-                                         self.edge_vlm_limiter)
+                self.edge_vlm_limiter.admit()
+                # Keep the flight LLM on the 6 GB GPU. The stronger pinned
+                # Qwen2-VL model runs CPU-offloaded and releases after this one
+                # bounded question, avoiding VRAM contention and the inaccurate
+                # 256M-model answers observed during live acceptance.
+                result = inspect_image(
+                    output, question, Path.home() / "models/edge/MANIFEST.json",
+                    timeout_s=45.0, gpu_layers=0)
             else:
                 result = inspect_image(output, question, Path.home() / "models/vision/MANIFEST.json")
         result["image"]["source"] = source

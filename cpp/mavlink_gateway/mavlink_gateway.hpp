@@ -35,6 +35,7 @@ class MavlinkGateway {
   [[nodiscard]] virtual CommandResult Arm(bool arm) = 0;
   [[nodiscard]] virtual CommandResult Takeoff(double altitude_agl_m) = 0;
   [[nodiscard]] virtual CommandResult SetMode(std::uint32_t custom_mode) = 0;
+  [[nodiscard]] virtual CommandResult SetYaw(double heading_deg) = 0;
   virtual bool GotoGlobal(const v1::GeoPosition& position) = 0;
   virtual bool GotoLocal(const v1::LocalPositionNed& position) = 0;
 };
@@ -53,6 +54,7 @@ class ArdupilotGateway final : public MavlinkGateway {
   [[nodiscard]] CommandResult Arm(bool arm) override;
   [[nodiscard]] CommandResult Takeoff(double altitude_agl_m) override;
   [[nodiscard]] CommandResult SetMode(std::uint32_t custom_mode) override;
+  [[nodiscard]] CommandResult SetYaw(double heading_deg) override;
   bool GotoGlobal(const v1::GeoPosition& position) override;
   bool GotoLocal(const v1::LocalPositionNed& position) override;
 

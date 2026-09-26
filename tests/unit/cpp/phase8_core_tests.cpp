@@ -46,10 +46,15 @@ class FakeGateway final : public icarus::mavlink_gateway::MavlinkGateway {
     last_mode = mode;
     return {true, false, 0, "accepted"};
   }
+  [[nodiscard]] icarus::mavlink_gateway::CommandResult SetYaw(double heading) override {
+    last_heading = heading;
+    return {true, false, 0, "accepted"};
+  }
   bool GotoGlobal(const icarus::v1::GeoPosition&) override { return true; }
   bool GotoLocal(const icarus::v1::LocalPositionNed&) override { return true; }
   std::atomic<int> mode_commands{0};
   std::atomic<std::uint32_t> last_mode{0};
+  std::atomic<double> last_heading{-1.0};
 };
 
 icarus::v1::DroneState HealthyLandedState(std::int64_t now) {

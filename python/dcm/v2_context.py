@@ -200,9 +200,10 @@ def select_macro(catalog, mission_metadata=None, mission=""):
     else:
         text = " ".join(str(mission).lower().replace("-", " ").split())
         rules = (
+            ("inspection-orbit", ("orbit", "inspect"), ("orbit", "building"),
+             ("orbit", "survey")),
             ("building-inspection", ("building", "inspect"), ("building", "check"),
              ("building", "hover")),
-            ("inspection-orbit", ("orbit", "inspect"), ("orbit", "survey")),
             ("landing-site-survey", ("landing", "survey"), ("landing", "site")),
             ("perimeter-sweep", ("perimeter",), ("boundary", "survey"),
              ("perimeter", "sweep")),
@@ -252,15 +253,19 @@ def compile_mission_contract(mission, macro=None, reference=None, obligations=No
                      if item.get("id") == primary_id), None)
     if primary_id:
         target = {"id": primary_id}
-        if landmark and landmark.get("hover_waypoint"):
-            target["hover_waypoint"] = dict(landmark["hover_waypoint"])
+        for key in ("inspection_waypoint", "person_observation_waypoint",
+                    "hover_waypoint"):
+            if landmark and landmark.get(key):
+                target[key] = dict(landmark[key])
         contract["target"] = target
 
     completion = {
         "flight": "successful_takeoff",
         "building_visual_inspection": "successful_inspect_scene",
         "building_hover": "hold_at_reviewed_waypoint",
-        "person_count": "successful_detect_person",
+        "inspection_orbit": "successful_reviewed_orbit",
+        "person_count": "successful_detect_person_at_reviewed_waypoint",
+        "hold_position": "successful_requested_hold",
         "return_home": "landed_at_home",
     }
     for requirement in obligations.get("requirements", []):
@@ -270,19 +275,45 @@ def compile_mission_contract(mission, macro=None, reference=None, obligations=No
             "id": requirement["id"],
             "completion": completion.get(requirement["id"], "reviewed_evidence"),
         }
-        for key in ("target_altitude_agl_m", "reviewed_waypoint",
-                    "duration_ms", "detector_classes", "target_id"):
+        for key in ("target_altitude_agl_m", "reviewed_waypoint", "reviewed_orbit",
+                    "staged_at_reviewed_waypoint", "duration_ms", "detector_classes",
+                    "target_id"):
             if requirement.get(key) is not None:
                 if key == "target_id" and requirement[key] == primary_id:
-                    continue
-                if key == "reviewed_waypoint" and contract.get(
-                        "target", {}).get("hover_waypoint") == requirement[key]:
                     continue
                 objective[key] = requirement[key]
         contract["objectives"].append(objective)
         status_key = ("completed" if requirement.get("status") == "satisfied"
                       else "pending")
         contract[status_key].append(requirement["id"])
+    if contract["pending"]:
+        contract["active_objective_id"] = contract["pending"][0]
+        active = next(item for item in contract["objectives"]
+                      if item["id"] == contract["active_objective_id"])
+        identifier = active["id"]
+        if identifier == "flight":
+            allowed = ["arm", "takeoff"]
+        elif identifier in ("building_visual_inspection", "person_count",
+                            "building_hover") and active.get("reviewed_waypoint"):
+            if not active.get("staged_at_reviewed_waypoint"):
+                allowed = ["goto"]
+            elif identifier == "building_visual_inspection":
+                allowed = ["inspect_scene"]
+            elif identifier == "person_count":
+                allowed = ["detect"]
+            else:
+                allowed = ["hold"]
+        else:
+            allowed = {
+                "building_visual_inspection": ["inspect_scene"],
+                "building_hover": ["hold"],
+                "inspection_orbit": ["orbit"],
+                "person_count": ["detect"],
+                "hold_position": ["hold"],
+                "return_home": ["return_home"],
+            }.get(identifier)
+        if allowed:
+            active["allowed_progress_actions"] = allowed
     if not contract["objectives"] and not macro:
         contract["operator_text_is_authoritative"] = True
     return contract

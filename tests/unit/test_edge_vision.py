@@ -75,17 +75,18 @@ class EdgeVisionTests(unittest.TestCase):
     def test_checksum_verification_refuses_swapped_artifact(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            qwen = root / "qwen.gguf"; yolo = root / "yolo.pt"; vlm = root / "vlm"
-            vlm.mkdir(); weights = vlm / "weights.bin"
-            for path in (qwen, yolo, weights): path.write_bytes(path.name.encode())
+            qwen = root / "qwen.gguf"; yolo = root / "yolo.pt"
+            vlm = root / "vlm.gguf"; mmproj = root / "mmproj.gguf"
+            for path in (qwen, yolo, vlm, mmproj): path.write_bytes(path.name.encode())
             entry = lambda role, path: {"role": role, "path": str(path),
                                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                                         "repository": "r", "revision": "v", "runtime": "r"}
             manifest = {"profile": "edge-vision", "simulation_only": True, "llama_cpp_revision": "x",
                         "artifacts": [entry("qwen_edge_primary", qwen), entry("yolo", yolo),
-                                      {"role": "vlm", "path": str(vlm), "sha256": "a" * 64,
-                                       "repository": "r", "revision": "v", "runtime": "r"}]}
-            manifest["artifacts"][-1]["file_sha256"] = {"weights.bin": hashlib.sha256(weights.read_bytes()).hexdigest()}
+                                      {**entry("vlm", vlm), "family": "qwen2-vl",
+                                       "mmproj_path": str(mmproj),
+                                       "mmproj_sha256": hashlib.sha256(
+                                           mmproj.read_bytes()).hexdigest()}]}
             self.assertTrue(verify_edge_manifest_files(manifest))
             yolo.write_bytes(b"swapped")
             with self.assertRaises(ValueError): verify_edge_manifest_files(manifest)

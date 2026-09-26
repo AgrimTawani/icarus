@@ -19,6 +19,7 @@ holds, rather than executing stale reasoning.
 """
 
 import json
+import re
 import sys
 import time
 import uuid
@@ -55,6 +56,7 @@ class MissionMemory:
         self.mission_metadata = ({"macro_id": macro_id} if macro_id else None)
         self.completed = []
         self.rejected = 0
+        self.last_feedback = None
 
     def remember(self, action, outcome, result=None, arguments=None):
         item = {"action": action, "outcome": outcome}
@@ -63,9 +65,29 @@ class MissionMemory:
         if arguments is not None:
             item["arguments"] = dict(arguments)
         self.completed.append(item)
+        self.last_feedback = {"action": action, "outcome": outcome}
+
+    def reject(self, proposal, error):
+        self.rejected += 1
+        self.last_feedback = {
+            "proposal_rejected": (proposal or {}).get("action"),
+            "reason": str(error),
+        }
 
     def as_history(self):
         return list(self.completed)
+
+    def repeated_failure_action(self, threshold=3):
+        """Return an action that failed consecutively enough to stop retries."""
+        if len(self.completed) < threshold:
+            return None
+        recent = self.completed[-threshold:]
+        action = recent[0].get("action")
+        if (action and all(item.get("action") == action and
+                           item.get("outcome") != "SUCCEEDED"
+                           for item in recent)):
+            return action
+        return None
 
 
 def observe(client, memory, decision_index, context_version="v2"):
@@ -98,7 +120,7 @@ def observe(client, memory, decision_index, context_version="v2"):
     kwargs = ({"mission_metadata": memory.mission_metadata,
                "runtime_body": runtime_body}
               if context_version == "v3" else {})
-    observation = builder(state, perception, None, memory.mission, event,
+    observation = builder(state, perception, memory.last_feedback, memory.mission, event,
                          history=memory.as_history(), **kwargs)
     reference = getattr(client, "mission_reference", dict)()
     if reference:
@@ -150,6 +172,131 @@ def _describe(proposal):
     return f"{proposal['action']} ({rendered})"
 
 
+def _recovery_evidence(observation):
+    """Return deterministic evidence that permits abandoning pending objectives."""
+    state = observation.get("state") or {}
+    summary = observation.get("state_summary") or {}
+    failures = observation.get("failure_signals") or {}
+    if state.get("manual_override_active") or state.get("geofence_breached"):
+        return True
+    if int(failures.get("consecutive_failures") or 0) >= 2:
+        return True
+    battery = summary.get("battery") or {}
+    if type(battery.get("remaining_percent")) in (int, float) and \
+            battery["remaining_percent"] <= 20:
+        return True
+    unhealthy = {"HEALTH_LEVEL_DEGRADED", "HEALTH_LEVEL_CRITICAL",
+                 "HEALTH_LEVEL_UNAVAILABLE"}
+    if battery.get("level") in unhealthy:
+        return True
+    estimator = summary.get("estimator") or {}
+    if estimator.get("level") in unhealthy or any(
+            estimator.get(key) is False for key in
+            ("attitude_valid", "horizontal_position_valid", "vertical_position_valid")):
+        return True
+    mavlink = state.get("mavlink") or {}
+    return mavlink.get("connected") is False or mavlink.get("level") in unhealthy
+
+
+def _mission_progress_error(observation, proposal):
+    """Reject safe early termination while measurable mission work is pending.
+
+    The model still selects every progress action. This gate only prevents a
+    terminal proposal from falsely declaring completion; deterministic safety
+    evidence always retains authority to abandon the mission.
+    """
+    contract = observation.get("mission_contract") or {}
+    pending = list(contract.get("pending") or [])
+    action = proposal.get("action")
+    if not pending or action not in ("return_home", "land", "none"):
+        return None
+    blocking = ([item for item in pending if item != "return_home"]
+                if action == "return_home" else pending)
+    if not blocking or _recovery_evidence(observation):
+        return None
+    return (f"terminal action {action} cannot bypass pending objectives: "
+            + ", ".join(blocking))
+
+
+_OBJECTIVE_ACTIONS = {
+    "flight": {"arm", "takeoff", "hold"},
+    "building_visual_inspection": {"goto", "hold", "inspect_scene"},
+    "building_hover": {"goto", "hold"},
+    "inspection_orbit": {"goto", "hold", "orbit"},
+    "person_count": {"goto", "hold", "detect"},
+    "hold_position": {"hold"},
+    "return_home": {"hold", "return_home", "land"},
+}
+
+
+def _objective_progress_error(observation, proposal):
+    """Enforce the active evidence objective without selecting its next action."""
+    contract = observation.get("mission_contract") or {}
+    active = contract.get("active_objective_id")
+    action = proposal.get("action")
+    if not active or _recovery_evidence(observation):
+        return None
+    allowed = set(_OBJECTIVE_ACTIONS.get(active, ()))
+    if not allowed:
+        return None
+    objective = next((item for item in contract.get("objectives", [])
+                      if item.get("id") == active), {})
+    if objective.get("allowed_progress_actions"):
+        allowed = set(objective["allowed_progress_actions"])
+    if action not in allowed:
+        return (f"action {action} does not advance active objective {active}; "
+                f"allowed progress actions are {', '.join(sorted(allowed))}")
+
+    def differs(arguments, reviewed, keys):
+        return any(type(arguments.get(key)) not in (int, float) or
+                   abs(float(arguments[key]) - float(reviewed[key])) > 1e-6
+                   for key in keys)
+
+    arguments = proposal.get("arguments") or {}
+    if action == "goto" and objective.get("reviewed_waypoint") and differs(
+            arguments, objective["reviewed_waypoint"],
+            (("north_m", "east_m", "altitude_agl_m", "heading_deg")
+             if "heading_deg" in objective["reviewed_waypoint"] else
+             ("north_m", "east_m", "altitude_agl_m"))):
+        return f"goto must use the reviewed waypoint for active objective {active}"
+    if action == "orbit" and objective.get("reviewed_orbit") and differs(
+            arguments, objective["reviewed_orbit"],
+            ("center_north_m", "center_east_m", "radius_m",
+             "altitude_agl_m", "revolutions")):
+        return "orbit must use the reviewed geometry for the active objective"
+    if action == "takeoff" and objective.get("target_altitude_agl_m") is not None and \
+            abs(float(arguments.get("target_altitude_agl_m", -1)) -
+                float(objective["target_altitude_agl_m"])) > 1e-6:
+        return "takeoff must use the requested altitude for the active objective"
+    if action == "hold" and active == "hold_position" and \
+            int(arguments.get("duration_ms", 0)) < int(objective.get("duration_ms", 0)):
+        return "hold duration is shorter than the active objective"
+    if action == "detect" and objective.get("detector_classes") and not set(
+            objective["detector_classes"]).issubset(arguments.get("classes", [])):
+        return "detect omits a class required by the active objective"
+    if action == "inspect_scene" and active == "building_visual_inspection":
+        question = str(arguments.get("question", "")).lower()
+        if not any(noun in question for noun in ("building", "structure", "tower")):
+            return "building inspection question must ask about the reviewed structure"
+        if re.search(r"\b(?:count|people|persons?|how many)\b", question):
+            return "building inspection question must not replace detector object counting"
+    return None
+
+
+def _physical_transition_error(observation, proposal):
+    """Refuse lifecycle/navigation no-ops the autopilot might accept idempotently."""
+    phase = (observation.get("state_summary") or {}).get("flight_phase") or \
+        (observation.get("state") or {}).get("flight_phase")
+    action = proposal.get("action")
+    if action == "arm" and phase not in ("FLIGHT_PHASE_DISARMED", None):
+        return f"arm is invalid in {phase}"
+    if action == "takeoff" and phase != "FLIGHT_PHASE_ARMED_GROUND":
+        return f"takeoff is invalid in {phase}"
+    if action in ("goto", "orbit") and phase != "FLIGHT_PHASE_AIRBORNE":
+        return f"{action} requires an airborne aircraft, found {phase}"
+    return None
+
+
 def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 max_decisions=MAX_DECISIONS, stream=sys.stdin, echo=print,
                 context_version="v2", macro_id=None):
@@ -174,6 +321,15 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
 
     for index in range(1, max_decisions + 1):
         observation = _observe_for_context(client, memory, index, context_version)
+        repeated_failure = memory.repeated_failure_action()
+        if repeated_failure:
+            error = (f"stopped after 3 consecutive failed {repeated_failure} "
+                     "attempts; further identical commands are suppressed")
+            echo(f"[{index}] {error}")
+            _record(client, index, observation, None, None,
+                    "repeated_failure_breaker", error,
+                    health=health.record())
+            break
         stale = assess_freshness(observation)
         if stale:
             counts["stale"] += 1
@@ -189,7 +345,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
                 _record(client, index, observation, None, None,
                         "fallback_executed", stale, proposal=fallback,
-                        outcome=outcome, health=health.record())
+                        outcome=outcome, result=detail,
+                        health=health.record())
             else:
                 _record(client, index, observation, None, None, "stale", stale,
                         health=health.record())
@@ -210,7 +367,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 _record(client, index, observation, None, None,
                         "circuit_suppressed", "DCM circuit is open",
                         proposal=fallback, outcome=outcome,
-                        health=health.record())
+                        result=detail, health=health.record())
                 if action in ("return_home", "land") and outcome == "SUCCEEDED":
                     break
             else:
@@ -248,13 +405,29 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                          f"{macro.get('id')} permissions")
                 transition = health.transition("invalid", airborne=_airborne(observation))
                 echo(f"[{index}] refused {proposal['action']}: {error}")
-                memory.rejected += 1
+                memory.reject(proposal, error)
                 _record(client, index, observation, prompt, raw, "invalid", error,
                         latency_ms, proposal=proposal, reason_code=reason_code,
                         health=health.record())
                 continue
 
+        if proposal is not None:
+            progress_error = ((_physical_transition_error(observation, proposal)
+                               if context_version == "v3" else None) or
+                              _mission_progress_error(observation, proposal) or
+                              _objective_progress_error(observation, proposal))
+            if progress_error:
+                counts["invalid"] += 1
+                transition = health.transition("invalid", airborne=_airborne(observation))
+                echo(f"[{index}] refused {proposal['action']}: {progress_error}")
+                memory.reject(proposal, progress_error)
+                _record(client, index, observation, prompt, raw, "invalid",
+                        progress_error, latency_ms, proposal=proposal,
+                        reason_code=reason_code, health=health.record())
+                continue
+
         if proposal is None:
+            memory.reject(None, error)
             transition = health.transition(status, airborne=_airborne(observation))
             echo(f"[{index}] {status}: {error}")
             if transition.fallback_action:
@@ -267,7 +440,8 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 executed.append({**fallback, "outcome": outcome, "senior_fallback": True})
                 _record(client, index, observation, prompt, raw,
                         "fallback_executed", error, latency_ms, fallback, outcome,
-                        reason_code=reason_code, health=health.record())
+                        reason_code=reason_code, health=health.record(),
+                        result=detail)
                 if fallback["action"] in ("return_home", "land") and \
                         outcome == "SUCCEEDED":
                     break
@@ -298,7 +472,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
                 _record(client, index, observation, prompt, raw,
                         "fallback_executed", moved, latency_ms,
                         proposal=fallback, outcome=outcome,
-                        health=health.record())
+                        result=detail, health=health.record())
                 if fallback["action"] in ("return_home", "land") and \
                         outcome == "SUCCEEDED":
                     break
@@ -319,7 +493,7 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         if not approve(proposal, mode, stream,
                        out=None if echo is print else echo):
             counts["declined"] += 1
-            memory.rejected += 1
+            memory.reject(proposal, "operator declined proposal")
             echo("      declined")
             _record(client, index, observation, prompt, raw, "declined", None,
                     latency_ms, proposal, operator_approval=False,
@@ -343,8 +517,9 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         counts["executed"] += 1
         if outcome not in ("SUCCEEDED",):
             counts["failed"] += 1
-        _record(client, index, observation, prompt, raw, "executed", detail,
-                latency_ms, proposal, outcome,
+        _record(client, index, observation, prompt, raw, "executed",
+                None if outcome == "SUCCEEDED" else str(detail),
+                latency_ms, proposal, outcome, result=detail,
                 operator_approval=(True if mode == "approval" else None),
                 reason_code=reason_code, health=health.record())
 
@@ -358,6 +533,32 @@ def fly_mission(client, runtime, mission, mode="approval", descriptor=None,
         if proposal["action"] in ("land", "return_home") and outcome == "SUCCEEDED":
             echo("      aircraft is down; mission complete")
             break
+
+    # Never release a live V3 control lease merely because the model proposed
+    # `none`, exhausted its budget, or entered its circuit breaker. A senior,
+    # deterministic recovery returns an airborne aircraft before the client
+    # closes. This does not turn an incomplete semantic mission into success.
+    if context_version == "v3" and \
+            memory.repeated_failure_action() != "return_home" and not any(
+            item["action"] in ("return_home", "land") and
+            item["outcome"] == "SUCCEEDED" for item in executed):
+        recovery_observation = _observe_for_context(
+            client, memory, max_decisions + 1, context_version)
+        if _airborne(recovery_observation):
+            fallback = {"action": "return_home", "arguments": {}}
+            echo("decision loop ended airborne; senior recovery requests return_home")
+            outcome, detail = _execute(
+                client, action_pb2, fallback, max_decisions + 1, echo)
+            counts["executed"] += 1
+            counts["failed"] += outcome != "SUCCEEDED"
+            memory.remember("return_home", outcome, arguments={})
+            executed.append({**fallback, "outcome": outcome,
+                             "senior_fallback": True})
+            _record(client, max_decisions + 1, recovery_observation, None, None,
+                    "mission_exit_recovery",
+                    None if outcome == "SUCCEEDED" else str(detail),
+                    proposal=fallback, outcome=outcome,
+                    result=detail, health=health.record())
 
     completion = getattr(client, "assess_mission_completion", lambda *_: None)(mission, executed)
     return {"mission": mission, "mode": mode, "counts": counts,
@@ -438,12 +639,20 @@ def _state_name(value):
 
 def _airborne(observation):
     state = observation.get("state") or {}
-    return state.get("landed") is False and state.get("armed") is True
+    summary = observation.get("state_summary") or {}
+    phase = summary.get("flight_phase") or state.get("flight_phase")
+    if phase == "FLIGHT_PHASE_AIRBORNE":
+        return True
+    if phase in ("FLIGHT_PHASE_DISARMED", "FLIGHT_PHASE_ARMED_GROUND"):
+        return False
+    armed = summary.get("armed", state.get("armed"))
+    landed = summary.get("landed", state.get("landed"))
+    return armed is True and landed is not True
 
 
 def _record(client, index, observation, prompt, raw, status, error,
             latency_ms=0.0, proposal=None, outcome=None,
-            operator_approval=None, reason_code=None, health=None):
+            operator_approval=None, reason_code=None, health=None, result=None):
     """Write the decision into the episode.
 
     Phase 10 requires model prompts and responses to be replayable alongside
@@ -460,16 +669,17 @@ def _record(client, index, observation, prompt, raw, status, error,
         "prompt": prompt,
         "raw_response": raw if isinstance(raw, str) else None,
         "reason_code": reason_code,
-        "validator_verdict": ("accepted" if proposal is not None
-                               else "not_accepted"),
+        "validator_verdict": ("accepted" if proposal is not None and
+                               status != "invalid" else "not_accepted"),
         "proposal": proposal,
         "status": status,
         "error": error,
+        "result": result,
         "latency_ms": round(latency_ms, 3),
         "outcome": outcome,
         "executed": (proposal is not None and outcome is not None and
                      status in ("executed", "fallback_executed",
-                                "circuit_suppressed")),
+                                "circuit_suppressed", "mission_exit_recovery")),
         # True/False means an approval-mode operator made an explicit decision;
         # null means no operator approval was requested (autonomous mode or a
         # pre-execution refusal). This is annotation data, not authority.

@@ -143,7 +143,7 @@ def layer_label(number, label, y1, y2, color):
 title = "Icarus V2 Phase 1 — Prompt-to-Motors Architecture"
 bb = d.textbbox((0, 0), title, font=font(49, True))
 d.text(((W - (bb[2] - bb[0])) / 2, 30), title, font=font(49, True), fill=COLORS["ink"])
-subtitle = "V3 is the default reviewed context • one model proposal per decision • deterministic authority remains outside the LLM"
+subtitle = "Hardened V3 prompt v8 • one active objective per decision • deterministic authority remains outside the LLM"
 bb = d.textbbox((0, 0), subtitle, font=font(19))
 d.text(((W - (bb[2] - bb[0])) / 2, 94), subtitle, font=font(19), fill=COLORS["muted"])
 
@@ -199,6 +199,7 @@ for xy, t, lines in profile_boxes:
 box((1100, 445, 1435, 865), "V3 context builder", [
     "Allow-list fields only", "Resolve macro deterministically",
     "Compile one MissionContract", "Strip duplicate/audit-only data",
+    "Select active objective + progress actions",
     "One evidence-health summary", "Budget ≤ 8 KB",
     "Hash final visible context",
     "Freshness check before inference"], "gold", 31, 23, 16)
@@ -214,7 +215,7 @@ rounded_box((1485, 390, 2245, 900), COLORS["blue_fill"], COLORS["blue"], 22, 5)
 d.text((1515, 410), "ACTUAL TWO-MESSAGE PROMPT", font=font(24, True), fill=COLORS["blue"])
 box((1515, 458, 2215, 655), "SYSTEM message", [
     "Real multirotor embodiment + safety contract",
-    "typed action vocabulary + closed reason codes",
+    "active progress actions + bounded safety exits",
     "compact flight-state and mission-order rules",
     "3 operating principles + semantic live BODY",
     "no hashes, paths, empty facts or macro prose"], "blue", 61, 21, 15)
@@ -229,7 +230,7 @@ arrow([(1435, 655), (1485, 655)], "blue")
 # ----------------------------------------------------- DCM and validation row
 box((2325, 390, 2745, 550), "Local Qwen DCM", ["llama.cpp chat template", "temperature 0", "chooses one next action"], "blue", 35, 24, 16)
 box((2325, 590, 2745, 720), "Typed JSON proposal", ["action • arguments • reason_code", "No free-form rationale or control authority"], "blue", 38, 22, 15)
-box((2325, 760, 2745, 900), "Post-model checks", ["schema + bounds + macro subset", "freshness + material-state recheck"], "blue", 39, 22, 15)
+box((2325, 760, 2745, 900), "Post-model checks", ["schema + bounds + macro/objective subset", "freshness + state recheck + failure breaker"], "blue", 39, 22, 15)
 arrow([(2245, 500), (2325, 500)], "blue")
 arrow([(2535, 550), (2535, 590)], "blue")
 arrow([(2535, 720), (2535, 760)], "blue")
@@ -238,14 +239,14 @@ arrow([(2535, 720), (2535, 760)], "blue")
 box((340, 990, 700, 1095), "Approval gate", ["Human approval by default", "or autonomous simulation"], "orange", 32)
 box((790, 990, 1160, 1095), "Drone API", ["gRPC + Protobuf", "typed command boundary"], "orange", 30)
 box((1250, 990, 1690, 1095), "Lease + C++ guardrails", ["Authority, mode, geofence", "limits and failsafes"], "orange", 39)
-box((1780, 990, 2250, 1095), "Action executor + planner", ["Validated action → trajectory", "vision actions stay non-flight"], "orange", 42)
+box((1780, 990, 2250, 1095), "Action executor + planner", ["Heading-confirmed goto • nearest-entry orbit", "vision actions stay non-flight"], "orange", 42)
 arrow([(2535, 900), (2535, 960), (520, 960), (520, 990)], "blue")
 arrow([(700, 1042), (790, 1042)], "orange")
 arrow([(1160, 1042), (1250, 1042)], "orange")
 arrow([(1690, 1042), (1780, 1042)], "orange")
 
 # Vision side path within authority layer
-box((340, 1145, 825, 1268), "Semantic perception boundary", ["detect → YOLO person counts", "inspect_scene → SmolVLM description", "camera evidence has no flight authority"], "green", 42, 21, 14)
+box((340, 1145, 825, 1268), "Semantic perception boundary", ["detect → YOLO person counts", "inspect_scene → CPU Qwen2-VL description", "camera evidence has no flight authority"], "green", 42, 21, 14)
 box((910, 1145, 1395, 1268), "Result → mission history", ["Typed success/failure + evidence", "next decision sees updated obligations"], "green", 42, 21, 14)
 arrow([(2015, 1095), (2015, 1118), (582, 1118), (582, 1145)], "green", width=4)
 arrow([(825, 1207), (910, 1207)], "green", width=4)

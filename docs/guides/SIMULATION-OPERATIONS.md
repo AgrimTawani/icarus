@@ -363,16 +363,18 @@ acceptance conclusions into a dated `SIM-*` report; do not commit bulk recording
 ./scripts/view-camera
 ./scripts/start-autonomy --profile edge-vision
 ./scripts/dcm-fly --runtime llama --role primary --mode autonomous \
-  --profile edge-vision --context-length 4096 \
-  --mission "Arm, take off to 5 metres, fly to the known north building, orbit it at 7 metres, count unique people visible below for 20 seconds, return home, and land."
+  --profile edge-vision --context-length 4096 --max-decisions 24 \
+  --mission "Arm, take off to 5 metres, fly north to the building, visually inspect it, orbit it, count all visible people, hover for 5 seconds, then return home and land."
 ```
 
 The setup step also provisions a checksum-pinned, local CC-BY human actor asset
 under `~/models/edge/`; restart the simulator after updating the edge runtime
 so the generated world uses those actors. The simulator stays headless while
 the separate RTP viewer remains visible.
-YOLO11n is capped at 640 px and 5 FPS; SmolVLM is a bounded qualitative
-question, rate-limited to five seconds and load/infer/release by default.
+YOLO11n is capped at 640 px and 5 FPS; Qwen2-VL-2B Q4 answers a bounded
+qualitative question, is rate-limited to five seconds and runs load/infer/release
+on CPU in this profile so it does not contend with the flight DCM for 6 GB of
+VRAM.
 The YOLO observer round-robins the forward and downward RGB-D feeds within
 that single total 5-FPS budget. Unique-person counting remains tied to the
 20-second observer window: it takes the largest same-frame person observation
@@ -386,7 +388,9 @@ depth/LiDAR/geometry.
 Do not add “count the buildings you see” to this acceptance prompt: the known
 `north_building` landmark is a committed navigation reference, not a YOLO
 class. A mission that asks for people must produce successful `detect(person)`
-evidence before its landing is scored as a completed mission.
+evidence at the reviewed observation waypoint before its landing is scored as
+a completed mission. Compact V3 exposes only the active objective's progress
+action to the DCM, while terminal and safety exits remain available.
 
 After the DCM client seals its episode, produce the evidence report with:
 

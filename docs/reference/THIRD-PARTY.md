@@ -49,9 +49,11 @@ AerialClaw movement and pose APIs are intentionally excluded.
 The experimental, simulation-only `edge-vision` profile uses
 `ultralytics/yolo11` (`yolo11n`) for continuous 640 px detection/tracking.
 Ultralytics is AGPL-3.0; this dependency is research-only until a commercial
-licensing decision or a permissively licensed replacement is made. SmolVLM
-(`HuggingFaceTB/SmolVLM-256M-Instruct`) is Apache-2.0 and is bounded
-qualitative evidence only, with no flight authority.
+licensing decision or a permissively licensed replacement is made. Qwen2-VL
+(`Qwen/Qwen2-VL-2B-Instruct` converted to the pinned Q4 GGUF plus f16 visual
+projector) is Apache-2.0 and is bounded qualitative evidence only, with no
+flight authority. Exact local hashes and source revision are recorded in
+`~/models/edge/MANIFEST.json`.
 
 The deterministic edge scenario also provisions version 1 of Mingfei's Gazebo
 Fuel `actor` model to `~/models/edge/gazebo_fuel_cache/`. It is CC-BY-4.0 and

@@ -61,6 +61,13 @@ def extract_answer(stdout: str) -> str:
     timing = next((index for index, line in enumerate(lines)
                    if line.startswith("[ Prompt:")), None)
     if timing is not None:
+        question = max((index for index, line in enumerate(lines[:timing])
+                        if line.startswith("Question:")), default=None)
+        if question is not None:
+            # llama.cpp wraps longer generations across physical lines. Keep
+            # the complete generation between the echoed question and timing
+            # footer instead of returning only its last wrapped fragment.
+            return " ".join(lines[question + 1:timing]).strip()
         return lines[timing - 1] if timing else ""
     ignored = {"Exiting...", ">"}
     return next((line for line in reversed(lines)
@@ -69,7 +76,8 @@ def extract_answer(stdout: str) -> str:
 
 
 def inspect_image(image_path: Path, question: str, manifest_path: Path,
-                  binary: Path | None = None, timeout_s: float = 45.0) -> dict:
+                  binary: Path | None = None, timeout_s: float = 45.0,
+                  gpu_layers: int = 99) -> dict:
     """Ask the pinned VLM one question about an image without retaining pixels."""
     question = normalize_question(question)
     image_path = Path(image_path)
@@ -80,6 +88,8 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         raise FileNotFoundError("llama-cli is unavailable")
     if timeout_s <= 0:
         raise ValueError("VLM timeout must be positive")
+    if type(gpu_layers) is not int or not 0 <= gpu_layers <= 999:
+        raise ValueError("VLM gpu_layers must be an integer in 0..999")
     prompt = (
         "You are a visual inspection component. Describe only what is visible "
         "in the supplied image. Do not propose flight actions, landing sites, "
@@ -87,18 +97,29 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         f"Question: {question}"
     )
     started = time.monotonic()
+    command = [str(executable), "-m", artifact["path"], "--mmproj",
+               artifact["mmproj_path"], "--image", str(image_path),
+               "-ngl", str(gpu_layers)]
+    if gpu_layers == 0:
+        # ``-ngl 0`` keeps text layers on the CPU but llama.cpp may still put
+        # the multimodal projector and host operations on CUDA. That is enough
+        # to OOM beside the resident flight LLM on a 6 GB device. Make CPU-only
+        # execution explicit for every backend component.
+        command.extend(["--device", "none", "--no-op-offload",
+                        "--no-mmproj-offload", "--mmproj-device", "none"])
+    command.extend(["-c", "1024", "--temp", "0", "-n", "96",
+                    "--single-turn", "--no-display-prompt", "-p", prompt])
     completed = subprocess.run(
-        [str(executable), "-m", artifact["path"], "--mmproj", artifact["mmproj_path"],
-         "--image", str(image_path), "-ngl", "99", "-c", "1024", "--temp", "0",
-         "-n", "96", "--single-turn", "--no-display-prompt", "-p", prompt],
+        command,
         check=False, text=True, capture_output=True, timeout=timeout_s,
+        stdin=subprocess.DEVNULL, start_new_session=True,
     )
     if completed.returncode:
         raise RuntimeError("VLM inference failed: " + completed.stderr[-500:])
     # llama-cli writes the generated response before its timing footer. Keep
     # the bounded, non-empty portion rather than pretending its prose is a
     # machine-validated measurement.
-    answer = extract_answer(completed.stdout)
+    answer = extract_answer(completed.stdout) or extract_answer(completed.stderr)
     if not answer:
         raise RuntimeError("VLM returned no inspection text")
     return {
@@ -108,7 +129,8 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         "answer": answer[:MAX_ANSWER_CHARS],
         "latency_ms": round((time.monotonic() - started) * 1000, 3),
         "image": {"sha256": _sha256(image_path)},
-        "runtime": {key: artifact.get(key) for key in
-                    ("family", "quantization", "sha256", "mmproj_sha256", "repository", "revision")},
+        "runtime": ({key: artifact.get(key) for key in
+                    ("family", "quantization", "sha256", "mmproj_sha256",
+                     "repository", "revision")} | {"gpu_layers": gpu_layers}),
         "flight_authority": False,
     }

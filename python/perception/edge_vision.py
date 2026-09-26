@@ -263,12 +263,21 @@ def verify_edge_manifest_files(manifest):
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != artifacts[role]["sha256"]:
             raise ValueError(f"edge manifest {role} checksum mismatch")
     vlm = artifacts["vlm"]
-    files = vlm.get("file_sha256", {})
-    if not files:
-        raise ValueError("edge manifest VLM files are not checksum-pinned")
-    root = Path(vlm["path"]).resolve()
-    for relative, expected in files.items():
-        path = (root / relative).resolve()
-        if root not in path.parents or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-            raise ValueError("edge manifest VLM checksum mismatch: " + relative)
+    if vlm.get("family") == "qwen2-vl":
+        for path_key, hash_key in (("path", "sha256"),
+                                   ("mmproj_path", "mmproj_sha256")):
+            path = Path(vlm.get(path_key, ""))
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != \
+                    vlm.get(hash_key):
+                raise ValueError("edge manifest VLM checksum mismatch: " + path_key)
+    else:
+        files = vlm.get("file_sha256", {})
+        if not files:
+            raise ValueError("edge manifest VLM files are not checksum-pinned")
+        root = Path(vlm["path"]).resolve()
+        for relative, expected in files.items():
+            path = (root / relative).resolve()
+            if root not in path.parents or not path.is_file() or \
+                    hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                raise ValueError("edge manifest VLM checksum mismatch: " + relative)
     return True

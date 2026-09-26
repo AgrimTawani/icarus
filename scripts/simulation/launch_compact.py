@@ -502,16 +502,29 @@ def main():
             print("Manual: ./scripts/manual-control", flush=True)
             print("Mission: ./scripts/run-mission --mission takeoff_hover_land", flush=True)
             print("Stop: Ctrl+C in this terminal", flush=True)
+            recorder_unhealthy_since = None
+            camera_unhealthy_since = None
+            unhealthy_grace_s = 10.0
             while True:
                 check_children()
+                now = time.monotonic()
                 h = health()
-                if (
+                recorder_unhealthy = (
                     h.get("status") != "ready"
-                    or time.monotonic() - h.get("updated_monotonic_s", 0) > 5
-                ):
+                    or now - h.get("updated_monotonic_s", 0) > 5)
+                recorder_unhealthy_since = (
+                    recorder_unhealthy_since or now
+                    if recorder_unhealthy else None)
+                if (recorder_unhealthy_since is not None and
+                        now - recorder_unhealthy_since >= unhealthy_grace_s):
                     raise RuntimeError("Sensor recorder unhealthy: " + str(h))
                 video_health = camera_health()
-                if video_health.get("status") != "ready":
+                camera_unhealthy = video_health.get("status") != "ready"
+                camera_unhealthy_since = (
+                    camera_unhealthy_since or now
+                    if camera_unhealthy else None)
+                if (camera_unhealthy_since is not None and
+                        now - camera_unhealthy_since >= unhealthy_grace_s):
                     raise RuntimeError("Camera stream unhealthy: " + str(video_health))
                 time.sleep(0.25)
         command = [

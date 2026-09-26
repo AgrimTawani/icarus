@@ -21,7 +21,7 @@ Therefore the following combined claim is **not yet true**:
 
 | Track | What has actually run | What it proves | What it does not prove |
 | --- | --- | --- | --- |
-| Packaged AirVLN city | Generic compiled AirSim pawn, ArduPilot SITL, Drone API, DCM, RGB/depth/LiDAR, SmolVLM and YOLO | The Icarus control and visual-perception architecture works against AirSim; scene 6 completed the prompt-driven building-inspection/hover/detection/RTL flow | Custom Icarus7 rendering, collision, dynamics or sensors; deterministic wind; verified person-count accuracy |
+| Packaged AirVLN city | Generic compiled AirSim pawn, ArduPilot SITL, Drone API, DCM, RGB/depth/LiDAR, Qwen2-VL and YOLO | The Icarus control and visual-perception architecture works against AirSim; scene 6 completed the prompt-driven building-inspection/hover/detection/RTL flow | Custom Icarus7 rendering, collision, dynamics or sensors; deterministic wind; verified person-count accuracy |
 | Custom Icarus7 source module | Reviewed meshes, native pawn source, collision, rotor animation, sensor transforms, settings and custom AirLib physics | The source contract is internally consistent; the patched AirLib compiles and instantiates the intended mass, inertia, propulsion and rotor layout | Unreal compilation, pawn spawning, camera imagery, collision behavior, custom-drone flight or an end-to-end mission |
 | Gazebo baseline | Project-owned custom vehicle, seeded turbulent atmosphere, sensors, ArduPilot, Drone API and regression scenarios | Current deterministic dynamics/safety acceptance baseline | Unreal visual realism |
 

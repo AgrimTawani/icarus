@@ -184,6 +184,18 @@ CommandResult ArdupilotGateway::SetMode(std::uint32_t custom_mode) {
   return {true, false, MAV_RESULT_ACCEPTED, "mode confirmed"};
 }
 
+CommandResult ArdupilotGateway::SetYaw(double heading_deg) {
+  if (!std::isfinite(heading_deg) || heading_deg < 0.0 || heading_deg > 360.0) {
+    return {false, false, MAV_RESULT_FAILED, "invalid absolute heading"};
+  }
+  // ArduPilot's CONDITION_YAW: target degrees, 30 deg/s, shortest direction,
+  // absolute heading. The executor separately confirms the observed attitude
+  // before declaring the containing action complete.
+  const float params[7] = {static_cast<float>(heading_deg), 30.0F, 0.0F,
+                           0.0F, 0.0F, 0.0F, 0.0F};
+  return SendCommand(MAV_CMD_CONDITION_YAW, params);
+}
+
 bool ArdupilotGateway::GotoGlobal(const v1::GeoPosition& position) {
   mavlink_message_t message{};
   std::uint8_t frame = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT;

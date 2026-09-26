@@ -182,6 +182,14 @@ v1::ValidationResult Guardrails::Validate(
       return Reject(v1::REASON_CODE_INVALID_ARGUMENT,
                     "acceptance radius must be positive", state.sequence());
     }
+    const auto& heading = command.goto_().heading();
+    if (heading.mode() == v1::HEADING_MODE_ABSOLUTE &&
+        (!heading.has_heading_deg() || !std::isfinite(heading.heading_deg()) ||
+         heading.heading_deg() < 0.0 || heading.heading_deg() > 360.0)) {
+      return Reject(v1::REASON_CODE_INVALID_ARGUMENT,
+                    "absolute heading must be in 0..360 degrees",
+                    state.sequence());
+    }
     if (command.goto_().has_limits()) {
       result = ValidateLimits(command.goto_().limits(), state);
       if (!result.valid()) return result;

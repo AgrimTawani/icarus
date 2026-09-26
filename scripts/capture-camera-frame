@@ -59,6 +59,11 @@ def main():
         raise RuntimeError("Could not subscribe to normalized RGB camera")
     if not received.wait(args.timeout):
         raise TimeoutError("Timed out waiting for a camera frame")
+    # The Gazebo Python binding owns a native subscription thread. Explicitly
+    # stop it before interpreter teardown; otherwise a callback racing process
+    # exit can call std::terminate after a valid frame was already written.
+    node.unsubscribe(args.topic)
+    time.sleep(0.05)
     if "error" in result:
         raise RuntimeError(result["error"])
     args.output.parent.mkdir(parents=True, exist_ok=True)

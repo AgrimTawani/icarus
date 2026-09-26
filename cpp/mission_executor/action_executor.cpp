@@ -204,10 +204,17 @@ void ActionExecutor::Execute(const std::string& action_id,
               },
               "takeoff altitude reached");
   } else if (command.has_goto_()) {
-    ExecuteGoto(action_id, context, command.goto_().destination(),
-                command.goto_().acceptance_radius_m(),
-                TimeoutOf(command.goto_().limits(), 120'000),
-                true, ClearanceOf(command.goto_().limits()));
+    if (!ExecuteGoto(action_id, context, command.goto_().destination(),
+                     command.goto_().acceptance_radius_m(),
+                     TimeoutOf(command.goto_().limits(), 120'000),
+                     false, ClearanceOf(command.goto_().limits()))) {
+      return;
+    }
+    if (!ApplyHeading(action_id, context, command.goto_().heading())) return;
+    const auto state = state_engine_.Snapshot();
+    store_.Transition(action_id, v1::ACTION_STATE_SUCCEEDED,
+                      v1::REASON_CODE_OK, "destination and heading reached", 1.0,
+                      state ? &*state : nullptr);
   } else if (command.has_execute_route()) {
     const auto& route = command.execute_route();
     const auto timeout_per_point = 120'000U;
@@ -283,9 +290,32 @@ void ActionExecutor::Execute(const std::string& action_id,
     constexpr int kSegmentsPerRevolution = 24;
     const int segment_count = static_cast<int>(
         std::ceil(kSegmentsPerRevolution * orbit.revolutions()));
-    for (int index = 0; index < segment_count; ++index) {
+    // Enter the circle at the point nearest the aircraft. Starting every
+    // local orbit at angle zero can command a path straight through the
+    // inspected object when the aircraft is waiting on its opposite side.
+    double start_angle = 0.0;
+    const auto initial_state = state_engine_.Snapshot();
+    if (initial_state && orbit.center().has_local_ned() &&
+        initial_state->has_local_position_ned()) {
+      const auto& center = orbit.center().local_ned();
+      const auto& current = initial_state->local_position_ned();
+      start_angle = std::atan2(current.east_m() - center.east_m(),
+                               current.north_m() - center.north_m());
+    } else if (initial_state && orbit.center().has_geo() &&
+               initial_state->position().has_geo()) {
+      const auto& center = orbit.center().geo();
+      const auto& current = initial_state->position().geo();
+      const double north =
+          (current.latitude_deg() - center.latitude_deg()) * kPi / 180.0 *
+          kEarthRadiusM;
+      const double east =
+          (current.longitude_deg() - center.longitude_deg()) * kPi / 180.0 *
+          kEarthRadiusM * std::cos(center.latitude_deg() * kPi / 180.0);
+      start_angle = std::atan2(east, north);
+    }
+    for (int index = 0; index <= segment_count; ++index) {
       const double fraction = orbit.clockwise() ? -1.0 : 1.0;
-      const double angle =
+      const double angle = start_angle +
           fraction * 2.0 * kPi * index / kSegmentsPerRevolution;
       v1::Position point;
       if (orbit.center().has_local_ned()) {
@@ -319,6 +349,40 @@ void ActionExecutor::Execute(const std::string& action_id,
                       v1::REASON_CODE_OK, "orbit completed", 1.0,
                       state ? &*state : nullptr);
   }
+}
+
+bool ActionExecutor::ApplyHeading(const std::string& action_id,
+                                  const v1::CommandContext& context,
+                                  const v1::HeadingPolicy& heading) {
+  if (heading.mode() == v1::HEADING_MODE_UNSPECIFIED ||
+      heading.mode() == v1::HEADING_MODE_KEEP_CURRENT) {
+    return true;
+  }
+  if (heading.mode() != v1::HEADING_MODE_ABSOLUTE ||
+      !heading.has_heading_deg()) {
+    store_.Transition(action_id, v1::ACTION_STATE_FAILED,
+                      v1::REASON_CODE_INVALID_ARGUMENT,
+                      "executor supports only keep-current or absolute heading");
+    return false;
+  }
+  const auto result = gateway_.SetYaw(heading.heading_deg());
+  if (!result.accepted) {
+    store_.Transition(action_id, v1::ACTION_STATE_FAILED,
+                      result.timed_out ? v1::REASON_CODE_AUTOPILOT_TIMEOUT
+                                       : v1::REASON_CODE_AUTOPILOT_REJECTED,
+                      "heading command failed: " + result.message);
+    return false;
+  }
+  const double target = heading.heading_deg() * kPi / 180.0;
+  return WaitUntil(
+      action_id, context, 15'000,
+      [target](const v1::DroneState& state) {
+        if (!state.has_attitude()) return false;
+        const double delta = std::remainder(state.attitude().yaw_rad() - target,
+                                            2.0 * kPi);
+        return std::abs(delta) <= 5.0 * kPi / 180.0;
+      },
+      "heading reached", false);
 }
 
 bool ActionExecutor::WaitUntil(

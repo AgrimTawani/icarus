@@ -1,12 +1,65 @@
 # V2 Phase 1 implementation and evidence
 
-Date: 2026-09-23
+Date: 2026-09-27
 
 Branch: `feat/version-v2-software-architecture`
 
 Decision: implementation complete. As of 2026-09-24, V3 is the interactive,
 observe and evaluation CLI default by explicit operator decision; V2 remains
 available through `--context v2` for compatibility and baseline comparisons.
+
+## Phase-1 hardening closeout (2026-09-27)
+
+The compact context is now `dcm-prompt-v8-active-vocabulary`. Deterministic
+code exposes only the active objective's legal progress action or actions, plus
+the bounded `none`, `hold`, `return_home` and `land` safety exits. The model
+still chooses each progress action; the compiler does not secretly execute a
+mission script. Objective order, reviewed waypoints, detector classes, hover
+duration and terminal completion are independently enforced after inference.
+
+Hardening also added native absolute-heading confirmation, nearest-safe-entry
+orbit generation, a three-identical-failure breaker, terminal airborne RTL,
+ten-second launcher health debounce, truthfully recorded action results and
+schema validation at the live decision-trace boundary. The Gazebo actor path
+and count geometry were corrected. `inspect_scene` and `detect` use the mounted
+forward view for this mission; YOLO may observe both cameras but the report
+attributes the accepted maximum same-frame count to its actual feed. Qwen2-VL
+2B Q4 runs CPU-only on this 6 GB host so the Qwen flight model, Gazebo and VLM
+cannot contend for CUDA memory.
+
+Retained live evidence from the final code path:
+
+| Episode | Scenario and operator wording | Result |
+| --- | --- | --- |
+| `20260927T041123_0a62e3f27053` | Building inspection, reviewed orbit, count all visible people, hold and RTL | 9/9 actions succeeded; Qwen2-VL described the building; forward YOLO observed four people; semantic report and complete replay passed |
+| `20260927T042122_6ecfa541aa24` | Alternative “detect north building / detect people” wording | 7/7 actions succeeded; forward feed observed the expected four people; report and replay passed |
+| `20260927T042555_f1235131da86` | Fly above the building, hover over it for four seconds, RTL | 5/5 actions succeeded; reviewed building-hover and RTL completion passed |
+| `20260927T043110_1dad8ed23b68` | Five-second hover and RTL in gusting wind | 4/4 actions succeeded; semantic completion and complete replay passed |
+| `20260927T043402_1f1ad161e42a` | Twenty-second hold and RTL under the scheduled MAVLink-loss profile | 4/4 actions succeeded and complete replay passed; this particular run is resilience evidence, not a claim that the transient produced a recorded safety intervention |
+
+These results close the requested Phase-1 implementation and operator-flow
+hardening. They do not approve unattended or physical flight and do not replace
+the larger frozen promotion campaign. Aggregating exactly these five sealed
+episodes produced a 1.0 recorded mission-success rate, 29 executed actions and
+1.0 recovery rate for the one recoverable event. Tool-selection accuracy is
+intentionally `null` because these live records have no human tool annotations;
+the report does not manufacture a score from model output.
+
+### Prompt disposition
+
+- Freeze compact V3 prompt v8 as the Phase-1 interactive and simulation
+  default. Any model-visible edit requires a new prompt version and a rerun of
+  the acceptance set.
+- Keep V2 only as an explicit historical/baseline switch; do not blend its
+  repeated action/freshness prose back into V3.
+- Keep SOUL, BODY and the selected soft-skill macro as deterministic context
+  inputs, but render only three principles, semantic live embodiment facts and
+  one compiled `MissionContract`. Full prose and provenance remain audit-only.
+- Keep mission interpretation and success scoring in deterministic code. The
+  model receives pending evidence and chooses one next action; it never decides
+  that its own mission succeeded.
+- Do not start Laya/Phase 2 from this branch. Phase 2 must compare against this
+  frozen prompt and the same sealed scenario evidence.
 
 ## Delivered architecture
 
@@ -134,7 +187,7 @@ tested default because it provides a bright textured residential area and a
 safe nearby low-rise target. `start-airsim-realistic` preserves the same
 ArduPilot route and attaches a reviewed landmark reference to the session.
 
-Live AirSim RGB frames now feed the existing edge-vision boundaries. SmolVLM
+Live AirSim RGB frames now feed the existing edge-vision boundaries. Qwen2-VL
 describes the primary building; YOLO supplies the visible-person count. Neither
 has flight authority. Deterministic completion evidence is compiled into the
 mission contract without choosing the next action. Reviewed macro constraints and ordinary

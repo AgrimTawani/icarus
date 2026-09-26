@@ -53,6 +53,9 @@ class ActionExecutor {
                    double acceptance_radius_m, std::uint32_t timeout_ms,
                    bool complete_action = true,
                    double requested_clearance_m = 0.0);
+  bool ApplyHeading(const std::string& action_id,
+                    const v1::CommandContext& context,
+                    const v1::HeadingPolicy& heading);
   [[nodiscard]] bool SetMode(const std::string& action_id,
                              std::uint32_t mode,
                              const std::string& name);

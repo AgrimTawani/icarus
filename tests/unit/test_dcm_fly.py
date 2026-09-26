@@ -249,6 +249,10 @@ class ExecutionGateTests(unittest.TestCase):
         self.assertEqual(result["executed"][0]["outcome"], "SUCCEEDED")
         self.assertEqual(result["executed"][0]["arguments"],
                          {"question": "count visible trees"})
+        decision = next(payload for kind, payload in client.episode.records
+                        if kind == "dcm_decision")
+        self.assertIsNone(decision["error"])
+        self.assertEqual(decision["result"]["answer"], "simulated scene")
 
     def test_each_action_gets_a_distinct_idempotency_name(self):
         # context() derives the idempotency key from this name, so reusing one
@@ -285,6 +289,7 @@ class ExecutionGateTests(unittest.TestCase):
     def test_selected_macro_rejects_an_action_outside_its_permissions(self):
         def observation(client, memory, index, context_version):
             value = patched_observe(self.fly)(client, memory, index)
+            value["state"]["flight_phase"] = "FLIGHT_PHASE_DISARMED"
             value["context_version"] = "dcm-context-v3-compact"
             value["mission_macro"] = {
                 "id": "recovery", "allowed_actions": ["hold", "land"]}
@@ -300,6 +305,103 @@ class ExecutionGateTests(unittest.TestCase):
                 echo=lambda *_: None, max_decisions=1)
         self.assertEqual(client.action_api.calls, [])
         self.assertEqual(result["counts"]["invalid"], 1)
+
+    def test_safe_terminal_action_cannot_bypass_pending_v3_objective(self):
+        def observation(client, memory, index, context_version):
+            value = patched_observe(self.fly)(client, memory, index)
+            value.update({
+                "context_version": "dcm-context-v3-compact",
+                "mission_contract": {
+                    "pending": ["building_visual_inspection", "return_home"]},
+                "state_summary": {"battery": {
+                    "level": "HEALTH_LEVEL_HEALTHY", "remaining_percent": 90},
+                    "flight_phase": "FLIGHT_PHASE_DISARMED",
+                    "estimator": {"level": "HEALTH_LEVEL_HEALTHY",
+                                  "attitude_valid": True,
+                                  "horizontal_position_valid": True,
+                                  "vertical_position_valid": True}},
+                "failure_signals": {"consecutive_failures": 0},
+            })
+            return value
+
+        with patch.object(self.fly, "_observe_for_context", observation):
+            client = FakeClient()
+            runtime = ScriptedRuntime(
+                '{"action":"return_home","arguments":{},'
+                '"reason_code":"MISSION_COMPLETE"}')
+            result = fly_mission(
+                client, runtime, "inspect then return", mode="autonomous",
+                context_version="v3", echo=lambda *_: None, max_decisions=1)
+        self.assertEqual(client.action_api.calls, [])
+        self.assertEqual(result["counts"]["invalid"], 1)
+        decision = next(payload for kind, payload in client.episode.records
+                        if kind == "dcm_decision")
+        self.assertEqual(decision["validator_verdict"], "not_accepted")
+        self.assertIn("building_visual_inspection", decision["error"])
+
+    def test_recovery_evidence_allows_terminal_action_with_pending_objective(self):
+        def observation(client, memory, index, context_version):
+            value = patched_observe(self.fly)(client, memory, index)
+            value.update({
+                "context_version": "dcm-context-v3-compact",
+                "mission_contract": {"pending": ["inspection", "return_home"]},
+                "state": {**value["state"], "geofence_breached": True},
+            })
+            return value
+
+        with patch.object(self.fly, "_observe_for_context", observation):
+            client = FakeClient()
+            runtime = ScriptedRuntime(
+                '{"action":"return_home","arguments":{},'
+                '"reason_code":"RECOVERY_REQUIRED"}')
+            result = fly_mission(
+                client, runtime, "inspect then return", mode="autonomous",
+                context_version="v3", echo=lambda *_: None, max_decisions=1)
+        self.assertEqual(client.action_api.calls, ["ReturnHome"])
+        self.assertEqual(result["counts"]["invalid"], 0)
+
+    def test_active_objective_rejection_is_visible_to_next_inference(self):
+        feedback = []
+
+        def observation(client, memory, index, context_version):
+            feedback.append(memory.last_feedback)
+            phase = ("FLIGHT_PHASE_AIRBORNE" if index <= 2
+                     else "FLIGHT_PHASE_DISARMED")
+            return {
+                "observed_at_unix_ms": FRESH,
+                "context_version": "dcm-context-v3-compact",
+                "state": {"observed_at_unix_ms": FRESH - 10,
+                          "flight_phase": phase},
+                "state_summary": {"flight_phase": phase},
+                "perception": {"local_map_age_ms": 20},
+                "mission": memory.mission,
+                "actions_completed": memory.as_history(),
+                "mission_contract": {
+                    "pending": ["person_count"],
+                    "active_objective_id": "person_count",
+                    "objectives": [{
+                        "id": "person_count",
+                        "reviewed_waypoint": {
+                            "north_m": 4, "east_m": 0,
+                            "altitude_agl_m": 4},
+                        "staged_at_reviewed_waypoint": False,
+                        "allowed_progress_actions": ["goto"]}]},
+            }
+
+        with patch.object(self.fly, "_observe_for_context", observation):
+            client = FakeClient()
+            runtime = ScriptedRuntime(
+                '{"action":"hold","arguments":{},'
+                '"reason_code":"MISSION_OBJECTIVE_PENDING"}',
+                '{"action":"goto","arguments":{"north_m":4,"east_m":0,'
+                '"altitude_agl_m":4},"reason_code":"MISSION_OBJECTIVE_PENDING"}')
+            result = fly_mission(
+                client, runtime, "count people", mode="autonomous",
+                context_version="v3", echo=lambda *_: None, max_decisions=2)
+        self.assertEqual(client.action_api.calls, ["Goto"])
+        self.assertEqual(result["counts"]["invalid"], 1)
+        self.assertEqual(feedback[1]["proposal_rejected"], "hold")
+        self.assertIn("allowed progress actions", feedback[1]["reason"])
 
     def test_material_state_change_discards_a_fresh_but_obsolete_decision(self):
         observations = []
@@ -318,6 +420,16 @@ class ExecutionGateTests(unittest.TestCase):
                 max_decisions=1)
         self.assertEqual(client.action_api.calls, [])
         self.assertEqual(result["counts"]["stale"], 1)
+
+    def test_memory_stops_only_three_identical_consecutive_failures(self):
+        memory = MissionMemory("mission")
+        memory.remember("return_home", "FAILED")
+        memory.remember("return_home", "FAILED")
+        self.assertIsNone(memory.repeated_failure_action())
+        memory.remember("return_home", "FAILED")
+        self.assertEqual(memory.repeated_failure_action(), "return_home")
+        memory.remember("hold", "SUCCEEDED")
+        self.assertIsNone(memory.repeated_failure_action())
 
     def test_open_circuit_suppresses_inference_and_escalates_airborne(self):
         def airborne_observe(client, memory, index):
@@ -376,6 +488,19 @@ class EpisodeRecordingTests(unittest.TestCase):
         self.assertEqual(payload["status"], "declined")
         self.assertFalse(payload["executed"])
         self.assertFalse(payload["operator_approval"])
+
+    def test_senior_exit_recovery_is_recorded_as_executed_with_result(self):
+        client = FakeClient()
+        observation = patched_observe(self.fly)(
+            client, MissionMemory("mission"), 1)
+        self.fly._record(
+            client, 2, observation, None, None, "mission_exit_recovery",
+            None, proposal={"action": "return_home", "arguments": {}},
+            outcome="SUCCEEDED", result="landed at home")
+        payload = next(p for k, p in client.episode.records
+                       if k == "dcm_decision")
+        self.assertTrue(payload["executed"])
+        self.assertEqual(payload["result"], "landed at home")
 
     def test_autonomous_execution_does_not_fabricate_operator_approval(self):
         runtime = ScriptedRuntime('{"action":"arm","arguments":{}}')

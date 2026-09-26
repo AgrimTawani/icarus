@@ -105,7 +105,11 @@ def target_model(world, item):
     mesh_dir = edge_root / "gazebo_fuel_cache/fuel.gazebosim.org/mingfei/models/actor/1/meshes"
     actor = element(world, "actor", name=item["id"])
     x, y, z = item["center_m"]
-    element(actor, "pose", f"{x} {y} {z + 1.0} 0 0 0")
+    # Actor trajectory waypoints are world poses, unlike model/link-relative
+    # visual poses. Applying the target position here as well would translate
+    # every person twice (the former four targets at north=12 rendered at
+    # north=24, behind the building while ground truth still claimed 12).
+    element(actor, "pose", "0 0 0 0 0 0")
     animation = "walk" if item.get("animated") else "stand"
     skin = element(actor, "skin")
     element(skin, "filename", (mesh_dir / "walk.dae").as_uri())
