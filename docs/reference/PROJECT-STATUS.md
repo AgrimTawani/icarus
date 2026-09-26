@@ -61,6 +61,11 @@ toolchain, and the public AirVLN download is packaged rather than source, so no
 custom cooked environment or custom-pawn flight claim exists yet. Visual motor
 geometry also differs from the accepted stretched-X physics geometry; that
 mechanical decision remains explicit rather than silently distorted.
+The successful AirVLN scene-6 prompt mission used the generic pawn already
+compiled into that packaged world, not this custom pawn. AirSim wind injection
+is also not implemented. The exact completed/open gates and end-to-end
+definition of done are recorded in
+[`../simulation/AIRSIM-ICARUS7-READINESS.md`](../simulation/AIRSIM-ICARUS7-READINESS.md).
 
 ## Executive Summary
 

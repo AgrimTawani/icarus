@@ -3,6 +3,10 @@
 Status: V2 Phase-1 feasibility implementation complete; experimental and
 simulation-only. Gazebo Harmonic remains the promotion baseline.
 
+For the exact custom-drone completion boundary, including what has run versus
+what remains before a windy Gazebo-equivalent mission can be claimed, see
+[`../simulation/AIRSIM-ICARUS7-READINESS.md`](../simulation/AIRSIM-ICARUS7-READINESS.md).
+
 ## Purpose and boundary
 
 AirSim adds a separate Unreal-based visual-simulation track for studying
@@ -131,6 +135,12 @@ physics baseline is stretched-X at approximately ±138.5/±173.4 mm. This is
 recorded rather than hidden by mesh distortion. No cross-simulator physical
 parity claim is made until that mechanical choice and as-built properties are
 reviewed.
+
+The custom module must not be confused with the already successful AirVLN
+scene-6 mission. That mission exercised the full DCM, Drone API, ArduPilot and
+visual-perception path using the **generic pawn compiled into AirVLN**. It did
+not fly the Icarus7 pawn. No Icarus AirSim component currently applies
+`simSetWind`, so it was also not a windy-environment acceptance run.
 
 Native plugins and uncooked assets cannot be inserted into the already packaged
 AirVLN executables. The module must be compiled into a source AirSim/UE4.27

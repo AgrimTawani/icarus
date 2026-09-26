@@ -16,15 +16,18 @@ quickly establish the truth of the repository.
    — Gazebo, SITL, MAVLink and sensor connections.
 7. [`architecture/AIRSIM-SIMULATION.md`](architecture/AIRSIM-SIMULATION.md) —
    separate experimental AirSim/ArduPilot track, commands and evidence.
-8. [`architecture/DRONE-API-V1.md`](architecture/DRONE-API-V1.md) — Phase 8
+8. [`simulation/AIRSIM-ICARUS7-READINESS.md`](simulation/AIRSIM-ICARUS7-READINESS.md)
+   — completed custom-drone work, remaining Unreal/wind/runtime gates and the
+   definition of Gazebo-equivalent end-to-end completion.
+9. [`architecture/DRONE-API-V1.md`](architecture/DRONE-API-V1.md) — Phase 8
    command, authority, state and extension contract.
-9. [`simulation/PHASE-8-ACCEPTANCE.md`](simulation/PHASE-8-ACCEPTANCE.md) —
+10. [`simulation/PHASE-8-ACCEPTANCE.md`](simulation/PHASE-8-ACCEPTANCE.md) —
    Drone API flight and injected-failure exit-gate evidence.
-10. [`simulation/PHASE-9-ACCEPTANCE.md`](simulation/PHASE-9-ACCEPTANCE.md) —
+11. [`simulation/PHASE-9-ACCEPTANCE.md`](simulation/PHASE-9-ACCEPTANCE.md) —
    headless live-LiDAR obstacle-avoidance evidence.
-11. [`guides/GETTING-STARTED.md`](guides/GETTING-STARTED.md) — recreate the local
+12. [`guides/GETTING-STARTED.md`](guides/GETTING-STARTED.md) — recreate the local
    environment.
-12. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
+13. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
    test and stop scenarios.
 
 For the current data and DCM work, continue with

@@ -27,6 +27,13 @@ The module never changes the DCM or control authority. The custom pawn is still
 an `ArduCopter`; Icarus commands continue through the Drone API, ArduPilot SITL
 and AirSim's actuator/sensor boundary.
 
+Current runtime status: the source integration and AirLib physics test are
+complete, but this pawn has not yet been compiled by Unreal Engine or flown.
+The successful realistic AirVLN mission used that packaged executable's
+generic pawn. See the
+[end-to-end readiness report](../../../../docs/simulation/AIRSIM-ICARUS7-READINESS.md)
+for the precise remaining acceptance gates.
+
 ## Source and build boundaries
 
 The reviewed assets are user-supplied and intentionally remain outside Git.
@@ -109,3 +116,6 @@ has changed:
   of `UnrealFinalReopen.json`, which represents the post-import/reopen state.
 - A source Unreal environment and UE4.27 are mandatory for the final native
   plugin compile and cooked Linux binary.
+- No custom AirSim wind controller or recorded wind campaign exists yet. The
+  AirVLN prompt-driven flight therefore does not establish the windy custom
+  drone result already available in Gazebo.

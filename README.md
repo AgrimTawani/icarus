@@ -26,7 +26,10 @@ recovery without giving the model a new control path.
    and [simulation connections](docs/architecture/SIMULATION-CONNECTIONS.md).
    The separate experimental AirSim ArduCopter simulation track is documented in
    [AirSim Simulation](docs/architecture/AIRSIM-SIMULATION.md); it does not
-   replace Gazebo as the promotion baseline.
+   replace Gazebo as the promotion baseline. The
+   [custom Icarus7 readiness report](docs/simulation/AIRSIM-ICARUS7-READINESS.md)
+   separates completed source integration from the remaining Unreal build,
+   wind and end-to-end runtime gates.
 4. Follow [getting started](docs/guides/GETTING-STARTED.md) and the
    [simulation operator guide](docs/guides/SIMULATION-OPERATIONS.md).
 
