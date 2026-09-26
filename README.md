@@ -73,6 +73,9 @@ for the corresponding evidence and limitations.
 #   --mode autonomous --context-length 4096 --max-decisions 18 \
 #   --mission "Arm, take off to 3 metres, check that building, hover over it \
 #   for 3 seconds, count no. of people, then return home and land."
+
+# Custom Icarus7 pawn (after the documented UE4.27 source build/package step)
+./scripts/start-airsim-icarus7 --gui
 ```
 
 List every supported or reserved profile with

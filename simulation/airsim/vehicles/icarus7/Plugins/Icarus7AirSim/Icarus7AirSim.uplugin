@@ -1,0 +1,25 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "Icarus7 AirSim Vehicle",
+  "Description": "Native AirSim pawn and visual bindings for the Icarus7 quadrotor.",
+  "Category": "Simulation",
+  "CreatedBy": "Icarus",
+  "CanContainContent": false,
+  "EnabledByDefault": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "Icarus7AirSim",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "AirSim",
+      "Enabled": true
+    }
+  ]
+}

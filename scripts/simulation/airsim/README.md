@@ -21,6 +21,20 @@ supervisor.
 The launcher refuses to overlap the two session types. This is deliberate:
 their transport, sensors and timing must not be accidentally mixed.
 
+## Custom Icarus7 vehicle
+
+The user-supplied UE4.27 asset has a project-owned AirSim source integration at
+[`simulation/airsim/vehicles/icarus7/README.md`](../../../simulation/airsim/vehicles/icarus7/README.md).
+It adds a native `AFlyingPawn`, actuator-driven rotors, cameras, sensor poses,
+compound collision and a pinned Icarus physics overlay. This is distinct from
+the generic pawn in the downloaded Blocks and AirVLN binaries.
+
+The module has been installed into a pinned AirSim Blocks source fixture, its
+AirLib physics code compiles, and the runtime parameters instantiate in an
+executable test. This host does not have Unreal Engine 4.27, so a cooked custom
+Linux environment has not yet been produced. Packaged AirVLN scenes cannot be
+retrofitted with a native module; a source Unreal environment must be rebuilt.
+
 ## Prerequisites
 
 1. Use the digest-pinned Blocks v1.8.0 asset for a small compatibility smoke,
@@ -65,6 +79,9 @@ caused the binary to fall back to SimpleFlight.
 
 # High-detail city with the native Unreal/AirSim viewport visible.
 ./scripts/start-airsim-realistic --gui
+
+# After installing and packaging the custom UE4.27 source module:
+./scripts/start-airsim-icarus7 --gui
 
 # Stop only the recorded AirSim process.
 ./scripts/stop-airsim

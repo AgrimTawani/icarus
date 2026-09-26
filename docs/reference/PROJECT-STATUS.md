@@ -52,6 +52,16 @@ crowd truth. It remains supplementary because cross-simulator
 frozen-scene/seed equivalence is not established. See
 [`../architecture/V2-PHASE1-IMPLEMENTATION.md`](../architecture/V2-PHASE1-IMPLEMENTATION.md).
 
+The supplied Icarus7 UE4.27 visual project now has a native AirSim vehicle
+module, custom pawn ABI, actuator-driven rotors, cameras, compound collision,
+sensor transforms, custom settings, a pinned 4.343 kg AirLib physics overlay,
+installer, validator, packager and guarded launcher. The patched AirLib compiles
+and its runtime parameters pass an executable test. The host has no UE4.27
+toolchain, and the public AirVLN download is packaged rather than source, so no
+custom cooked environment or custom-pawn flight claim exists yet. Visual motor
+geometry also differs from the accepted stretched-X physics geometry; that
+mechanical decision remains explicit rather than silently distorted.
+
 ## Executive Summary
 
 Icarus has a verified custom Gazebo/ArduPilot simulation foundation. Its

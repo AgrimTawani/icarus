@@ -109,6 +109,37 @@ non-negative expected visible count and camera ID. Without it, completion is
 never added to the DCM observation. The project-owned Gazebo
 `edge_people_building` scenario remains the deterministic count regression.
 
+### Custom Icarus7 pawn and physics module
+
+The reviewed Icarus7 UE4.27 delivery is integrated as source under
+`simulation/airsim/vehicles/icarus7/`. It is not treated as a runnable binary:
+the delivery contains meshes and materials but no AirSim plugin, pawn, map,
+runtime sensors, complete-airframe collision or packaged executable.
+
+The module supplies a native `AFlyingPawn` subclass with AirSim's five required
+camera components, four actuator-driven rotors in ArduPilot Quad-X order,
+compound collision and reviewed sensor transforms. `settings.icarus7*.json`
+select it through `PawnPaths` and select a pinned physics overlay through
+`Model=Icarus7`. The overlay uses the component-derived 4.343 kg mass, the
+FLU-to-FRD inertia transform, canonical rotor positions and the frozen
+motor/propeller baseline. A compiled AirLib executable test verifies those
+runtime values.
+
+The asset and canonical physics geometries are not yet identical: the visual
+motor centres are symmetric at approximately ±176.8 mm while the accepted
+physics baseline is stretched-X at approximately ±138.5/±173.4 mm. This is
+recorded rather than hidden by mesh distortion. No cross-simulator physical
+parity claim is made until that mechanical choice and as-built properties are
+reviewed.
+
+Native plugins and uncooked assets cannot be inserted into the already packaged
+AirVLN executables. The module must be compiled into a source AirSim/UE4.27
+environment. The current host lacks UE4.27, so the source module, AirLib build,
+installer and validators are complete while final Unreal cooking remains an
+external toolchain gate. See the
+[module README](../../simulation/airsim/vehicles/icarus7/README.md) for exact
+commands.
+
 ## Bring-up sequence
 
 1. Run `./scripts/fetch-airsim-blocks` or supply another reviewed environment.
