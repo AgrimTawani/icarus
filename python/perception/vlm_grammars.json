@@ -10,5 +10,9 @@
   "count": {
     "schema_sha256": "62fe66e59e049b664444dfbb1d10de5d25046d9d5e3ca0c31d7f18de6fe7f2f3",
     "grammar": "answer ::= \"\\\"\" char{0,300} \"\\\"\"\nanswer-kv ::= \"\\\"answer\\\"\" space \":\" space answer\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\ncount ::= count-0 | null\ncount-0 ::= ([0] | [1-9] [0-9]{0,15})\ncount-kv ::= \"\\\"count\\\"\" space \":\" space count\nnull ::= \"null\"\nroot ::= \"{\" space count-kv \",\" space answer-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
+  },
+  "description": {
+    "schema_sha256": "1bcd5f15d3dac4784bd6e686a75c6c7ee740b16c2f3f76cf9b4c34ce00131b4e",
+    "grammar": "answer ::= \"\\\"\" char{0,300} \"\\\"\"\nanswer-kv ::= \"\\\"answer\\\"\" space \":\" space answer\nanswerable ::= boolean | null\nanswerable-kv ::= \"\\\"answerable\\\"\" space \":\" space answerable\nboolean ::= (\"true\" | \"false\")\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\nnull ::= \"null\"\nroot ::= \"{\" space answerable-kv \",\" space answer-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
   }
 }

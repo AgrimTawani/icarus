@@ -123,7 +123,7 @@ WORKFLOW_FLIGHT = {
         "clockwise": BOOL, "rate_deg_s": {"type": "number", "minimum": 5, "maximum": 60},
         "observation": {"enum": ["detect", "scene"]}, "camera": CAMERA,
         "classes": DETECTION_CLASSES,
-        "question": {**TEXT, "maxLength": 240}, "stop_on_detection": TEXT,
+        "question": {**TEXT, "maxLength": 240}, "question_type": {"enum": ["condition", "description"]}, "stop_on_detection": TEXT,
         "minimum_count": {"type": "integer", "minimum": 1},
         "repeat_until_match": BOOL,
         "return_on": {"enum": ["observation", "sweep"]},
@@ -141,7 +141,7 @@ WORKFLOW_FLIGHT = {
         "repetitions": {"type": "integer", "minimum": 1, "maximum": 10},
         "observation": {"enum": ["none", "scene", "detect"]}, "camera": CAMERA,
         "observation_count": {"type": "integer", "minimum": 1, "maximum": 16},
-        "question": {**TEXT, "maxLength": 240},
+        "question": {**TEXT, "maxLength": 240}, "question_type": {"enum": ["condition", "description"]},
         "classes": DETECTION_CLASSES,
         "stop_on_detection": TEXT, "minimum_count": {"type": "integer", "minimum": 1},
         "return_on": {"enum": ["observation", "completion"]},
@@ -154,7 +154,7 @@ WORKFLOW_FLIGHT = {
 WORKFLOW_FLIGHT["fly_pattern"] = obj({
     name: copy.deepcopy(schema)
     for name, schema in WORKFLOW_FLIGHT["scan_area"]["properties"].items()
-    if name not in {"observation", "camera", "observation_count", "question",
+    if name not in {"observation", "camera", "observation_count", "question", "question_type",
                     "classes", "stop_on_detection", "minimum_count", "return_on", "exit_policy"}
 }, ["shape", "coverage"])
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
@@ -189,7 +189,8 @@ SCHEMAS.update(
             ["classes"],
         ),
         "inspect_scene": obj(
-            {"question": {**TEXT, "maxLength": 240}, "camera": CAMERA}, ["question"]
+            {"question": {**TEXT, "maxLength": 240}, "camera": CAMERA,
+             "question_type": {"enum": ["condition", "description"], "description": "condition: answer a yes/no visual question; false is a valid result. description: describe visible appearance or scene; an unseen subject is unanswerable."}}, ["question"]
         ),
         "assess_landing_zone": obj(),
         "localize_target": obj(
@@ -350,6 +351,8 @@ def decision_tools(context, angular_scans=None, area_scans=None):
                         branch['properties']['target_id']['enum'] = target_ids.copy()
                     else:
                         variants.remove(branch)
+        if function['name'] == 'inspect_scene':
+            function['parameters']['required'].append('question_type')
         if function['name'] == 'execute_sequence':
             variants = function['parameters']['properties']['actions']['items']['oneOf']
             function['parameters']['properties']['actions']['items']['oneOf'] = [
@@ -470,6 +473,7 @@ def observation_call(args, *, default_observation, default_camera):
         params['classes'] = args.get('classes')
     else:
         params['question'] = args.get('question', 'Describe visible objects and any uncertainty in this view.')
+        params['question_type'] = args.get('question_type', 'description')
     validate_call(name, params)
     return name, params
 
@@ -625,15 +629,26 @@ class ToolExecutor:
                 }
             elif name == "inspect_scene":
                 camera = arguments.pop("camera", "forward_d435i")
+                question_type = arguments.pop("question_type", "description")
                 view = self.client.capture_view(camera=camera)
                 try:
                     result = {
                         "status": "SUCCEEDED",
                         "evidence": self.client.inspect_scene(
-                            arguments["question"], view=view
+                            arguments["question"], view=view,
+                            **({"structured":True, "result_type":"boolean"} if question_type == "condition" else {})
                         ),
                     }
                     result['evidence']['measurement_kind'] = 'qualitative_vlm_answer'
+                    result['evidence']['question_type'] = question_type
+                    usable = (result['evidence'].get('validity') == 'valid'
+                              and type(result['evidence'].get('found')) is bool) if question_type == 'condition' else result['evidence'].get('answerable') is True
+                    if not usable:
+                        result.update(status='OBSERVATION_UNAVAILABLE', message=(
+                            'The camera call completed, but this view cannot answer the requested question. '
+                            'The requested inspection is unfinished. Obtain a usable view, or ask the operator '
+                            'before changing an explicitly requested camera or viewing constraint. '
+                            'Do not report the target description as completed.'))
                     vocabulary = getattr(self.client, 'camera_detector_classes', lambda: [])()
                     if vocabulary and not self.interrupted():
                         # Quantitative feedback comes from the configured

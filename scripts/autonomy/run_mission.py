@@ -767,6 +767,8 @@ class MissionClient:
         from python.perception.vlm import inspect_image, normalize_question
 
         question = normalize_question(question)
+        if not structured and result_type is None:
+            result_type = 'description'
         with tempfile.TemporaryDirectory(prefix="icarus-vlm-") as temporary:
             suffix = ".png" if self.simulation_session.get("simulator") == "airsim" else ".ppm"
             output = Path(temporary) / ("frame" + suffix)
@@ -800,7 +802,7 @@ class MissionClient:
         summary = {key: result[key] for key in ("question", "answer", "latency_ms",
                                               "observed_at_unix_ms", "flight_authority")}
         summary.update({key: result[key] for key in (
-            "result_type", "found", "count", "value", "validity", "error_code",
+            "result_type", "answerable", "found", "count", "value", "validity", "error_code",
             "uncertainty", "count_scope") if key in result})
         summary["image"] = result["image"]
         if view is not None:

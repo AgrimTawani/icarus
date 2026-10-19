@@ -1341,7 +1341,7 @@ def test_scene_inspection_keeps_detector_receipt_separate_and_never_flies(tmp_pa
     client=FakeClient()
     directory=tmp_path/'camera';directory.mkdir()
     monkeypatch.setattr(client,'capture_view',lambda camera:{'directory':str(directory),'camera':camera},raising=False)
-    monkeypatch.setattr(client,'inspect_scene',lambda question,view:{'answer':'Two objects may be visible.'},raising=False)
+    monkeypatch.setattr(client,'inspect_scene',lambda question,view:{'answerable':True,'answer':'Two objects may be visible.'},raising=False)
     monkeypatch.setattr(client,'camera_detector_classes',lambda:['car','person'],raising=False)
     requested=[]
     def detect(**args):

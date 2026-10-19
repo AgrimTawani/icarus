@@ -57,6 +57,7 @@ def main():
              ROOT / 'build/phase8/icarus-drone-api',
              *sorted((ROOT / 'config/dcm/prompts').glob('*.md')),
              ROOT / 'config/dcm/default_policy.json',
+             ROOT / 'python/perception/vlm_grammars.json',
              *sorted((ROOT / 'config/perception').glob('*.json')),
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
     if os.environ.get('ICARUS_WAYPOINTS_FILE'):

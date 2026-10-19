@@ -78,10 +78,11 @@ class AgentSession:
             for item in result.get('actions', []):
                 self.remember_tool_result(item['name'], item.get('arguments', {}), item['result'])
             return
+        key = name + ':' + arguments.get('question_type', 'description') if name == 'inspect_scene' else name
         if result.get('status') == 'SUCCEEDED':
-            self.unresolved_tool_failures.pop(name, None)
+            self.unresolved_tool_failures.pop(key, None)
         elif result.get('status') not in (None, 'CANCELLED'):
-            self.unresolved_tool_failures[name] = {
+            self.unresolved_tool_failures[key] = {
                 'action': name, 'arguments': copy.deepcopy(arguments),
                 'status': result.get('status'), 'message': result.get('message', '')}
 

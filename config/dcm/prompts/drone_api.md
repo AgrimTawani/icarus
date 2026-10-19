@@ -16,3 +16,5 @@ Catalogue entries are supplied in context.registered_waypoints. Optional named w
 Catalogue role identifies navigation_pose (default), observation_pose, or explicitly supplied orbit_center. Navigation/observation poses do not identify physical object centers or overhead positions. Orbit centers may include target_altitude_agl_m for camera geometry. A confirmed fresh landed-and-disarmed state already satisfies land; never arm to repair an already completed landing.
 
 The takeoff tool is phase-aware: from landed it arms and departs; while airborne it reaches the requested altitude above home while holding horizontal position. It never re-arms in flight. An explicit departure climb rate is not silently applied to an airborne goto.
+
+For inspect_scene select question_type: condition for a yes/no visual decision (false is valid, null is unknown), description for appearance or scene details (unanswerable is unfinished). A camera capture alone does not establish the requested description.

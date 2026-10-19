@@ -37,6 +37,13 @@ COUNT_SCHEMA = {
     "required": ["count", "answer"], "additionalProperties": False,
 }
 
+DESCRIPTION_SCHEMA = {
+    "type": "object", "properties": {
+        "answerable": {"type": ["boolean", "null"]},
+        "answer": {"type": "string", "maxLength": 300}},
+    "required": ["answerable", "answer"], "additionalProperties": False,
+}
+
 
 class VlmInferenceError(RuntimeError):
     """Inference failed before producing usable visual evidence."""
@@ -48,9 +55,9 @@ class VlmInferenceError(RuntimeError):
 
 def decode_measurement(answer, result_type="boolean"):
     """Validate evidence without coercing text, booleans, or missing counts."""
-    if result_type not in {"boolean", "count"}:
-        raise ValueError("VLM result_type must be boolean or count")
-    key = "found" if result_type == "boolean" else "count"
+    if result_type not in {"boolean", "count", "description"}:
+        raise ValueError("VLM result_type must be boolean, count or description")
+    key = {"boolean":"found", "count":"count", "description":"answerable"}[result_type]
     base = {"result_type": result_type, key: None, "value": None}
     if result_type == "count":
         base["count_scope"] = "visible_frame"
@@ -62,12 +69,12 @@ def decode_measurement(answer, result_type="boolean"):
         if not isinstance(value["answer"], str) or len(value["answer"]) > 300:
             raise ValueError("measurement explanation must be bounded text")
         if measured is not None and not (
-                type(measured) is bool if key == "found" else
+                type(measured) is bool if key in ("found", "answerable") else
                 type(measured) is int and measured >= 0):
             raise ValueError("incorrect measurement type")
         return dict(base, **{key: measured, "value": measured,
                             "answer": value["answer"],
-                            "validity": "unknown" if measured is None else "valid"})
+                            "validity": "unknown" if measured is None or key == "answerable" and measured is False else "valid"})
     except (ValueError, TypeError):
         return dict(base, validity="unknown", error_code="malformed_output",
                     uncertainty="VLM did not return the requested typed measurement")
@@ -86,9 +93,9 @@ def measurement_grammar(result_type):
     same JSON language; no free-text inference fallback is permitted.
     Regenerate with scripts/autonomy/generate_vlm_grammars.py after schema edits.
     """
-    schemas = {"boolean": CONDITION_SCHEMA, "count": COUNT_SCHEMA}
+    schemas = {"boolean": CONDITION_SCHEMA, "count": COUNT_SCHEMA, "description": DESCRIPTION_SCHEMA}
     if result_type not in schemas:
-        raise ValueError("VLM result_type must be boolean or count")
+        raise ValueError("VLM result_type must be boolean, count or description")
     artifact = json.loads(Path(__file__).with_name("vlm_grammars.json").read_text())
     encoded = json.dumps(schemas[result_type], sort_keys=True, separators=(",", ":"))
     entry = artifact[result_type]
@@ -202,18 +209,25 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         raise ValueError("VLM timeout must be positive")
     if type(gpu_layers) is not int or not 0 <= gpu_layers <= 999:
         raise ValueError("VLM gpu_layers must be an integer in 0..999")
-    if result_type is not None and result_type not in {"boolean", "count"}:
-        raise ValueError("VLM result_type must be boolean or count")
+    if result_type is not None and result_type not in {"boolean", "count", "description"}:
+        raise ValueError("VLM result_type must be boolean, count or description")
     structured = structured or result_type is not None
     result_type = result_type or "boolean"
     answer_format = (
         "First describe the visible colors, surfaces and their image placement, then answer briefly. "
         "A cropped or partial surface does not establish the whole object's shape, height or distance. "
         "State which part is visible and what cannot be determined; do not complete unseen parts.")
-    if structured:
+    if structured and result_type == 'description':
+        answer_format += (
+            ' Return JSON only: {"answerable":true or false or null,"answer":"brief visible evidence and limits"}. '
+            'answerable means the image supports answering THIS question, not that a condition is true. '
+            'A presence question can have an answerable negative answer. '
+            'A description or attribute of an unseen subject is not answerable: use false or null. '
+            'Do not substitute another object or complete unseen parts.')
+    elif structured:
         answer_format = (
             'Return JSON only: {"found":true or false or null,"answer":"brief visible evidence"}. '
-            'Use null if uncertain.' if result_type == "boolean" else
+            'found is the truth of the asked yes/no question. False is a usable negative answer; use null when the image cannot decide it.' if result_type == "boolean" else
             'Count only individually visible instances in this single image. Return JSON only: '
             '{"count":nonnegative integer or null,"answer":"brief visible evidence"}. '
             'Use null if the count is uncertain; never infer invisible instances.')
@@ -271,7 +285,7 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         "schema": SCHEMA,
         "observed_at_unix_ms": int(time.time() * 1000),
         "question": question,
-        "answer": answer[:MAX_ANSWER_CHARS],
+        "answer": measurement.get("answer", answer[:MAX_ANSWER_CHARS]) if result_type == "description" else answer[:MAX_ANSWER_CHARS],
         "latency_ms": round((time.monotonic() - started) * 1000, 3),
         "image": {"sha256": _sha256(image_path)},
         "runtime": ({key: artifact.get(key) for key in
