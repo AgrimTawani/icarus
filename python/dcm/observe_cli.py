@@ -40,7 +40,7 @@ def main():
                         help="hard per-decision deadline for the llama runtime")
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed")
-    parser.add_argument("--context", choices=("v2", "v3"), default="v3",
+    parser.add_argument("--context", choices=("v2",), default="v2",
                         help="context contract (default: compact v3; select "
                              "v2 only for historical comparisons)")
     parser.add_argument("--macro-id",

@@ -1,0 +1,52 @@
+# Gazebo ONLY. Loaded after mark4_v2_base.parm; never apply to real hardware.
+# Dedicated sensor link, separate from the mission/GCS TCP connection.
+SERIAL2_PROTOCOL 2
+SERIAL2_BAUD 921
+# Mid-360 horizontal proximity via MAVLink (companion 3-D map remains active).
+PRX1_TYPE 2
+PRX1_MIN 1
+PRX1_MAX 40
+PRX_IGN_GND 1
+PRX_ALT_MIN 1
+PRX_LOG_RAW 1
+AVOID_ENABLE 3
+AVOID_MARGIN 2
+AVOID_BEHAVE 1
+# Do not introduce unrequested reverse motion when a clearance is breached.
+AVOID_BACKUP_SPD 0
+# Actual downward ray sensor, NOT the landing-depth proxy.
+RNGFND1_TYPE 10
+RNGFND1_ADDR 11
+RNGFND1_ORIENT 25
+RNGFND1_MIN 0.08
+RNGFND1_MAX 30
+RNGFND1_GNDCLR 0.078
+RNGFND1_POS_X 0.055
+RNGFND1_POS_Y 0
+RNGFND1_POS_Z 0.1125
+# Image-derived flow: BRIO focal point, body FRD angular rates.
+# This emulates a flow sensor, not ARK's firmware or native optical placement.
+FLOW_TYPE 5
+FLOW_FXSCALER 0
+FLOW_FYSCALER 0
+FLOW_ORIENT_YAW 0
+FLOW_POS_X 0.101
+FLOW_POS_Y 0
+FLOW_POS_Z 0.0799
+FLOW_OPTIONS 0
+# Retain GPS XY and barometric Z; fuse valid flow as supplemental velocity.
+EK3_SRC1_POSXY 3
+EK3_SRC1_VELXY 3
+EK3_SRC1_POSZ 1
+EK3_SRC1_VELZ 3
+EK3_SRC1_YAW 1
+EK3_SRC2_POSXY 0
+EK3_SRC2_VELXY 5
+EK3_SRC2_POSZ 1
+EK3_SRC2_VELZ 0
+EK3_SRC2_YAW 1
+EK3_SRC_OPTIONS 1
+EK3_FLOW_USE 1
+EK3_FLOW_M_NSE 0.35
+# Keep barometric altitude reference; range aids terrain/landing, not roof steps.
+EK3_RNG_USE_HGT -1

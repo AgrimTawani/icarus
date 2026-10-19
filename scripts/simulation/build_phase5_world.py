@@ -13,6 +13,7 @@ from pathlib import Path
 
 from build_akshu_candidate import ROOT
 from scenario_config import canonical_bytes, load_scenario
+from sensor_profiles import navsat_horizontal_noise_degrees
 
 
 def element(parent, tag, text=None, **attributes):
@@ -164,20 +165,29 @@ def build(scenario_value):
     )
     model_tree = ET.parse(model_dir / "model.sdf")
     model = model_tree.getroot().find("model")
-    navsat = model.find("link/sensor[@name='navsat']/navsat")
+    navsat = model.find("link/sensor[@name='h_rtk_gnss']/navsat")
     degraded = scenario["gps_degradation"]
+    navsat.find("position_sensing/horizontal/noise/stddev").text = str(
+        navsat_horizontal_noise_degrees(degraded["position_stddev_m"])
+    )
+    navsat.find("position_sensing/vertical/noise/stddev").text = str(
+        degraded["position_stddev_m"]
+    )
     for direction in ("horizontal", "vertical"):
-        navsat.find(f"position_sensing/{direction}/noise/stddev").text = str(
-            degraded["position_stddev_m"]
-        )
         navsat.find(f"velocity_sensing/{direction}/noise/stddev").text = str(
             degraded["velocity_stddev_m_s"]
         )
     battery = model.find("plugin[@name='gz::sim::systems::LinearBatteryPlugin']")
     battery.find("initial_charge").text = str(
-        10.0 * scenario["battery"]["initial_soc"]
+        float(battery.find("capacity").text) * scenario["battery"]["initial_soc"]
     )
-    battery.find("power_load").text = str(scenario["battery"]["load_w"])
+    load_model = model.find("plugin[@name='icarus::BatteryLoad']")
+    if load_model is not None:
+        load_model.find("hover_power_w").text = str(scenario["battery"]["load_w"])
+        if float(load_model.find("hover_power_w").text) < float(load_model.find("idle_power_w").text):
+            raise ValueError("scenario battery hover load must cover configured idle load")
+    else:
+        battery.find("power_load").text = str(scenario["battery"]["load_w"])
     (model_dir / "model.config").write_text(
         '<model><name>Phase 5 ' + scenario["name"]
         + '</name><version>1.0</version><sdf version="1.9">model.sdf</sdf>'

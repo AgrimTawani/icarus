@@ -37,7 +37,7 @@ def frozen_held_out_episode_ids(split_path=DEFAULT_SPLIT_PATH):
     held_out = split.get("held_out_episode_ids")
     training = split.get("training_episode_ids")
     if not isinstance(held_out, list) or not isinstance(training, list):
-        raise ValueError("held-out split lists are missing")
+        raise ValueError("held-out split lists are missing")  # noqa: TRY004
     if not held_out or any(not isinstance(item, str) or not item for item in held_out):
         raise ValueError("held-out split is empty or invalid")
     if set(held_out) & set(training):

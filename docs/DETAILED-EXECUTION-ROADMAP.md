@@ -124,9 +124,9 @@ inside and outside them.
       isolation.
 - [x] Allocate up to 900 g for a flight-suitable Thor T5000 compute assembly;
       the 1.94 kg developer kit is for bench use only.
-- [x] Select GNSS/compass, downward rangefinder, forward depth camera, and
-      top-mounted 360-degree lidar as the initial sensor suite.
-- [x] Set the initial takeoff mass to 4.343 kg, cap the design at 4.5 kg, require
+- [x] Select H-RTK ZED-F9P/RM3100, ARK Flow MR, forward D435i, downward BRIO,
+      and MID-360 as the hardware-specific sensor suite.
+- [x] Set the current takeoff mass to 4.4745 kg, cap the design at 4.5 kg, require
       the horizontal center of gravity within 5 mm of frame center, and preserve
       at least 2.18:1 thrust-to-weight at the initial 70% output ceiling.
 

@@ -97,20 +97,20 @@ overrides upstream ComputerVision/SimpleFlight examples with the reviewed
 LiDAR are timestamped API sensors, and ArduPilot SITL remains the only flight
 controller. No AirSim movement or pose RPC is available to the DCM.
 
-Each calibrated city scene has a separate reviewed mission-reference JSON. It
-names a primary building and an explicit local-NED hover waypoint. A prompt such as “check that building, hover
-over it, and count no. of people” must produce successful `inspect_scene`,
-`goto`, `hold` and `detect(["person"])` evidence in the requested order before
-landing. Qwen2-VL supplies the qualitative building description and YOLO11n
-supplies the visible-person count. Both are read-only perception tools.
+No city-scene landmark catalog or waypoint file is added to an LLM prompt.
+The planner sees the world for the first time through live sensors. A prompt
+such as “check the building” can request current-camera VLM inspection, but
+“fly to the building” asks for explicit local coordinates before any flight.
+Qwen2-VL supplies qualitative current-camera descriptions and YOLO11n supplies
+supported object detections. Both are read-only perception tools.
 
 AirVLN scenes are visually rich research worlds, not deterministic crowd
 fixtures. A detector may report zero, but that is an observation rather than a
-verified answer. AirSim person-count completion succeeds only when the scene
-reference contains a reviewed `person_count_ground_truth` block with a
-non-negative expected visible count and camera ID. Without it, completion is
-`inconclusive_no_airsim_ground_truth`. The truth block is scoring-only and is
-never added to the DCM observation. The project-owned Gazebo
+verified answer. AirSim person-count completion is
+`inconclusive_no_airsim_ground_truth` unless an external test harness compares
+the recorded result with private truth after the mission. No truth block is
+placed in the session or DCM observation. `That building` never selects hidden
+coordinates; it is limited to current-camera inspection. The project-owned Gazebo
 `edge_people_building` scenario remains the deterministic count regression.
 
 ### Custom Icarus7 pawn and physics module
@@ -124,7 +124,7 @@ The module supplies a native `AFlyingPawn` subclass with AirSim's five required
 camera components, four actuator-driven rotors in ArduPilot Quad-X order,
 compound collision and reviewed sensor transforms. `settings.icarus7*.json`
 select it through `PawnPaths` and select a pinned physics overlay through
-`Model=Icarus7`. The overlay uses the component-derived 4.343 kg mass, the
+`Model=Icarus7`. The overlay uses the component-derived 4.4745 kg mass, the
 FLU-to-FRD inertia transform, canonical rotor positions and the frozen
 motor/propeller baseline. A compiled AirLib executable test verifies those
 runtime values.
@@ -182,9 +182,11 @@ ArduPilot/RPC/sensor stack. The default command remains off-screen and
 Unreal viewport: it displays the vehicle's RGB capture beside a false-color
 depth product, at the sensor resolutions selected for autonomy throughput.
 
-`--scene <id>` selects another installed AirVLN scene, but it does not make
-that scene a calibrated mission environment. Prompt-driven building flight
-requires a committed and reviewed `airvln-env-<id>-reference.json`.
+`--scene <id>` selects another installed AirVLN scene, but it does not expose
+scene semantics to either LLM. Prompt-driven visual-target flight remains
+unavailable until live camera/depth localization can produce reviewed 3-D
+coordinates; current-camera inspection and explicit-coordinate flight remain
+separate capabilities.
 
 ## Verified 2026-09-23
 

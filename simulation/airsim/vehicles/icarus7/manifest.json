@@ -20,12 +20,12 @@
   "physics": {
     "source": "simulation/models/akshu_compact_sitl/mass_properties.json",
     "status": "design-target parity; not as-built validation",
-    "mass_kg": 4.343,
-    "cg_flu_m": [0.0010460511, 0.0, -0.0590099010],
+    "mass_kg": 4.4745,
+    "cg_flu_m": [0.0051726450, -0.0014904459, -0.0519852106],
     "inertia_frd_kg_m2": [
-      [0.0298044346, 0.0000007026, -0.0001342980],
-      [0.0000007026, 0.0302975742, 0.0],
-      [-0.0001342980, 0.0, 0.0415397287]
+      [0.0356599568, 0.0006420780, 0.0016414150],
+      [0.0006420780, 0.0378816077, 0.0006401254],
+      [0.0016414150, 0.0006401254, 0.0443568033]
     ],
     "propeller_diameter_m": 0.254,
     "max_rpm": 15606.0,
@@ -35,17 +35,17 @@
     "moment_to_thrust_ratio_m": 0.016
   },
   "rotors_airsim_order": [
-    {"index": 0, "label": "FR", "direction": "CCW", "frd_m": [0.1384983492, 0.1733868713, -0.0590099010]},
-    {"index": 1, "label": "RL", "direction": "CCW", "frd_m": [-0.1384933424, -0.1733872604, -0.0590099010]},
-    {"index": 2, "label": "FL", "direction": "CW", "frd_m": [0.1385076265, -0.1733864822, -0.0590099010]},
-    {"index": 3, "label": "RR", "direction": "CW", "frd_m": [-0.1385126333, 0.1733868713, -0.0590099010]}
+    {"index": 0, "label": "FR", "direction": "CCW", "frd_m": [0.1333257042, 0.1718964254, -0.0519852106]},
+    {"index": 1, "label": "RL", "direction": "CCW", "frd_m": [-0.1436659874, -0.1748777063, -0.0519852106]},
+    {"index": 2, "label": "FL", "direction": "CW", "frd_m": [0.1333349815, -0.1748769281, -0.0519852106]},
+    {"index": 3, "label": "RR", "direction": "CW", "frd_m": [-0.1436852783, 0.1718964254, -0.0519852106]}
   ],
   "sensors_frd_m": {
-    "Lidar1": [0.0700, 0.0, -0.1385099010],
-    "FrontCenterCamera": [0.1199, 0.0, -0.0510099010],
-    "BottomCenterCamera": [0.1010, 0.0, 0.0208900990],
-    "OpticalFlow": [0.0550, 0.0, 0.0534900990],
-    "RTK": [-0.0910, 0.0680, -0.1030099010]
+    "Lidar1": [0.0648273550, -0.0014904459, -0.1314852106],
+    "FrontCenterCamera": [0.1147273550, -0.0014904459, -0.0439852106],
+    "BottomCenterCamera": [0.0958273550, -0.0014904459, 0.0279147894],
+    "OpticalFlow": [0.0498273550, -0.0014904459, 0.0605147894],
+    "RTK": [-0.0961726450, 0.0665095541, -0.0959852106]
   },
   "known_limitations": [
     "The supplied full visual mesh has no collision; the module supplies conservative compound boxes.",

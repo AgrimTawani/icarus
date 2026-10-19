@@ -29,8 +29,6 @@ def main():
     parser.add_argument("--environment-id", default="blocks-v1.8.0")
     parser.add_argument("--environment-license", default="MIT-compatible-binary-distribution")
     parser.add_argument("--environment-source", default="microsoft/AirSim-v1.8.0")
-    parser.add_argument("--mission-reference", type=Path,
-                        help="Reviewed landmark/reference JSON for this scene")
     parser.add_argument("--binary-arg", action="append", default=[],
                         help="Argument forwarded to the Unreal entrypoint (repeatable)")
     parser.add_argument("--startup-timeout", type=float, default=60)
@@ -38,22 +36,6 @@ def main():
                         help="Open the Unreal viewport instead of using off-screen rendering.")
     parser.add_argument("--rebuild-sitl", action="store_true")
     args = parser.parse_args()
-    mission_reference = None
-    if args.mission_reference:
-        mission_reference = json.loads(args.mission_reference.read_text())
-        if not isinstance(mission_reference.get("known_landmarks", []), list):
-            parser.error("mission reference known_landmarks must be a list")
-        person_truth = mission_reference.get("person_count_ground_truth")
-        if person_truth is not None and (
-                not isinstance(person_truth, dict)
-                or type(person_truth.get("expected_visible_count")) is not int
-                or person_truth["expected_visible_count"] < 0
-                or person_truth.get("review_status") != "reviewed"
-                or not isinstance(person_truth.get("camera_id"), str)
-                or not person_truth.get("camera_id")):
-            parser.error(
-                "person_count_ground_truth requires a non-negative "
-                "expected_visible_count, review_status=reviewed, and camera_id")
     if args.rebuild_sitl or not SITL.is_file():
         environment = dict(os.environ)
         environment["PATH"] = str(ARDUPILOT / ".venv/bin") + os.pathsep + environment["PATH"]
@@ -122,8 +104,6 @@ def main():
             "source": args.environment_source,
         },
     })
-    if mission_reference is not None:
-        session["mission_reference"] = mission_reference
     SESSION.write_text(json.dumps(session, indent=2) + "\n")
     deadline = time.monotonic() + args.startup_timeout
     smoke = [str(ROOT / "scripts/airsim-smoke"), "--timeout", "5"]

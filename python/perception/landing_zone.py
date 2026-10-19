@@ -27,13 +27,19 @@ def load_landing_source(path):
     physical downward camera can replace only this adapter configuration.
     """
     source = json.loads(Path(path).read_text())
-    if source.get("version") != 1 or set(source) != {"version", "active_source"}:
+    version = source.get("version")
+    if version not in (1, 2) or set(source) != {"version", "active_source"}:
         raise ValueError("invalid landing source configuration")
     active = source["active_source"]
     required = {"sensor_id", "topic", "optical_axis_body_frd",
                 "horizontal_fov_deg", "vertical_fov_deg"}
-    if set(active) != required or not isinstance(active["sensor_id"], str):
+    optional = ({"simulation_only", "physical_camera"} if version == 2 else set())
+    if set(active) != required | optional or not isinstance(active["sensor_id"], str):
         raise ValueError("invalid active landing source")
+    if version == 2 and (
+            active["simulation_only"] is not True
+            or not isinstance(active["physical_camera"], str)):
+        raise ValueError("invalid simulation-only landing proxy metadata")
     if not isinstance(active["topic"], str) or not active["topic"].startswith("/"):
         raise ValueError("landing source topic must be absolute")
     _as_axis(active["optical_axis_body_frd"])
@@ -170,6 +176,7 @@ def assess_landing_zone(
         "footprint_radius_m": round(footprint_radius_m, 5),
         "slope_deg": round(slope_deg, 5),
         "roughness_m": round(roughness, 5),
+        "surface_distance_m": round(float(coefficients[2]), 5),
         "sample_count": int(len(points)),
         "limits": {"max_slope_deg": max_slope_deg,
                    "max_roughness_m": max_roughness_m},

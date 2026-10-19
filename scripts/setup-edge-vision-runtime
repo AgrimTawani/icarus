@@ -8,6 +8,16 @@ ACTOR_CACHE="${EDGE_DIR}/gazebo_fuel_cache"
 ACTOR_DIR="${ACTOR_CACHE}/fuel.gazebosim.org/mingfei/models/actor/1"
 MANIFEST="${EDGE_DIR}/MANIFEST.json"; VENV="${ROOT}/.venv"
 VISION_MANIFEST="${VISION_MANIFEST:-$HOME/models/vision/MANIFEST.json}"
+# Re-provision the installed flight selection by default; explicit source/role wins.
+if [[ -z "${FLIGHT_MANIFEST:-}" ]]; then
+  if [[ -f "${MANIFEST}" ]]; then
+    FLIGHT_MANIFEST="${MANIFEST}"
+  else
+    FLIGHT_MANIFEST="$HOME/models/qwen/MANIFEST.json"
+  fi
+fi
+FLIGHT_ROLE="${FLIGHT_ROLE:-}"
+
 mkdir -p "${YOLO_DIR}" "${ACTOR_CACHE}"
 [[ -x "${VENV}/bin/python" ]] || { echo "missing .venv; run ./scripts/bootstrap --profile ml" >&2; exit 1; }
 if [[ ! -f "${ACTOR_DIR}/meshes/walk.dae" || ! -f "${ACTOR_DIR}/meshes/stand.dae" ]]; then
@@ -30,30 +40,47 @@ PY
 then
   "${ROOT}/scripts/setup-vlm-runtime"
 fi
-"${VENV}/bin/python" - "${ROOT}" "${YOLO_DIR}" "${ACTOR_DIR}" "${MANIFEST}" "${VISION_MANIFEST}" <<'PY'
+"${VENV}/bin/python" - "${ROOT}" "${YOLO_DIR}" "${ACTOR_DIR}" "${MANIFEST}" "${VISION_MANIFEST}" "${FLIGHT_MANIFEST}" "${FLIGHT_ROLE}" <<'PY'
 import hashlib, json, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
-root, yolo_dir, actor_dir, manifest_path, vision_manifest = map(Path, sys.argv[1:])
-qwen_manifest = Path.home() / "models/qwen/MANIFEST.json"
-if not qwen_manifest.is_file(): raise SystemExit("existing Qwen manifest missing; run ./scripts/setup-model-runtime")
-qwen = json.loads(qwen_manifest.read_text())
-q4 = next((a for a in qwen.get("artifacts", []) if a.get("quantization") == "q4_k_m"), None)
-if not q4 or not Path(q4["path"]).is_file(): raise SystemExit("existing Qwen Q4 artifact missing")
+root, yolo_dir, actor_dir, manifest_path, vision_manifest, flight_manifest = map(Path, sys.argv[1:7])
+flight_role = sys.argv[7] or None
+sys.path.insert(0, str(root))
+from python.dcm.edge_provisioning import flight_artifact
+if not flight_manifest.is_file(): raise SystemExit("flight manifest missing; set FLIGHT_MANIFEST and optional FLIGHT_ROLE")
+flight_source = json.loads(flight_manifest.read_text())
+if flight_role is None:
+    flight_role = ("qwen_edge_primary" if any(a.get("role") == "qwen_edge_primary"
+                   for a in flight_source.get("artifacts", [])) else "primary")
+selected = [a for a in flight_source.get("artifacts", []) if a.get("role") == flight_role]
+if len(selected) == 1 and any(not selected[0].get(key, flight_source.get(key)) for key in ("revision", "family")):
+    from python.dcm.model_provenance import publisher_metadata, upgrade_legacy_source
+    repository = selected[0].get("repository", flight_source.get("repository"))
+    if not repository: raise SystemExit("legacy model manifest has no publisher repository")
+    metadata = publisher_metadata(repository, flight_manifest.parent / "PUBLISHER_METADATA.json")
+    flight_source = upgrade_legacy_source(flight_source, flight_role, metadata)
+flight = flight_artifact(flight_source, flight_role)
 def sha(path):
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
         for block in iter(lambda: f.read(1024 * 1024), b""): h.update(block)
     return h.hexdigest()
-yolo = yolo_dir / "yolo11n.pt"
+# Preserve an installed detector unless the operator chooses a variant.
+installed = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+previous = next((a for a in installed.get("artifacts", []) if a.get("role") == "yolo"), {})
+yolo_id = os.environ.get("EDGE_YOLO_MODEL") or previous.get("model_id") or Path(previous.get("path", "yolo11s.pt")).stem
+if yolo_id not in {"yolo11n", "yolo11s", "yolo11m", "yolo11l", "yolo11x"}:
+    raise SystemExit("EDGE_YOLO_MODEL must name an official YOLO11 detection variant")
+yolo = yolo_dir / (yolo_id + ".pt")
 if not yolo.is_file():
     from ultralytics import YOLO
     previous_cwd = Path.cwd()
     os.chdir(yolo_dir)
     try:
-        model = YOLO("yolo11n.pt")
-        source = Path(getattr(model, "ckpt_path", "yolo11n.pt"))
-        if not source.is_file(): source = yolo_dir / "yolo11n.pt"
+        model = YOLO(yolo.name)
+        source = Path(getattr(model, "ckpt_path", yolo.name))
+        if not source.is_file(): source = yolo
         if source.resolve() != yolo.resolve(): yolo.write_bytes(source.read_bytes())
     finally:
         os.chdir(previous_cwd)
@@ -68,12 +95,15 @@ actor_meshes = {str(p.relative_to(actor_dir)): sha(p) for p in sorted(actor_dir.
 if not (actor_dir / "meshes/walk.dae").is_file() or not (actor_dir / "meshes/stand.dae").is_file():
     raise SystemExit("Gazebo actor asset is incomplete")
 artifacts = [
- {"role":"qwen_edge_primary","family":"qwen","repository":qwen.get("repository"),"revision":qwen.get("llama_cpp_revision"),"path":q4["path"],"sha256":q4["sha256"],"runtime":"llama_cpp","quantization":"q4_k_m","model_role":"flight_llm"},
- {"role":"yolo","family":"yolo","repository":"ultralytics/yolo11","revision":"ultralytics=="+ultralytics.__version__,"path":str(yolo),"sha256":sha(yolo),"runtime":"ultralytics","quantization":"fp16-or-runtime-default","model_role":"continuous_detector"},
+ flight,
+ {"role":"yolo","family":"yolo","model_id":yolo_id,"repository":"ultralytics/yolo11","revision":"ultralytics=="+ultralytics.__version__,"path":str(yolo),"sha256":sha(yolo),"runtime":"ultralytics","quantization":"fp16-or-runtime-default","model_role":"continuous_detector"},
  {**vlm,"model_role":"bounded_qualitative_inspection","execution":"cpu_offload_to_preserve_flight_llm_vram"},
  {"role":"gazebo_actor","family":"gazebo_fuel","repository":"https://fuel.gazebosim.org/1.0/Mingfei/models/actor","revision":"1","path":str(actor_dir),"sha256":sha(actor_dir / "model.sdf"),"file_sha256":actor_meshes,"runtime":"gazebo_harmonic","quantization":"n/a","model_role":"detector-visible_simulation_target"},
 ]
-manifest = {"schema":"icarus.edge.runtime.v1","profile":"edge-vision","simulation_only":True,"recorded_at":datetime.now(timezone.utc).isoformat(),"context_length":4096,"llama_cpp_revision":qwen.get("llama_cpp_revision"),"artifacts":artifacts,"policy":{"yolo_image_size":640,"yolo_max_fps":5,"vlm_interval_s":5,"vlm_gpu_layers":0,"vlm_load_mode":"load-infer-release","raw_pixels_in_episode_logs":False}}
+manifest = {"schema":"icarus.edge.runtime.v1","profile":"edge-vision","simulation_only":True,"recorded_at":datetime.now(timezone.utc).isoformat(),"context_length":flight.get("context_length",8192),"llama_cpp_revision":flight_source.get("llama_cpp_revision"),"artifacts":artifacts,"policy":{"yolo_image_size":640,"yolo_max_fps":5,"vlm_interval_s":5,"vlm_gpu_layers":0,"vlm_load_mode":"load-infer-release","raw_pixels_in_episode_logs":False}}
+for field in ("deadline_ms", "reasoning_mode", "reasoning_budget", "gpu_layers", "gpu_memory_margin_mib"):
+    if field in flight:
+        manifest[field] = flight[field]
 manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 print(manifest_path)
 PY

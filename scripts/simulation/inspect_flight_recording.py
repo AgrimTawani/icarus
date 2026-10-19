@@ -19,6 +19,7 @@ def main():
     from gz.msgs10.laserscan_pb2 import LaserScan
     from gz.msgs10.magnetometer_pb2 import Magnetometer
     from gz.msgs10.navsat_pb2 import NavSat
+    from gz.msgs10.stringmsg_pb2 import StringMsg
     from gz.msgs10.vector3d_pb2 import Vector3d
 
     types = {
@@ -32,6 +33,7 @@ def main():
             FluidPressure,
             BatteryState,
             Vector3d,
+            StringMsg,
         )
     }
     folder = args.directory / "sensors"
@@ -57,10 +59,16 @@ def main():
                     first = stamp
                 last = stamp
                 if (
-                    name in ("rgb", "depth")
+                    name in ("rgb", "depth", "downward_rgb", "landing_depth_proxy")
                     and schema.get("image_pixels_saved") is False
                 ):
-                    assert not msg.data and msg.width == 640 and msg.height == 480
+                    expected = {
+                        "rgb": (848, 480),
+                        "depth": (848, 480),
+                        "downward_rgb": (1280, 720),
+                        "landing_depth_proxy": (320, 180),
+                    }[name]
+                    assert not msg.data and (msg.width, msg.height) == expected
                 count += 1
         assert count == health["recorded"][name] and count >= 3
         results[name] = {

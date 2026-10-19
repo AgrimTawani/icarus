@@ -15,6 +15,7 @@ from test_mark4_motors import stop
 
 def case(strip_visuals, directory):
     os.environ["GZ_PARTITION"] = "icarus_drop_" + uuid.uuid4().hex
+    os.environ["GZ_IP"] = "127.0.0.1"
     os.environ["GZ_SIM_RESOURCE_PATH"] = str(ROOT / "simulation/models")
     from gz.msgs10.pose_v_pb2 import Pose_V
     from gz.transport13 import Node

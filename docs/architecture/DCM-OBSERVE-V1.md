@@ -130,9 +130,11 @@ The verdict is snapshotted before the restart. Tearing the server down can
 unblock the worker, and a late answer arriving afterwards must not overturn a
 decision the deadline has already made.
 
-Output is deliberately **not** grammar-constrained. llama.cpp can force
-schema-valid JSON, which would make the invalid-action rate zero by
-construction and hide exactly the differences Phase 12 exists to measure.
+Per-observation action output is deliberately **not** grammar-constrained.
+llama.cpp can force schema-valid JSON, which would make the invalid-action rate
+zero by construction and hide exactly the differences Phase 12 exists to
+measure. The separate deployment mission-planner envelope is schema-constrained;
+its semantic plan is still independently grounded and validated before flight.
 
 ### Measured behaviour
 

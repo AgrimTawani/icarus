@@ -1,0 +1,132 @@
+{
+  "schema": "icarus.dcm.vague-terms.v1",
+  "description": "Reviewed values the deterministic resolver substitutes for vague operator words. The planner LLM may name a term (the planner grammar only offers these terms); only this file gives it a number. Every substitution is recorded as vague_term:<term> provenance and shown in the operator readback. Values are deliberately conservative and inside the Drone API contract bounds (takeoff <= 10 m, hold <= 60 s, orbit radius 3..15 m, yaw rate 5..60 deg/s). An unrecognised term falls back to family_defaults and is disclosed in the readback. Reviewed values only fill a missing or vague value: an explicit operator number inside the contract bounds is never replaced (visual_defaults.max_scan_step_deg bounds the reviewed step terms and defaults, not the operator), and any adjustment still needed for validity is shown on the readback line.",
+  "duration_s": {
+    "a sec": 2,
+    "a second": 2,
+    "a moment": 3,
+    "a few seconds": 5,
+    "briefly": 5,
+    "a bit": 5,
+    "a little": 5,
+    "a little while": 5,
+    "a short while": 5,
+    "a while": 10,
+    "a minute": 60,
+    "a long while": 20
+  },
+  "distance_m": {
+    "a little": 3,
+    "a bit": 3,
+    "a bit further": 3,
+    "a few metres": 3,
+    "a short way": 3,
+    "a short distance": 3,
+    "some distance": 5,
+    "far": 10
+  },
+  "vertical_m": {
+    "a little": 2,
+    "a bit": 2,
+    "a bit higher": 2,
+    "a bit lower": 2,
+    "a few metres": 3,
+    "some distance": 5
+  },
+  "radius_m": {
+    "tight": 3,
+    "small": 5,
+    "small circle": 5,
+    "nearby": 5,
+    "medium": 8,
+    "large": 12,
+    "wide": 12,
+    "wide circle": 12
+  },
+  "altitude_m": {
+    "low": 3,
+    "a bit": 3,
+    "a little": 3,
+    "medium": 6,
+    "high": 10,
+    "high up": 10,
+    "treetop": 8
+  },
+  "sweep_deg": {
+    "full": 360,
+    "360": 360,
+    "full circle": 360,
+    "whole area": 360,
+    "all around": 360,
+    "look around": 360,
+    "have a look": 360,
+    "scan the area": 360,
+    "everywhere": 360,
+    "half": 180,
+    "half turn": 180,
+    "quarter": 90
+  },
+  "step_deg": {
+    "small": 15,
+    "fine": 10,
+    "large": 45
+  },
+  "speed": {
+    "slowly": {
+      "yaw_rate_deg_s": 15.0,
+      "ground_speed_mps": 1.0,
+      "climb_rate_mps": 0.5
+    },
+    "normal": {
+      "yaw_rate_deg_s": 30.0,
+      "ground_speed_mps": 2.0,
+      "climb_rate_mps": 1.0
+    },
+    "quickly": {
+      "yaw_rate_deg_s": 45.0,
+      "ground_speed_mps": 3.0,
+      "climb_rate_mps": 1.5
+    }
+  },
+  "aliases": {
+    "carefully": "slowly",
+    "gently": "slowly",
+    "slow": "slowly",
+    "fast": "quickly",
+    "quick": "quickly",
+    "a few meters": "a few metres",
+    "a couple of seconds": "a few seconds",
+    "a bit longer": "a little while",
+    "all the way around": "full",
+    "full rotation": "full",
+    "a full circle": "full circle",
+    "whole": "full",
+    "around": "full",
+    "180": "half turn"
+  },
+  "family_defaults": {
+    "duration_s": 5,
+    "distance_m": 3,
+    "vertical_m": 2,
+    "radius_m": 5,
+    "altitude_m": 3,
+    "sweep_deg": 360,
+    "step_deg": 10,
+    "speed": "normal"
+  },
+  "visual_defaults": {
+    "vlm_scan_step_deg": 30.0,
+    "max_scan_step_deg": 45.0,
+    "search_max_angle_deg": 360.0,
+    "search_max_viewpoints": 36,
+    "search_max_vlm_calls": 12
+  },
+  "navigation_safety": {
+    "minimum_navigation_altitude_agl_m": 2.0
+  },
+  "navigation_defaults": {
+    "orbit_revolutions": 1.0,
+    "orbit_direction": "clockwise",
+    "implicit_takeoff_when_grounded": true
+  }
+}

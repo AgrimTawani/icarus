@@ -17,10 +17,12 @@ class LandingZoneTests(unittest.TestCase):
     def test_versioned_source_configuration_is_loaded(self):
         root = Path(__file__).resolve().parents[2]
         source = load_landing_source(root / "config/perception/landing_zone.json")
-        self.assertEqual(source["sensor_id"], "downward_rgbd")
-        self.assertEqual(source["topic"], "/icarus/sensors/rgbd_down/depth_image")
+        self.assertEqual(source["sensor_id"], "simulation_only_landing_depth_proxy")
+        self.assertEqual(source["topic"], "/icarus/sensors/landing_depth_proxy/depth_image")
+        self.assertTrue(source["simulation_only"])
+        self.assertEqual(source["physical_camera"], "logitech_brio_4k_rgb_only")
         self.assertEqual(source["optical_axis_body_frd"], [0.0, 0.0, 1.0])
-        self.assertAlmostEqual(source["vertical_fov_deg"], 67.15)
+        self.assertAlmostEqual(source["vertical_fov_deg"], 52.2338454)
 
     def test_invalid_source_configuration_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

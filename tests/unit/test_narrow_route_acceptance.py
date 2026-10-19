@@ -1,9 +1,8 @@
 """Structural contract checks for the narrow-route acceptance client."""
 
-from pathlib import Path
 import sys
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/simulation"))
@@ -16,7 +15,7 @@ class NarrowRouteAcceptanceTest(unittest.TestCase):
     def test_uses_typed_api_truth_scoring_and_episode_capture(self):
         source = (ROOT / "scripts/autonomy/run_narrow_route_acceptance.py").read_text()
         self.assertIn('session.get("scenario") != "obstacle_course"', source)
-        self.assertIn('north_m=target[1], east_m=target[0], down_m=-target[2]', source)
+        self.assertIn('north_m=target[1], east_m=target[0], altitude_above_home_m=target[2]', source)
         self.assertIn("client.action_api.Goto", source)
         self.assertIn("ACTION_STATE_ABORTED_BY_SAFETY", source)
         self.assertIn("no collision-free path", source)

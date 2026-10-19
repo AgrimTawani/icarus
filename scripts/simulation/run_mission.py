@@ -78,6 +78,7 @@ def main():
         )
     env = os.environ.copy()
     env["GZ_PARTITION"] = session["partition"]
+    env["GZ_IP"] = session.get("gz_ip", "127.0.0.1")
     print("Mission artifacts:", directory, flush=True)
     completed = subprocess.run(command, env=env, check=False)
     raise SystemExit(completed.returncode)

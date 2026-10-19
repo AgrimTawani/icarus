@@ -25,24 +25,28 @@ to `start-sim` or `start-airsim-stack`.
        -> validates scenario and generates world/model
        -> starts Gazebo server (+ GUI when requested)
        -> starts ArduCopter SITL
+       -> starts calibrated image-flow and Gazebo-to-MAVLink sensor bridges
        -> verifies sensors, MAVLink navigation and forward video
        -> publishes the active session only after global readiness
 
 Exactly one independent control client:
     ./scripts/manual-control -> keyboard/Xbox RC override client
-    ./scripts/run-mission    -> deterministic pymavlink mission client
-    future Drone API         -> safety-bounded autonomy path
+    ./scripts/run-mission / ./scripts/dcm-fly
+                            -> Drone API -> safety-bounded MAVLink gateway
 
 Gazebo physics --JSON/UDP :9002--> ArduPilot SITL
 Gazebo motors <--normalized servo outputs-- ArduPilot SITL
 Controller <---------MAVLink TCP :5760--------> ArduPilot SITL
-Public sensor streams --> recorder/fault boundary (future perception consumers)
+Public sensor streams --> companion perception, recorder and fault boundary
+MID-360 / downward range / image-derived flow
+    --> Gazebo-only sensor bridge --MAVLink2 UDP :14562--> ArduPilot SERIAL2
 ```
 
 Gazebo owns rigid-body dynamics, collisions, wind and native sensor simulation.
 ArduPilot owns estimation, stabilization, flight modes and motor mixing. The
-mission client performs the present automated takeoff-hover-land test; it is
-test infrastructure, not the future Drone API. The manual client supplies
+`run-mission` client exercises the Drone API. Dedicated simulator acceptance
+controllers can also test SITL directly and must not run alongside a mission
+client. The manual client supplies
 simulated RC input while ArduPilot still owns stabilization and motor mixing.
 
 ## Sensor Paths
@@ -53,10 +57,19 @@ model state support that lockstep interface. ArduPilot SITL currently generates
 its GPS, compass, barometer and battery behavior within the SITL integration.
 
 Gazebo-native camera, 360-degree lidar and downward range sensors are exposed as
-public simulation streams and checked by the health recorder. Phase 5 delays or
-drops data at this public consumer boundary. Those faults do **not** corrupt the
-MAVLink connection or ArduPilot EKF. Connecting these streams to Icarus
-perception and the normalized state engine belongs to Phases 8–9.
+public simulation streams and checked by the health recorder. The companion
+uses the cameras and 3-D LiDAR for perception. The Gazebo-only autopilot bridge
+additionally forwards a horizontal LiDAR proximity slice (`OBSTACLE_DISTANCE`),
+the real downward range rays (`DISTANCE_SENSOR`), and calibrated image-derived
+flow (`OPTICAL_FLOW`). GPS/barometric altitude stay primary; valid flow is
+configured as supplemental velocity aiding and range supports terrain/landing.
+
+Sensor `drop` faults on `lidar`, `range` and `optical_flow` now also stop their
+autopilot input streams, allowing ArduPilot's native timeout behaviour to be
+tested. This does not corrupt the flight-command connection. Direct GPS/IMU
+hardware-channel fusion remains outside this change. See
+[`Gazebo hardware fidelity`](../simulation/GAZEBO-HARDWARE-FIDELITY.md#ardupilot-sensor-integration-gazebo-only)
+for frame conventions, parameter defaults, control-mode restrictions and tests.
 
 ## Frames and Units
 

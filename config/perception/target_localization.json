@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "camera": {
+    "sensor_id": "intel_realsense_d435i_rgb",
+    "gazebo_camera": "0",
+    "width_px": 848,
+    "height_px": 480,
+    "horizontal_fov_deg": 86.1307,
+    "yaw_offset_deg": 0.0,
+    "pitch_offset_deg": 0.0,
+    "calibration": "simulation SDF rgbd_camera d435i (horizontal_fov 1.5032649213 rad, 848x480, body-aligned); replace with bench calibration on hardware",
+    "depth_minimum_m": 0.3,
+    "depth_maximum_m": 10.0
+  },
+  "lidar": {
+    "sensor_id": "livox_mid360",
+    "maximum_range_m": 40.0,
+    "minimum_elevation_deg": -7.0,
+    "maximum_elevation_deg": 52.0,
+    "elevation_calibration": "MID-360 body-aligned scan limits; simulation models use -7 to +52 degrees. Replace with mounted sensor calibration on other platforms."
+  },
+  "association": {
+    "minimum_image_iou": 0.05,
+    "minimum_bearing_overlap": 0.25,
+    "minimum_lidar_returns": 10
+  },
+  "multiview": {
+    "history_s": 120.0,
+    "agreement_tolerance_m": 2.0,
+    "agreement_range_fraction": 0.15
+  },
+  "footprint": {
+    "single_face_depth_m": 1.0,
+    "single_face_depth_fraction": 0.2
+  },
+  "maximum_perception_age_ms": 750
+}

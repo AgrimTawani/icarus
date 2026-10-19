@@ -107,6 +107,13 @@ create_project_environment() {
 build_simulation() {
     checkout_locked ardupilot
     checkout_locked ardupilot_gazebo
+    local battery_patch="${PROJECT_ROOT}/simulation/patches/ardupilot-gazebo-battery.patch"
+    if git -C "${PROJECT_ROOT}/third_party/ardupilot_gazebo" apply --check "${battery_patch}"; then
+        git -C "${PROJECT_ROOT}/third_party/ardupilot_gazebo" apply "${battery_patch}"
+    else
+        # Already applied is acceptable; any different upstream layout fails.
+        git -C "${PROJECT_ROOT}/third_party/ardupilot_gazebo" apply --reverse --check "${battery_patch}"
+    fi
     python3 -m venv --system-site-packages "${PROJECT_ROOT}/third_party/ardupilot/.venv"
     "${PROJECT_ROOT}/third_party/ardupilot/.venv/bin/python" -m pip install \
         --upgrade pip setuptools wheel

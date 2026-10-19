@@ -52,6 +52,11 @@ message LocalPositionNed {
   double east_m = 2;
   double down_m = 3;
   string origin_id = 4;
+  // Target-only override: north/east remain in origin_id's local frame, while
+  // altitude is explicitly above home. The executor resolves down_m from a
+  // fresh measured home/origin transform. Unset means genuine local NED.
+  // Telemetry never sets this field.
+  optional double altitude_above_home_m = 5;
 }
 
 message Position {
@@ -84,12 +89,15 @@ message SourceHealth {
 
 message BatteryState {
   HealthLevel level = 1;
-  double remaining_percent = 2;
-  double voltage_v = 3;
-  double current_a = 4;
+  // Presence distinguishes unknown telemetry from measured zero charge/current.
+  optional double remaining_percent = 2;
+  optional double voltage_v = 3;
+  optional double current_a = 4;
   double consumed_mah = 5;
   double temperature_c = 6;
   uint32 estimated_remaining_s = 7;
+  // Independent receipt time of the battery frame, not the latest pose.
+  int64 received_at_unix_ms = 8;
 }
 
 message EstimatorState {
@@ -120,6 +128,22 @@ message ControlAuthority {
   int64 expires_at_unix_ms = 4;
 }
 
+// Raw autopilot-reported measurements, not claims about current EKF fusion.
+// Each reading carries its own reception time; a fresh DroneState does not
+// imply every sensor is fresh. Zero timestamps mean unavailable.
+message NavigationSensors {
+  double downward_range_m = 1;
+  int64 range_received_at_unix_ms = 2;
+  bool range_valid = 3;
+  double flow_velocity_x_mps = 4;
+  double flow_velocity_y_mps = 5;
+  uint32 flow_quality = 6;
+  int64 flow_received_at_unix_ms = 7;
+  double pressure_hpa = 8;
+  int64 pressure_received_at_unix_ms = 9;
+  string source = 10;
+}
+
 message DroneState {
   string vehicle_id = 1;
   uint64 sequence = 2;
@@ -142,6 +166,19 @@ message DroneState {
   bool geofence_breached = 19;
   repeated SourceHealth sources = 20;
   LocalPositionNed local_position_ned = 21;
+  NavigationSensors navigation_sensors = 22;
+  // Independent measurement reception times and autopilot sample clocks.
+  // A fresh aggregate state alone does not prove a coherent altitude pair.
+  int64 local_position_received_at_unix_ms = 23;
+  int64 relative_altitude_received_at_unix_ms = 24;
+  uint32 local_position_time_boot_ms = 25;
+  uint32 relative_altitude_time_boot_ms = 26;
+  int64 attitude_received_at_unix_ms = 27;
+  // Autopilot HOME_POSITION's directly measured EKF-frame coordinates.
+  // This static frame reference is invalidated when the EKF origin changes;
+  // it must not be reconstructed from asynchronously arriving current poses.
+  LocalPositionNed home_local_position_ned = 28;
+  int64 home_position_received_at_unix_ms = 29;
 }
 
 message HealthReport {

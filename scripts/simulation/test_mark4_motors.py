@@ -49,6 +49,7 @@ def stop(process):
 
 def case(index, directory):
     os.environ["GZ_PARTITION"] = "icarus_motor_" + uuid.uuid4().hex
+    os.environ["GZ_IP"] = "127.0.0.1"
     os.environ["GZ_SIM_RESOURCE_PATH"] = str(ROOT / "simulation/models")
     from gz.msgs10.actuators_pb2 import Actuators
     from gz.msgs10.model_pb2 import Model
@@ -71,6 +72,8 @@ def case(index, directory):
         )
     model = copy.deepcopy(ET.parse(MODEL).getroot().find("model"))
     model_name = model.get("name")
+    model_mass_kg = sum(
+        float(item.text) for item in model.findall("link/inertial/mass"))
     # Direct-actuator bench excludes SITL adapters; these are tested by flight.
     for plugin in list(model.findall("plugin")):
         if plugin.get("filename") in ("ArduPilotPlugin", "IcarusMotorBridge"):
@@ -233,7 +236,7 @@ def case(index, directory):
                 velocity = height = 0.0
                 for n in range(200):
                     omega = 300 * (1 - math.exp(-n * 0.001 / 0.040))
-                    velocity += 4 * k * omega**2 / 4.343 * 0.001
+                    velocity += 4 * k * omega**2 / model_mass_kg * 0.001
                     height += velocity * 0.001
                 assert abs(pose.position.z - height) < 0.08 * height, (
                     "thrust magnitude",

@@ -10,11 +10,16 @@ PerceptionEngine::PerceptionEngine(const core::Clock& clock,
 void PerceptionEngine::Ingest(const RangeScan& scan) {
   const auto state = state_engine_.Snapshot();
   if (!state || !state->has_local_position_ned()) return;
+  // Terrain for object proposals is the home (arming) altitude.  The EKF
+  // origin's down can drift by metres from barometer bias between flights,
+  // while relative altitude is re-referenced to home at arming.
+  const double terrain_down = state->local_position_ned().down_m() +
+                              state->relative_altitude_m();
   map_.Ingest(scan, state->local_position_ned().north_m(),
               state->local_position_ned().east_m(),
               state->local_position_ned().down_m(),
               state->attitude().roll_rad(), state->attitude().pitch_rad(),
-              state->attitude().yaw_rad());
+              state->attitude().yaw_rad(), terrain_down);
 }
 
 v1::PerceptionSummary PerceptionEngine::Summary() const {

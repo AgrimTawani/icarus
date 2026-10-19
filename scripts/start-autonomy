@@ -3,10 +3,10 @@
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
@@ -46,6 +46,10 @@ partition = session.get("partition")
 if not partition:
     raise SystemExit("Active simulator did not publish its Gazebo partition")
 os.environ["GZ_PARTITION"] = partition
+gz_ip = session.get("gz_ip", "127.0.0.1")
+if gz_ip != "127.0.0.1":
+    raise SystemExit("Simulator session is not bound to the required loopback Gazebo transport")
+os.environ["GZ_IP"] = gz_ip
 scenario_name = session.get("scenario")
 if not isinstance(scenario_name, str):
     raise SystemExit("Active simulator did not publish its scenario")
@@ -54,16 +58,8 @@ scenario = json.loads(scenario_path.read_text())
 if edge_profile and scenario_name != "edge_people_building":
     raise SystemExit("edge-vision requires ./scripts/start-sim --profile edge-vision")
 if edge_profile:
-    edge_log = root / "logs" / "simulation" / "edge-vision-observer.log"
-    with edge_log.open("ab") as log:
-        observer = subprocess.Popen(
-            [str(root / "scripts/start-edge-vision"), "--profile", "edge-vision"],
-            cwd=root, env=os.environ.copy(), stdout=log, stderr=subprocess.STDOUT,
-            start_new_session=True)
-    # Fail closed if the pinned edge manifest is unavailable or invalid.
-    time.sleep(0.15)
-    if observer.poll() is not None:
-        raise SystemExit("edge vision observer failed; inspect " + str(edge_log))
+    print("Edge camera tools are owned by the direct agent; no duplicate background detector is started.",
+          flush=True)
 faults = scenario.get("mavlink_fault_schedule", [])
 if len(faults) > 1:
     raise SystemExit("Only one simulator MAVLink fault event is supported")
@@ -72,12 +68,7 @@ arguments = [
     "127.0.0.1", "--mavlink-port", "5760", "--safety-policy",
     str(root / "config/safety/v1.yaml"),
 ]
-# The generic ArduPilot JSON aircraft does not ingest Gazebo's battery plugin
-# state. Carry the scenario's authoritative initial SOC into the simulator-only
-# API bridge so safety/guardrail state agrees with the generated world.
-battery = scenario.get("battery", {})
-if isinstance(battery.get("initial_soc"), (int, float)):
-    arguments.extend(["--simulation-battery-percent", str(float(battery["initial_soc"]) * 100.0)])
+# Battery percentage comes from live ArduPilot telemetry; never freeze initial SOC.
 if faults:
     fault = faults[0]
     arguments.extend([
@@ -87,7 +78,34 @@ if faults:
     ])
     if fault["mode"] == "delay":
         arguments.extend(["--test-mavlink-fault-latency-ms", str(round(float(fault["latency_ms"])))])
-os.execv(
-    str(binary),
-    arguments,
-)
+# Own the server and the simulator-session dependency. Ending or replacing
+# the simulator must not leave an old API process holding the control port.
+server = subprocess.Popen(arguments, cwd=root, env=os.environ.copy(),
+                          start_new_session=True)
+try:
+    while True:
+        try:
+            exit_code = server.wait(timeout=1)
+            break
+        except subprocess.TimeoutExpired:
+            try:
+                active = json.loads(session_path.read_text())
+                if (active.get('launcher_pid') != session['launcher_pid'] or
+                        active.get('partition') != partition or active.get('status') != 'ready'):
+                    raise RuntimeError('Simulator session ended or changed')
+                os.kill(int(session['launcher_pid']), 0)
+            except (OSError, ValueError, KeyError, RuntimeError):
+                print('Simulator session ended; stopping the owned Drone API.', flush=True)
+                raise KeyboardInterrupt
+except KeyboardInterrupt:
+    try:
+        os.killpg(server.pid, signal.SIGINT)
+        exit_code = server.wait(timeout=5)
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        server.terminate()
+        try:
+            exit_code = server.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            server.kill()
+            exit_code = server.wait()
+raise SystemExit(exit_code)

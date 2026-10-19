@@ -5,6 +5,7 @@ arguments, stale data and model failure. Each has a class below.
 """
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -72,6 +73,7 @@ class UnknownActionTests(unittest.TestCase):
                       "radius_m": 5.0, "altitude_agl_m": 3.0},
             "detect": {"classes": ["person"]},
             "inspect_scene": {"question": "describe the scene"},
+            "yaw": {"angle_deg": 90.0},
         }
         for action, specification in ACTIONS.items():
             arguments = minimal.get(action, {})
@@ -226,6 +228,31 @@ class NavigationActionTests(unittest.TestCase):
             with self.subTest(revolutions=revolutions), self.assertRaises(ValueError):
                 validate_proposal(self.orbit(revolutions=revolutions))
 
+    def test_orbit_direction_is_an_optional_strict_boolean(self):
+        self.assertNotIn("clockwise",
+                         validate_proposal(self.orbit())["arguments"])
+        for clockwise in (True, False):
+            with self.subTest(clockwise=clockwise):
+                proposal = validate_proposal(self.orbit(clockwise=clockwise))
+                self.assertIs(proposal["arguments"]["clockwise"], clockwise)
+        for clockwise in (1, 0, "true", "clockwise", None, [True]):
+            with self.subTest(clockwise=clockwise), self.assertRaises(ValueError):
+                validate_proposal(self.orbit(clockwise=clockwise))
+
+    def test_orbit_request_carries_the_direction(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]
+                               / "build/generated/python"))
+        from icarus.v1 import action_pb2
+
+        from python.dcm.actions import build_request
+        arguments = json.loads(self.orbit())["arguments"]
+        context = action_pb2.CommandContext(request_id="req")
+        request, _ = build_request(action_pb2, "orbit", arguments, context)
+        self.assertTrue(request.clockwise)
+        request, _ = build_request(action_pb2, "orbit",
+                                   {**arguments, "clockwise": False}, context)
+        self.assertFalse(request.clockwise)
+
     def test_orbit_reach_stays_inside_the_geofence(self):
         # Worst case is the corner of the centre range plus the largest
         # radius: sqrt(40^2 + 40^2) + 15 = 71.6 m, inside the 100 m policy.
@@ -244,6 +271,147 @@ class NavigationActionTests(unittest.TestCase):
         self.assertIn('"orbit"', vocabulary)
         self.assertIn("north_m", vocabulary)
         self.assertIn("radius_m", vocabulary)
+
+    def test_relative_yaw_is_bounded_and_zero_is_rejected(self):
+        for angle in (-360.0, -45.0, 1.0, 90.0, 360.0):
+            validate_proposal(json.dumps({"action": "yaw", "arguments": {
+                "angle_deg": angle, "rate_deg_s": 30.0}}))
+        for angle in (-360.1, -0.5, 0.0, 0.5, 360.1):
+            with self.subTest(angle=angle), self.assertRaises(ValueError):
+                validate_proposal(json.dumps({"action": "yaw", "arguments": {
+                    "angle_deg": angle}}))
+
+
+class TargetRelativeArgumentTests(unittest.TestCase):
+    """Optional target-relative arguments: strict shapes, stricter-only limits.
+
+    They extend goto and orbit without changing the action set, so
+    VOCABULARY_VERSION (and the generated BODY manifest) stay as they are.
+    """
+
+    def goto(self, **overrides):
+        arguments = {"north_m": 10.0, "east_m": 0.0, "altitude_agl_m": 5.0}
+        arguments.update(overrides)
+        return json.dumps({"action": "goto", "arguments": arguments})
+
+    def orbit(self, **overrides):
+        arguments = {"center_north_m": 10.0, "center_east_m": 0.0,
+                     "radius_m": 6.0, "altitude_agl_m": 5.0}
+        arguments.update(overrides)
+        return json.dumps({"action": "orbit", "arguments": arguments})
+
+    @staticmethod
+    def action_pb2():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]
+                               / "build/generated/python"))
+        from icarus.v1 import action_pb2
+        return action_pb2
+
+    def test_goto_face_point_is_a_strict_local_point(self):
+        proposal = validate_proposal(self.goto(
+            face_point={"north_m": 14.0, "east_m": -2.5}))
+        self.assertEqual(proposal["arguments"]["face_point"]["east_m"], -2.5)
+        for point in ({"north_m": 14.0}, {"north_m": 1, "east_m": 2, "down_m": 0},
+                      {"north_m": "14", "east_m": 0.0},
+                      {"north_m": True, "east_m": 0.0},
+                      {"north_m": float("nan"), "east_m": 0.0},
+                      {"north_m": 100.1, "east_m": 0.0}, [14.0, 0.0], 14.0, None):
+            with self.subTest(point=point), self.assertRaises(ValueError):
+                validate_proposal(self.goto(face_point=point))
+
+    def test_goto_face_point_conflicts_with_heading_and_needs_distance(self):
+        with self.assertRaises(ValueError):
+            validate_proposal(self.goto(
+                heading_deg=90.0, face_point={"north_m": 14.0, "east_m": 0.0}))
+        with self.assertRaises(ValueError):
+            validate_proposal(self.goto(
+                face_point={"north_m": 10.2, "east_m": 0.2}))
+
+    def test_minimum_clearance_can_only_tighten_the_policy_floor(self):
+        import yaml
+        policy = yaml.safe_load((Path(__file__).resolve().parents[2]
+                                 / "config/safety/v1.yaml").read_text())
+        floor = policy["perception"]["hard_minimum_clearance_m"]
+        for action in ("goto", "orbit"):
+            with self.subTest(action=action):
+                self.assertGreaterEqual(
+                    ACTIONS[action]["minimum_clearance_m"]["minimum"], floor)
+        validate_proposal(self.goto(minimum_clearance_m=2.0))
+        validate_proposal(self.orbit(minimum_clearance_m=4.0))
+        for clearance in (1.9, 0.0, -2.0, 10.1, True, "3"):
+            with self.subTest(clearance=clearance), self.assertRaises(ValueError):
+                validate_proposal(self.goto(minimum_clearance_m=clearance))
+
+    def test_orbit_face_center_and_viewpoints_are_bounded(self):
+        proposal = validate_proposal(self.orbit(
+            face_center=True, viewpoints=4, viewpoint_dwell_ms=2_000))
+        self.assertIs(proposal["arguments"]["face_center"], True)
+        validate_proposal(self.orbit(viewpoints=3, revolutions=0.5))
+        for overrides in ({"face_center": 1}, {"face_center": "true"},
+                          {"viewpoints": 1}, {"viewpoints": 13},
+                          {"viewpoints": 4.0}, {"viewpoints": True},
+                          {"viewpoints": 4, "revolutions": 1.5},
+                          {"viewpoint_dwell_ms": 2_000},
+                          {"viewpoints": 4, "viewpoint_dwell_ms": 20_001}):
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                validate_proposal(self.orbit(**overrides))
+
+    def test_new_arguments_appear_in_the_generated_vocabulary(self):
+        vocabulary = render_vocabulary()
+        for name in ("face_point", "face_center", "viewpoints",
+                     "minimum_clearance_m"):
+            with self.subTest(name=name):
+                self.assertIn(name, vocabulary)
+
+    def test_goto_face_point_builds_a_face_point_heading(self):
+        from python.dcm.actions import build_request
+        action_pb2 = self.action_pb2()
+        context = action_pb2.CommandContext(request_id="req")
+        arguments = json.loads(self.goto(
+            face_point={"north_m": 14.0, "east_m": -2.5}))["arguments"]
+        request, _ = build_request(action_pb2, "goto", arguments, context)
+        self.assertEqual(request.heading.mode,
+                         action_pb2.HEADING_MODE_FACE_POINT)
+        face = request.heading.face_point.local_ned
+        self.assertEqual((face.north_m, face.east_m, face.origin_id),
+                         (14.0, -2.5, "ekf-origin"))
+        # No clearance requested: the live floor stays the policy's.
+        self.assertFalse(request.limits.HasField("minimum_clearance_m"))
+        self.assertEqual(request.target_source,
+                         action_pb2.TARGET_SOURCE_UNSPECIFIED)
+        request, _ = build_request(action_pb2, "goto",
+                                   {**arguments, "minimum_clearance_m": 3.0},
+                                   context, runtime_target=True)
+        self.assertEqual(request.limits.minimum_clearance_m, 3.0)
+        self.assertEqual(request.target_source,
+                         action_pb2.TARGET_SOURCE_RUNTIME_ESTIMATE)
+
+    def test_orbit_face_center_and_viewpoints_build_the_request(self):
+        from python.dcm.actions import DEFAULT_VIEWPOINT_DWELL_MS, build_request
+        action_pb2 = self.action_pb2()
+        context = action_pb2.CommandContext(request_id="req")
+        arguments = json.loads(self.orbit())["arguments"]
+        plain, plain_timeout = build_request(action_pb2, "orbit", arguments,
+                                             context)
+        self.assertEqual(plain.heading.mode,
+                         action_pb2.HEADING_MODE_KEEP_CURRENT)
+        self.assertEqual(plain.viewpoints, 0)
+        self.assertFalse(plain.HasField("limits"))
+        request, timeout = build_request(
+            action_pb2, "orbit",
+            {**arguments, "face_center": True, "viewpoints": 4,
+             "minimum_clearance_m": 2.5},
+            context, runtime_target=True)
+        self.assertEqual(request.heading.mode,
+                         action_pb2.HEADING_MODE_FACE_POINT)
+        # No explicit point: the executor faces the orbit centre.
+        self.assertFalse(request.heading.HasField("face_point"))
+        self.assertEqual((request.viewpoints, request.viewpoint_dwell_ms),
+                         (4, DEFAULT_VIEWPOINT_DWELL_MS))
+        self.assertEqual(request.limits.minimum_clearance_m, 2.5)
+        self.assertEqual(request.target_source,
+                         action_pb2.TARGET_SOURCE_RUNTIME_ESTIMATE)
+        self.assertGreater(timeout, plain_timeout)
 
 
 class StaleDataTests(unittest.TestCase):
@@ -425,7 +593,7 @@ class RuntimeDescriptorTests(unittest.TestCase):
             descriptor = RuntimeDescriptor.from_manifest(self.manifest(root, sha))
             self.assertEqual(descriptor.verify_artifact(), sha)
             self.assertEqual(descriptor.quantization, "q5_k_m")
-            self.assertEqual(descriptor.contract_version, CONTRACT_VERSION)
+            self.assertEqual(descriptor.contract_version, "direct-agent-v1")
 
     def test_missing_artifact_is_reported(self):
         with tempfile.TemporaryDirectory() as root:

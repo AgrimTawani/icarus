@@ -7,7 +7,6 @@ Gazebo-truth subscriber scores collision clearance only after flight.
 """
 
 import json
-import math
 import os
 import sys
 import threading
@@ -35,6 +34,7 @@ def main() -> int:
     if session.get("scenario") != "obstacle_course":
         raise SystemExit("Narrow-route gate requires: ./scripts/start-sim --scenario obstacle_course")
     os.environ["GZ_PARTITION"] = session["partition"]
+    os.environ["GZ_IP"] = session.get("gz_ip", "127.0.0.1")
 
     from gz.msgs10.pose_v_pb2 import Pose_V
     from gz.transport13 import Node
@@ -81,9 +81,10 @@ def main() -> int:
             action_pb2.GotoRequest(
                 context=client.context("phase12:narrow-goto"),
                 # Route ground truth is Gazebo ENU (east, north, up); the
-                # Drone API destination is local NED (north, east, down).
+                # This fixture places home at world altitude zero. Horizontal
+                # targets are local north/east; height is explicitly above home.
                 destination=state_pb2.Position(local_ned=state_pb2.LocalPositionNed(
-                    origin_id="home", north_m=target[1], east_m=target[0], down_m=-target[2])),
+                    origin_id="home", north_m=target[1], east_m=target[0], altitude_above_home_m=target[2])),
                 acceptance_radius_m=1.0,
                 limits=action_pb2.ActionLimits(maximum_ground_speed_mps=3.0,
                                                 execution_timeout_ms=120_000,

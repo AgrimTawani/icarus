@@ -28,6 +28,7 @@ def main():
     if args.duration < 6:
         raise ValueError("At least six seconds required for rate/noise statistics")
     os.environ["GZ_PARTITION"] = "icarus_phase4_" + uuid.uuid4().hex
+    os.environ["GZ_IP"] = "127.0.0.1"
     os.environ["GZ_SIM_RESOURCE_PATH"] = str(ROOT / "simulation/models")
     vendor = Path("/usr/share/glvnd/egl_vendor.d/10_nvidia.json")
     if vendor.exists():
@@ -44,14 +45,23 @@ def main():
     from gz.transport13 import Node
 
     specs = {
-        "rgb": ("rgbd/image", Image, 15),
-        "depth": ("rgbd/depth_image", Image, 15),
-        "imu": ("imu", IMU, 200),
-        "gps": ("navsat", NavSat, 5),
-        "compass": ("compass", Magnetometer, 50),
-        "barometer": ("barometer", FluidPressure, 30),
-        "lidar": ("lidar", LaserScan, 10),
-        "range": ("range_down", LaserScan, 20),
+        "rgb": ("d435i/image", Image, 30),
+        "depth": ("d435i/depth_image", Image, 30),
+        "downward_rgb": ("brio_down", Image, 30),
+        "landing_depth_proxy": ("landing_depth_proxy/depth_image", Image, 15),
+        "imu": ("pixhawk_imu_primary", IMU, 500),
+        "imu_secondary": ("pixhawk_imu_secondary", IMU, 500),
+        "imu_tertiary": ("pixhawk_imu_tertiary", IMU, 200),
+        "d435i_imu": ("d435i_imu", IMU, 200),
+        "mid360_imu": ("mid360_imu", IMU, 200),
+        "ark_flow_imu": ("ark_flow_imu", IMU, 200),
+        "gps": ("h_rtk_gnss", NavSat, 8),
+        "compass": ("h_rtk_compass", Magnetometer, 50),
+        "compass_secondary": ("pixhawk_magnetometer", Magnetometer, 50),
+        "barometer": ("pixhawk_barometer", FluidPressure, 30),
+        "barometer_secondary": ("pixhawk_barometer_secondary", FluidPressure, 30),
+        "lidar": ("mid360", LaserScan, 10),
+        "range": ("ark_flow_range", LaserScan, 20),
         "battery": (
             "/model/icarus_compact/battery/flight_battery/state",
             BatteryState,
@@ -88,27 +98,37 @@ def main():
     def callback(name):
         def receive(msg):
             stamp = msg.header.stamp.sec + msg.header.stamp.nsec * 1e-9
-            if name == "rgb":
+            if name in ("rgb", "downward_rgb"):
                 # Numeric intensity statistics only. Pixels are never retained.
                 value = float(np.frombuffer(msg.data, dtype=np.uint8).mean())
-            elif name == "depth":
+            elif name in ("depth", "landing_depth_proxy"):
                 data = np.frombuffer(msg.data, dtype=np.float32)
                 value = float(data[(msg.height // 2) * msg.width + msg.width // 2])
-            elif name == "imu":
-                value = msg.linear_acceleration.z
+            elif name in ("imu", "imu_secondary", "imu_tertiary",
+                           "d435i_imu", "mid360_imu", "ark_flow_imu"):
+                acceleration = msg.linear_acceleration
+                # Auxiliary units are mounted in their real orientations, so
+                # gravity may be expressed on a different sensor axis.  Its
+                # norm is invariant and lets the same physical check cover
+                # every IMU without pretending all frames are body-aligned.
+                value = math.sqrt(
+                    acceleration.x**2
+                    + acceleration.y**2
+                    + acceleration.z**2
+                )
             elif name == "gps":
                 value = msg.altitude
-            elif name == "compass":
+            elif name in ("compass", "compass_secondary"):
                 value = math.sqrt(
                     msg.field_tesla.x**2 + msg.field_tesla.y**2 + msg.field_tesla.z**2
                 )
-            elif name == "barometer":
+            elif name in ("barometer", "barometer_secondary"):
                 value = msg.pressure
             elif name == "battery":
                 # Gazebo fix_issue_225 reports percentage on a 0..100 scale.
                 value = msg.charge / msg.capacity
             else:
-                value = msg.ranges[5 * 360 + 179] if name == "lidar" else msg.ranges[0]
+                value = msg.ranges[5 * 500 + 249] if name == "lidar" else msg.ranges[15]
             with lock:
                 samples[name].append((stamp, time.monotonic(), value))
 
@@ -199,17 +219,31 @@ def main():
         assert np.all(np.isfinite(data[:, 2])), name
         nominal = {
             "range": 0.884,
-            "lidar": 2.9,
+            "lidar": 2.83,
             "compass": 5.8e-5,
             "imu": 9.80665,
-            "depth": 2.765,
+            "imu_secondary": 9.80665,
+            "imu_tertiary": 9.80665,
+            "d435i_imu": 9.80665,
+            "mid360_imu": 9.80665,
+            "ark_flow_imu": 9.80665,
+            "compass_secondary": 5.8e-5,
+            "depth": 2.78,
+            "landing_depth_proxy": 0.92,
         }
         tolerance = {
             "range": 0.03,
             "lidar": 0.08,
             "compass": 2e-5,
             "imu": 0.15,
+            "imu_secondary": 0.15,
+            "imu_tertiary": 0.15,
+            "d435i_imu": 0.15,
+            "mid360_imu": 0.15,
+            "ark_flow_imu": 0.15,
+            "compass_secondary": 2e-5,
             "depth": 0.10,
+            "landing_depth_proxy": 0.10,
         }
         if name in nominal:
             assert abs(data[:, 2].mean() - nominal[name]) < tolerance[name], (
@@ -222,20 +256,38 @@ def main():
                 data[0, 2],
                 data[-1, 2],
             )
-        if name == "barometer":
+        if name in ("barometer", "barometer_secondary"):
             assert 90000 < data[:, 2].mean() < 102000
         if name in (
             "imu",
+            "imu_secondary",
+            "imu_tertiary",
+            "d435i_imu",
+            "mid360_imu",
+            "ark_flow_imu",
             "gps",
             "compass",
+            "compass_secondary",
             "barometer",
+            "barometer_secondary",
             "lidar",
             "range",
             "rgb",
             "depth",
+            "downward_rgb",
+            "landing_depth_proxy",
         ):
             assert data[:, 2].std() > 1e-10, (name, "noise not observed")
-            keys = {"imu":"accelerometer", "gps":"gps_position", "compass":"magnetometer", "barometer":"pressure", "lidar":"lidar", "range":"range_down", "depth":"camera"}
+            keys = {
+                "imu": "accelerometer", "imu_secondary": "accelerometer",
+                "imu_tertiary": "accelerometer", "d435i_imu": "accelerometer",
+                "mid360_imu": "accelerometer", "ark_flow_imu": "accelerometer",
+                "gps": "gps_position", "compass": "magnetometer",
+                "compass_secondary": "magnetometer", "barometer": "pressure",
+                "barometer_secondary": "pressure", "lidar": "lidar",
+                "range": "range_down", "depth": "camera",
+                "landing_depth_proxy": "camera",
+            }
             if name in keys:
                 expected_std = config["stddev"][keys[name]]
                 assert .5*expected_std < data[:,2].std() < 2*expected_std, (name,"noise magnitude",data[:,2].std())

@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "icarus.dcm.visual-plan.v1",
+  "title": "Icarus preflight visual inference schedule",
+  "type": "object",
+  "required": [
+    "schema",
+    "dependency",
+    "visual_objective_weight_percent",
+    "calls",
+    "weight",
+    "total_timed_capture_window_s",
+    "flight_gating_visual_calls",
+    "checkpoints"
+  ],
+  "properties": {
+    "schema": {
+      "const": "icarus.dcm.visual-plan.v1"
+    },
+    "dependency": {
+      "enum": [
+        "none",
+        "medium",
+        "high"
+      ]
+    },
+    "visual_objective_weight_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "calls": {
+      "type": "object",
+      "required": [
+        "expected",
+        "maximum",
+        "yolo",
+        "vlm"
+      ],
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximum": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "yolo": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vlm": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "weight": {
+      "type": "object",
+      "required": [
+        "basis",
+        "compiled_steps",
+        "visual_steps",
+        "visual_step_percent",
+        "vlm_step_percent",
+        "yolo_step_percent"
+      ],
+      "properties": {
+        "basis": {
+          "const": "compiled_execution_steps"
+        },
+        "compiled_steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visual_steps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visual_step_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "vlm_step_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "yolo_step_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "total_timed_capture_window_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "flight_gating_visual_calls": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "objective_id",
+          "tool",
+          "mode",
+          "trigger",
+          "expected_calls",
+          "maximum_calls",
+          "capture",
+          "mission_effect"
+        ],
+        "properties": {
+          "objective_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tool": {
+            "enum": [
+              "yolo",
+              "vlm"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "once",
+              "at_viewpoints",
+              "until_found",
+              "runtime_localization"
+            ]
+          },
+          "trigger": {
+            "enum": [
+              "objective_start",
+              "after_each_yaw_step",
+              "after_each_yolo_window",
+              "at_each_viewpoint",
+              "until_localized"
+            ]
+          },
+          "expected_calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minimum_calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maximum_calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "capture": {
+            "type": "object",
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "enum": [
+                  "single_frame",
+                  "timed_window"
+                ]
+              },
+              "window_s": {
+                "type": "number",
+                "minimum": 0.2,
+                "maximum": 30
+              }
+            },
+            "additionalProperties": false
+          },
+          "viewpoints": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mission_effect": {
+            "enum": [
+              "report_only",
+              "stop_condition",
+              "localization_condition"
+            ]
+          },
+          "shared_budget_with": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "runtime_localization"
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            },
+            "then": {
+              "properties": {
+                "tool": {
+                  "const": "vlm"
+                },
+                "trigger": {
+                  "const": "until_localized"
+                },
+                "mission_effect": {
+                  "const": "localization_condition"
+                }
+              },
+              "if": {
+                "required": [
+                  "shared_budget_with"
+                ]
+              },
+              "then": {
+                "required": [
+                  "minimum_calls"
+                ],
+                "properties": {
+                  "expected_calls": {
+                    "const": 0
+                  },
+                  "minimum_calls": {
+                    "const": 0
+                  },
+                  "maximum_calls": {
+                    "const": 0
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "expected_calls": {
+                    "minimum": 1
+                  },
+                  "minimum_calls": {
+                    "minimum": 1
+                  },
+                  "maximum_calls": {
+                    "minimum": 1
+                  }
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "expected_calls": {
+                  "minimum": 1
+                },
+                "minimum_calls": {
+                  "minimum": 1
+                },
+                "maximum_calls": {
+                  "minimum": 1
+                },
+                "trigger": {
+                  "not": {
+                    "const": "until_localized"
+                  }
+                },
+                "mission_effect": {
+                  "not": {
+                    "const": "localization_condition"
+                  }
+                }
+              },
+              "not": {
+                "required": [
+                  "shared_budget_with"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

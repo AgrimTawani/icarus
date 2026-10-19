@@ -607,10 +607,10 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="lidar_mount">
+      <visual name="mid360_mount">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/lidar_mount.stl</uri>
+            <uri>model://akshu_compact/meshes/mid360_mount.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -618,10 +618,10 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="lidar_housing">
+      <visual name="mid360_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/lidar_housing.stl</uri>
+            <uri>model://akshu_compact/meshes/mid360_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -629,10 +629,10 @@
           <ambient>0.25 0.30 0.34 1</ambient>
         </material>
       </visual>
-      <visual name="lidar_optical_band">
+      <visual name="mid360_optical_band">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/lidar_optical_band.stl</uri>
+            <uri>model://akshu_compact/meshes/mid360_optical_band.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -640,10 +640,10 @@
           <ambient>0.08 0.32 0.40 1</ambient>
         </material>
       </visual>
-      <visual name="camera_housing">
+      <visual name="d435i_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_housing.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -651,10 +651,10 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="camera_window_-23">
+      <visual name="d435i_window_-25">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_window_-23.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_window_-25.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -662,10 +662,10 @@
           <ambient>0.03 0.10 0.14 1</ambient>
         </material>
       </visual>
-      <visual name="camera_window_0">
+      <visual name="d435i_window_0">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_window_0.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_window_0.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -673,10 +673,10 @@
           <ambient>0.03 0.10 0.14 1</ambient>
         </material>
       </visual>
-      <visual name="camera_window_23">
+      <visual name="d435i_window_25">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_window_23.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_window_25.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -684,10 +684,32 @@
           <ambient>0.03 0.10 0.14 1</ambient>
         </material>
       </visual>
-      <visual name="gnss_patch">
+      <visual name="brio_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/gnss_patch.stl</uri>
+            <uri>model://akshu_compact/meshes/brio_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="brio_lens">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/brio_lens.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="h_rtk_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/h_rtk_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -695,10 +717,10 @@
           <ambient>0.75 0.79 0.82 1</ambient>
         </material>
       </visual>
-      <visual name="range_housing">
+      <visual name="ark_flow_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/range_housing.stl</uri>
+            <uri>model://akshu_compact/meshes/ark_flow_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -706,10 +728,21 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="range_bracket">
+      <visual name="ark_flow_lens">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/range_bracket.stl</uri>
+            <uri>model://akshu_compact/meshes/ark_flow_lens.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="ark_flow_bracket">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/ark_flow_bracket.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -717,63 +750,91 @@
           <ambient>0.95 0.38 0.08 1</ambient>
         </material>
       </visual>
-      <sensor name="rgbd" type="rgbd_camera">
-        <pose>0.135 0 -0.028 0 0 0</pose>
-        <topic>/icarus/sensors/rgbd</topic>
+      <sensor name="d435i" type="rgbd_camera">
+        <pose>0.1199 0 -0.008 0 0 0</pose>
+        <topic>/icarus/sensors/d435i</topic>
         <always_on>true</always_on>
-        <update_rate>15</update_rate>
+        <update_rate>30</update_rate>
         <camera>
-          <horizontal_fov>1.5184</horizontal_fov>
+          <horizontal_fov>1.5032649213</horizontal_fov>
           <image>
-            <width>640</width>
+            <width>848</width>
             <height>480</height>
             <format>R8G8B8</format>
           </image>
           <clip>
-            <near>0.05</near>
-            <far>30</far>
+            <near>0.3</near>
+            <far>100</far>
           </clip>
+          <depth_camera>
+            <clip>
+              <near>0.3</near>
+              <far>10</far>
+            </clip>
+          </depth_camera>
         </camera>
       </sensor>
-      <!-- Calibrated belly RGB-D source for geometric landing assessment.
-           Gazebo camera optical axis is rotated down (+Z body-FRD) to match
-           the physical rangefinder mount immediately below. -->
-      <sensor name="rgbd_down" type="rgbd_camera">
-        <pose>0.110 0 -0.108 0 1.57079632679 0</pose>
-        <topic>/icarus/sensors/rgbd_down</topic>
+      <sensor name="d435i_imu" type="imu">
+        <pose>0.106 0 -0.008 0 0 0</pose>
+        <topic>/icarus/sensors/d435i_imu</topic>
         <always_on>true</always_on>
-        <update_rate>15</update_rate>
+        <update_rate>200</update_rate>
+        <imu />
+      </sensor>
+      <sensor name="brio_down" type="camera">
+        <pose>0.101 0 -0.0799 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/brio_down</topic>
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
         <camera>
-          <horizontal_fov>1.5184</horizontal_fov>
+          <horizontal_fov>1.4337743723</horizontal_fov>
           <image>
-            <width>640</width>
-            <height>480</height>
+            <width>1280</width>
+            <height>720</height>
             <format>R8G8B8</format>
           </image>
           <clip>
             <near>0.05</near>
+            <far>100</far>
+          </clip>
+        </camera>
+      </sensor>
+      <sensor name="landing_depth_proxy" type="rgbd_camera">
+        <pose>0.101 0 -0.0799 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/landing_depth_proxy</topic>
+        <always_on>true</always_on>
+        <update_rate>15</update_rate>
+        <camera>
+          <horizontal_fov>1.4337743723</horizontal_fov>
+          <image>
+            <width>320</width>
+            <height>180</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
             <far>30</far>
           </clip>
         </camera>
       </sensor>
-      <sensor name="lidar" type="gpu_lidar">
-        <pose>0 0 0.028 0 0 0</pose>
-        <topic>/icarus/sensors/lidar</topic>
+      <sensor name="mid360" type="gpu_lidar">
+        <pose>0.070 0 0.0795 0 0 0</pose>
+        <topic>/icarus/sensors/mid360</topic>
         <always_on>true</always_on>
         <update_rate>10</update_rate>
         <lidar>
           <scan>
             <horizontal>
-              <samples>360</samples>
+              <samples>500</samples>
               <resolution>1</resolution>
-              <min_angle>-3.14159265</min_angle>
-              <max_angle>3.14159265</max_angle>
+              <min_angle>-3.14159265359</min_angle>
+              <max_angle>3.14159265359</max_angle>
             </horizontal>
             <vertical>
-              <samples>16</samples>
+              <samples>40</samples>
               <resolution>1</resolution>
-              <min_angle>-0.2618</min_angle>
-              <max_angle>0.5236</max_angle>
+              <min_angle>-0.12217304764</min_angle>
+              <max_angle>0.90757121104</max_angle>
             </vertical>
           </scan>
           <range>
@@ -783,39 +844,73 @@
           </range>
         </lidar>
       </sensor>
-      <sensor name="range_down" type="gpu_lidar">
-        <pose>0.110 0 -0.108 0 1.57079632679 0</pose>
-        <topic>/icarus/sensors/range_down</topic>
+      <sensor name="mid360_imu" type="imu">
+        <pose>0.070 0 0.0795 0 0 0</pose>
+        <topic>/icarus/sensors/mid360_imu</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu />
+      </sensor>
+      <sensor name="ark_flow_range" type="gpu_lidar">
+        <pose>0.055 0 -0.1125 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/ark_flow_range</topic>
         <always_on>true</always_on>
         <update_rate>20</update_rate>
         <lidar>
           <scan>
             <horizontal>
-              <samples>1</samples>
+              <samples>8</samples>
               <resolution>1</resolution>
-              <min_angle>0</min_angle>
-              <max_angle>0</max_angle>
+              <min_angle>-0.108210414</min_angle>
+              <max_angle>0.108210414</max_angle>
             </horizontal>
+            <vertical>
+              <samples>4</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.054105207</min_angle>
+              <max_angle>0.054105207</max_angle>
+            </vertical>
           </scan>
           <range>
-            <min>0.02</min>
-            <max>40</max>
+            <min>0.08</min>
+            <max>30</max>
             <resolution>0.001</resolution>
           </range>
         </lidar>
       </sensor>
-      <sensor name="imu" type="imu">
-        <pose>0 0 -0.026 0 0 0</pose>
-        <topic>/icarus/sensors/imu</topic>
+      <sensor name="ark_flow_imu" type="imu">
+        <pose>0.055 0 -0.105 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/ark_flow_imu</topic>
         <always_on>true</always_on>
         <update_rate>200</update_rate>
         <imu />
       </sensor>
-      <sensor name="navsat" type="navsat">
-        <pose>-0.077 0 0.003 0 0 0</pose>
-        <topic>/icarus/sensors/navsat</topic>
+      <sensor name="pixhawk_imu_primary" type="imu">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_imu_primary</topic>
         <always_on>true</always_on>
-        <update_rate>5</update_rate>
+        <update_rate>500</update_rate>
+        <imu />
+      </sensor>
+      <sensor name="pixhawk_imu_secondary" type="imu">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_imu_secondary</topic>
+        <always_on>true</always_on>
+        <update_rate>500</update_rate>
+        <imu />
+      </sensor>
+      <sensor name="pixhawk_imu_tertiary" type="imu">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_imu_tertiary</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu />
+      </sensor>
+      <sensor name="h_rtk_gnss" type="navsat">
+        <pose>-0.091 -0.068 0.044 0 0 0</pose>
+        <topic>/icarus/sensors/h_rtk_gnss</topic>
+        <always_on>true</always_on>
+        <update_rate>8</update_rate>
         <navsat />
       </sensor>
     </link>

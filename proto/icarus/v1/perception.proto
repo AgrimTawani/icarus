@@ -62,6 +62,30 @@ message ObstacleSummary {
   double estimated_radius_m = 5;
   double confidence = 6;
   int64 observed_at_unix_ms = 7;
+  // LiDAR cluster evidence. Every field below is a geometric measurement of
+  // one scan's returns; the cluster producer leaves `confidence` unset because
+  // a point-cloud segment has no calibrated probability. Cluster ids are
+  // per-scan labels, not persistent tracks.
+  uint32 point_count = 8;
+  LocalPositionNed centroid = 9;
+  double min_north_m = 10;
+  double max_north_m = 11;
+  double min_east_m = 12;
+  double max_east_m = 13;
+  // Horizontal convex hull of the member returns in local NED (bounded
+  // vertex count); each vertex carries the cluster top as down_m.
+  repeated LocalPositionNed hull = 14;
+  double top_down_m = 15;
+  double bottom_down_m = 16;
+  // True when the highest member return lies on the sensor's top elevation
+  // ring, or the sensor elevation limit is unknown: the real top may be higher.
+  bool top_clipped = 17;
+  // Angular span of the hull as seen from the vehicle, relative to its
+  // current heading (positive clockwise), in the same frame as
+  // relative_bearing_deg.
+  double relative_bearing_min_deg = 18;
+  double relative_bearing_max_deg = 19;
+  string sensor_id = 20;
 }
 
 message PerceptionSummary {
@@ -76,4 +100,8 @@ message PerceptionSummary {
   double nearest_obstacle_bearing_deg = 9;
   double landing_zone_quality = 10;
   uint64 sequence = 11;
+  // Clusters found in the latest scan before the nearest-first bound was
+  // applied to nearby_obstacles.  The Drone API returns nearby_obstacles only
+  // when a request opts in (GetPerceptionRequest.include_nearby_obstacles).
+  uint32 obstacle_cluster_total = 12;
 }

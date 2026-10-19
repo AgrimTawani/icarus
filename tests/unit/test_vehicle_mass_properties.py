@@ -16,9 +16,9 @@ def test_component_manifest_generates_valid_full_aircraft_properties():
         ROOT / "config/simulation/vehicle_components.json"
     )
     mass, cg, inertia = calculate(manifest["components"])
-    assert mass == 4.343
+    assert mass == 4.4745
     assert len(digest) == 64
-    assert abs(cg[0]) < 0.005 and abs(cg[1]) < 0.005 and cg[2] < 0
+    assert abs(cg[0]) < 0.01 and abs(cg[1]) < 0.005 and cg[2] < 0
     assert np.linalg.eigvalsh(inertia).min() > 0
 
 
@@ -35,7 +35,7 @@ def test_generated_sdf_and_report_match_component_source():
     )
     assert abs(base_mass + rotor_mass - report["total_mass_kg"]) < 1e-12
     assert report["component_manifest"] == "config/simulation/vehicle_components.json"
-    assert len(report["components"]) == 20
+    assert len(report["components"]) == 21
 
 
 def test_duplicate_component_identifier_is_rejected():

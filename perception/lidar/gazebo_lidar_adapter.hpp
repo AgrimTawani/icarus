@@ -16,7 +16,7 @@ namespace icarus::perception {
 class GazeboLidarAdapter final : public RangeSource {
  public:
   explicit GazeboLidarAdapter(
-      std::string topic = "/icarus/sensors/lidar");
+      std::string topic = "/icarus/sensors/mid360");
   ~GazeboLidarAdapter() override;
   bool Start(Callback callback) override;
   void Stop() override;

@@ -93,6 +93,29 @@ if(BUILD_TESTING)
     ICARUS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   target_compile_options(phase8_core_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
   add_test(NAME phase8_core_tests COMMAND phase8_core_tests)
+  add_executable(mavlink_gateway_lifecycle_tests
+    tests/unit/cpp/mavlink_gateway_lifecycle_tests.cpp)
+  target_link_libraries(mavlink_gateway_lifecycle_tests PRIVATE
+    icarus_mavlink_gateway Threads::Threads)
+  target_compile_options(mavlink_gateway_lifecycle_tests PRIVATE
+    -Wall -Wextra -Wpedantic -Werror)
+  add_test(NAME mavlink_gateway_lifecycle_tests COMMAND mavlink_gateway_lifecycle_tests)
+  set_tests_properties(mavlink_gateway_lifecycle_tests PROPERTIES TIMEOUT 10)
+
+  add_executable(native_route_tests tests/unit/cpp/native_route_tests.cpp)
+  target_link_libraries(native_route_tests PRIVATE icarus_mission_runtime)
+  target_compile_definitions(native_route_tests PRIVATE ICARUS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_compile_options(native_route_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  add_test(NAME native_route_tests COMMAND native_route_tests)
+  set_tests_properties(native_route_tests PROPERTIES TIMEOUT 20)
+
+  add_executable(mavlink_mission_tests tests/unit/cpp/mavlink_mission_tests.cpp)
+  target_include_directories(mavlink_mission_tests SYSTEM PRIVATE "${ICARUS_MAVLINK_INCLUDE}")
+  target_link_libraries(mavlink_mission_tests PRIVATE icarus_mavlink_gateway Threads::Threads)
+  target_compile_options(mavlink_mission_tests PRIVATE -Wall -Wextra -Wpedantic -Werror -Wno-address-of-packed-member)
+  add_test(NAME mavlink_mission_tests COMMAND mavlink_mission_tests)
+  set_tests_properties(mavlink_mission_tests PROPERTIES TIMEOUT 20)
+
   add_executable(phase9_perception_tests
     tests/unit/cpp/phase9_perception_tests.cpp)
   target_link_libraries(phase9_perception_tests PRIVATE icarus_phase8_core)

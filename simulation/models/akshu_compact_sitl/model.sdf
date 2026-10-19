@@ -563,10 +563,10 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="lidar_mount">
+      <visual name="mid360_mount">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/lidar_mount.stl</uri>
+            <uri>model://akshu_compact/meshes/mid360_mount.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -574,10 +574,10 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="lidar_housing">
+      <visual name="mid360_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/lidar_housing.stl</uri>
+            <uri>model://akshu_compact/meshes/mid360_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -585,10 +585,10 @@
           <ambient>0.25 0.30 0.34 1</ambient>
         </material>
       </visual>
-      <visual name="lidar_optical_band">
+      <visual name="mid360_optical_band">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/lidar_optical_band.stl</uri>
+            <uri>model://akshu_compact/meshes/mid360_optical_band.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -596,10 +596,10 @@
           <ambient>0.08 0.32 0.40 1</ambient>
         </material>
       </visual>
-      <visual name="camera_housing">
+      <visual name="d435i_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_housing.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -607,10 +607,10 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="camera_window_-23">
+      <visual name="d435i_window_-25">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_window_-23.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_window_-25.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -618,10 +618,10 @@
           <ambient>0.03 0.10 0.14 1</ambient>
         </material>
       </visual>
-      <visual name="camera_window_0">
+      <visual name="d435i_window_0">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_window_0.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_window_0.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -629,10 +629,10 @@
           <ambient>0.03 0.10 0.14 1</ambient>
         </material>
       </visual>
-      <visual name="camera_window_23">
+      <visual name="d435i_window_25">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/camera_window_23.stl</uri>
+            <uri>model://akshu_compact/meshes/d435i_window_25.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -640,10 +640,32 @@
           <ambient>0.03 0.10 0.14 1</ambient>
         </material>
       </visual>
-      <visual name="gnss_patch">
+      <visual name="brio_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/gnss_patch.stl</uri>
+            <uri>model://akshu_compact/meshes/brio_housing.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.10 0.13 0.17 1</diffuse>
+          <ambient>0.10 0.13 0.17 1</ambient>
+        </material>
+      </visual>
+      <visual name="brio_lens">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/brio_lens.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="h_rtk_housing">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/h_rtk_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -651,10 +673,10 @@
           <ambient>0.75 0.79 0.82 1</ambient>
         </material>
       </visual>
-      <visual name="range_housing">
+      <visual name="ark_flow_housing">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/range_housing.stl</uri>
+            <uri>model://akshu_compact/meshes/ark_flow_housing.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -662,10 +684,21 @@
           <ambient>0.10 0.13 0.17 1</ambient>
         </material>
       </visual>
-      <visual name="range_bracket">
+      <visual name="ark_flow_lens">
         <geometry>
           <mesh>
-            <uri>model://akshu_compact/meshes/range_bracket.stl</uri>
+            <uri>model://akshu_compact/meshes/ark_flow_lens.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0.03 0.10 0.14 1</diffuse>
+          <ambient>0.03 0.10 0.14 1</ambient>
+        </material>
+      </visual>
+      <visual name="ark_flow_bracket">
+        <geometry>
+          <mesh>
+            <uri>model://akshu_compact/meshes/ark_flow_bracket.stl</uri>
           </mesh>
         </geometry>
         <material>
@@ -673,22 +706,28 @@
           <ambient>0.95 0.38 0.08 1</ambient>
         </material>
       </visual>
-      <sensor name="rgbd" type="rgbd_camera">
-        <pose>0.135 0 -0.028 0 0 0</pose>
-        <topic>/icarus/sensors/rgbd</topic>
+      <sensor name="d435i" type="rgbd_camera">
+        <pose>0.1199 0 -0.008 0 0 0</pose>
+        <topic>/icarus/sensors/d435i</topic>
         <always_on>true</always_on>
-        <update_rate>15</update_rate>
+        <update_rate>30</update_rate>
         <camera>
-          <horizontal_fov>1.5184</horizontal_fov>
+          <horizontal_fov>1.5032649213</horizontal_fov>
           <image>
-            <width>640</width>
+            <width>848</width>
             <height>480</height>
             <format>R8G8B8</format>
           </image>
           <clip>
-            <near>0.05</near>
-            <far>30</far>
+            <near>0.3</near>
+            <far>100</far>
           </clip>
+          <depth_camera>
+            <clip>
+              <near>0.3</near>
+              <far>10</far>
+            </clip>
+          </depth_camera>
           <noise>
             <type>gaussian</type>
             <mean>0.0</mean>
@@ -696,90 +735,9 @@
           </noise>
         </camera>
       </sensor>
-      <sensor name="rgbd_down" type="rgbd_camera">
-        <pose>0.110 0 -0.108 0 1.57079632679 0</pose>
-        <topic>/icarus/sensors/rgbd_down</topic>
-        <always_on>true</always_on>
-        <update_rate>15</update_rate>
-        <camera>
-          <horizontal_fov>1.5184</horizontal_fov>
-          <image>
-            <width>640</width>
-            <height>480</height>
-            <format>R8G8B8</format>
-          </image>
-          <clip>
-            <near>0.05</near>
-            <far>30</far>
-          </clip>
-          <noise>
-            <type>gaussian</type>
-            <mean>0.0</mean>
-            <stddev>0.005</stddev>
-          </noise>
-        </camera>
-      </sensor>
-      <sensor name="lidar" type="gpu_lidar">
-        <pose>0 0 0.028 0 0 0</pose>
-        <topic>/icarus/sensors/lidar</topic>
-        <always_on>true</always_on>
-        <update_rate>10</update_rate>
-        <lidar>
-          <scan>
-            <horizontal>
-              <samples>360</samples>
-              <resolution>1</resolution>
-              <min_angle>-3.14159265</min_angle>
-              <max_angle>3.14159265</max_angle>
-            </horizontal>
-            <vertical>
-              <samples>16</samples>
-              <resolution>1</resolution>
-              <min_angle>-0.2618</min_angle>
-              <max_angle>0.5236</max_angle>
-            </vertical>
-          </scan>
-          <range>
-            <min>0.1</min>
-            <max>40</max>
-            <resolution>0.01</resolution>
-          </range>
-          <noise>
-            <type>gaussian</type>
-            <mean>0.002</mean>
-            <stddev>0.02</stddev>
-          </noise>
-        </lidar>
-      </sensor>
-      <sensor name="range_down" type="gpu_lidar">
-        <pose>0.110 0 -0.108 0 1.57079632679 0</pose>
-        <topic>/icarus/sensors/range_down</topic>
-        <always_on>true</always_on>
-        <update_rate>20</update_rate>
-        <lidar>
-          <scan>
-            <horizontal>
-              <samples>1</samples>
-              <resolution>1</resolution>
-              <min_angle>0</min_angle>
-              <max_angle>0</max_angle>
-            </horizontal>
-          </scan>
-          <range>
-            <min>0.02</min>
-            <max>40</max>
-            <resolution>0.001</resolution>
-          </range>
-          <noise>
-            <type>gaussian</type>
-            <mean>0.001</mean>
-            <stddev>0.005</stddev>
-          </noise>
-        </lidar>
-      </sensor>
-      <sensor name="imu" type="imu">
-        <pose>0 0 -0.026 0 0 0</pose>
-        <topic>/icarus/sensors/imu</topic>
+      <sensor name="d435i_imu" type="imu">
+        <pose>0.106 0 -0.008 0 0 0</pose>
+        <topic>/icarus/sensors/d435i_imu</topic>
         <always_on>true</always_on>
         <update_rate>200</update_rate>
         <imu>
@@ -825,23 +783,373 @@
           </angular_velocity>
         </imu>
       </sensor>
-      <sensor name="navsat" type="navsat">
-        <pose>-0.077 0 0.003 0 0 0</pose>
-        <topic>/icarus/sensors/navsat</topic>
+      <sensor name="brio_down" type="camera">
+        <pose>0.101 0 -0.0799 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/brio_down</topic>
         <always_on>true</always_on>
-        <update_rate>5</update_rate>
+        <update_rate>30</update_rate>
+        <camera>
+          <horizontal_fov>1.4337743723</horizontal_fov>
+          <image>
+            <width>1280</width>
+            <height>720</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>100</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.005</stddev>
+          </noise>
+        </camera>
+      </sensor>
+      <sensor name="landing_depth_proxy" type="rgbd_camera">
+        <pose>0.101 0 -0.0799 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/landing_depth_proxy</topic>
+        <always_on>true</always_on>
+        <update_rate>15</update_rate>
+        <camera>
+          <horizontal_fov>1.4337743723</horizontal_fov>
+          <image>
+            <width>320</width>
+            <height>180</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>30</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.005</stddev>
+          </noise>
+        </camera>
+      </sensor>
+      <sensor name="mid360" type="gpu_lidar">
+        <pose>0.070 0 0.0795 0 0 0</pose>
+        <topic>/icarus/sensors/mid360</topic>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>500</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265359</min_angle>
+              <max_angle>3.14159265359</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>40</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.12217304764</min_angle>
+              <max_angle>0.90757121104</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>40</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.002</mean>
+            <stddev>0.02</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+      <sensor name="mid360_imu" type="imu">
+        <pose>0.070 0 0.0795 0 0 0</pose>
+        <topic>/icarus/sensors/mid360_imu</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <sensor name="ark_flow_range" type="gpu_lidar">
+        <pose>0.055 0 -0.1125 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/ark_flow_range</topic>
+        <always_on>true</always_on>
+        <update_rate>20</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>8</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.108210414</min_angle>
+              <max_angle>0.108210414</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>4</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.054105207</min_angle>
+              <max_angle>0.054105207</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.08</min>
+            <max>30</max>
+            <resolution>0.001</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.001</mean>
+            <stddev>0.005</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+      <sensor name="ark_flow_imu" type="imu">
+        <pose>0.055 0 -0.105 0 1.57079632679 0</pose>
+        <topic>/icarus/sensors/ark_flow_imu</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <sensor name="pixhawk_imu_primary" type="imu">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_imu_primary</topic>
+        <always_on>true</always_on>
+        <update_rate>500</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <sensor name="pixhawk_imu_secondary" type="imu">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_imu_secondary</topic>
+        <always_on>true</always_on>
+        <update_rate>500</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <sensor name="pixhawk_imu_tertiary" type="imu">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_imu_tertiary</topic>
+        <always_on>true</always_on>
+        <update_rate>200</update_rate>
+        <imu>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.003</mean>
+                <stddev>0.03</stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0001</mean>
+                <stddev>0.002</stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+        </imu>
+      </sensor>
+      <sensor name="h_rtk_gnss" type="navsat">
+        <pose>-0.091 -0.068 0.044 0 0 0</pose>
+        <topic>/icarus/sensors/h_rtk_gnss</topic>
+        <always_on>true</always_on>
+        <update_rate>8</update_rate>
         <navsat>
           <position_sensing>
             <horizontal>
               <noise type="gaussian">
-                <mean>0.02</mean>
-                <stddev>0.3</stddev>
+                <mean>0.0</mean>
+                <stddev>8.98311174991017e-08</stddev>
               </noise>
             </horizontal>
             <vertical>
               <noise type="gaussian">
-                <mean>0.02</mean>
-                <stddev>0.3</stddev>
+                <mean>0.0</mean>
+                <stddev>0.01</stddev>
               </noise>
             </vertical>
           </position_sensing>
@@ -909,15 +1217,15 @@
         </imu>
       </sensor>
       <inertial>
-        <mass>4.263</mass>
-        <pose>0.0010656814449917903 0.0 -0.060117288294628216 0 0 0</pose>
+        <mass>4.3945</mass>
+        <pose>0.005266810786210037 -0.0015175787916714078 -0.05293157924678576 0 0 0</pose>
         <inertia>
-          <ixx>0.026792906175491914</ixx>
-          <iyy>0.02815635089870799</iyy>
-          <izz>0.036954792695827875</izz>
-          <ixy>-6.056962174594283e-07</ixy>
-          <ixz>0.0001292671592775037</ixz>
-          <iyz>1.0842021724855044e-19</iyz>
+          <ixx>0.03271191582010094</ixx>
+          <iyy>0.035801962637269764</iyy>
+          <izz>0.039769596047190645</izz>
+          <ixy>-0.0006426090573506938</ixy>
+          <ixz>-0.0016633186516668576</ixz>
+          <iyz>0.0006464367019968142</iyz>
         </inertia>
       </inertial>
       <collision name="chassis_collision">
@@ -936,19 +1244,43 @@
           </box>
         </geometry>
       </collision>
-      <collision name="lidar_collision">
-        <pose>0 0 0.016 0 0 0</pose>
+      <collision name="mid360_collision">
+        <pose>0.07 0 0.081 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.045 0.045 0.022</size>
+            <size>0.065 0.065 0.06</size>
           </box>
         </geometry>
       </collision>
-      <collision name="camera_collision">
-        <pose>0.121 0 -0.028 0 0 0</pose>
+      <collision name="d435i_collision">
+        <pose>0.106 0 -0.008 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.022 0.07 0.024</size>
+            <size>0.025 0.09 0.025</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="brio_collision">
+        <pose>0.101 0 -0.06475 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.0265 0.102 0.027</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="ark_flow_collision">
+        <pose>0.055 0 -0.105 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.03 0.03 0.014</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="h_rtk_collision">
+        <pose>-0.091 -0.057 0.044 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.078 0.078 0.022</size>
           </box>
         </geometry>
       </collision>
@@ -1000,9 +1332,9 @@
           </box>
         </geometry>
       </collision>
-      <sensor name="compass" type="magnetometer">
-        <pose>-0.077 0 0.003 0 0 0</pose>
-        <topic>/icarus/sensors/compass</topic>
+      <sensor name="h_rtk_compass" type="magnetometer">
+        <pose>-0.091 -0.068 0.044 0 0 0</pose>
+        <topic>/icarus/sensors/h_rtk_compass</topic>
         <always_on>true</always_on>
         <update_rate>50</update_rate>
         <magnetometer>
@@ -1026,9 +1358,50 @@
           </z>
         </magnetometer>
       </sensor>
-      <sensor name="barometer" type="air_pressure">
-        <pose>0 0 -0.026 0 0 0</pose>
-        <topic>/icarus/sensors/barometer</topic>
+      <sensor name="pixhawk_magnetometer" type="magnetometer">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_magnetometer</topic>
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <magnetometer>
+          <x>
+            <noise type="gaussian">
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>1e-08</mean>
+              <stddev>2e-07</stddev>
+            </noise>
+          </z>
+        </magnetometer>
+      </sensor>
+      <sensor name="pixhawk_barometer" type="air_pressure">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_barometer</topic>
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <air_pressure>
+          <reference_altitude>584</reference_altitude>
+          <pressure>
+            <noise type="gaussian">
+              <mean>0.5</mean>
+              <stddev>2.0</stddev>
+            </noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+      <sensor name="pixhawk_barometer_secondary" type="air_pressure">
+        <pose>0 0 0.03345 0 0 0</pose>
+        <topic>/icarus/sensors/pixhawk_barometer_secondary</topic>
         <always_on>true</always_on>
         <update_rate>30</update_rate>
         <air_pressure>
@@ -1280,6 +1653,7 @@
       <thrust_coefficient>0.000017066574223409543</thrust_coefficient>
     </plugin>
     <plugin filename="ArduPilotPlugin" name="ArduPilotPlugin">
+      <battery_state_topic>/model/icarus_compact/battery/flight_battery/state</battery_state_topic>
       <fdm_addr>127.0.0.1</fdm_addr>
       <fdm_port_in>9002</fdm_port_in>
       <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
@@ -1349,11 +1723,34 @@
       <capacity>10</capacity>
       <resistance>0.025</resistance>
       <smooth_current_tau>1</smooth_current_tau>
-      <power_load>700</power_load>
+      <power_load>0</power_load>
       <fix_issue_225>true</fix_issue_225>
       <start_on_motion>true</start_on_motion>
       <power_draining_topic>/icarus/battery/start</power_draining_topic>
       <enable_recharge>false</enable_recharge>
+      <start_draining>true</start_draining>
+    </plugin>
+    <plugin filename="IcarusBatteryLoad" name="icarus::BatteryLoad">
+      <battery_name>flight_battery</battery_name>
+      <idle_power_w>45.0</idle_power_w>
+      <hover_power_w>700.0</hover_power_w>
+      <reference_speed_rad_s>801.7323751441446</reference_speed_rad_s>
+      <rotor>
+        <joint>rotor_01_joint</joint>
+        <slowdown>10</slowdown>
+      </rotor>
+      <rotor>
+        <joint>rotor_02_joint</joint>
+        <slowdown>10</slowdown>
+      </rotor>
+      <rotor>
+        <joint>rotor_03_joint</joint>
+        <slowdown>10</slowdown>
+      </rotor>
+      <rotor>
+        <joint>rotor_04_joint</joint>
+        <slowdown>10</slowdown>
+      </rotor>
     </plugin>
   </model>
 </sdf>

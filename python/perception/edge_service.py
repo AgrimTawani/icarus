@@ -19,8 +19,8 @@ from .edge_vision import UniqueTrackCounter, normalize_yolo_result, select_devic
 # round-robin schedule: combined inference remains capped at --max-fps, rather
 # than silently running each camera at the full budget.
 CAMERA_FEEDS = (
-    {"id": "forward_rgbd", "topic": "/icarus/sensors/rgbd/image", "count_eligible": False},
-    {"id": "downward_rgbd", "topic": "/icarus/sensors/rgbd_down/image", "count_eligible": True},
+    {"id": "forward_d435i", "topic": "/icarus/sensors/d435i/image", "count_eligible": False},
+    {"id": "downward_brio", "topic": "/icarus/sensors/brio_down", "count_eligible": True},
 )
 
 
@@ -37,7 +37,7 @@ def main():
     yolo_artifact = next(item for item in manifest["artifacts"] if item["role"] == "yolo")
     weights = Path(yolo_artifact["path"])
     if not weights.is_file() or hashlib.sha256(weights.read_bytes()).hexdigest() != yolo_artifact["sha256"]:
-        raise RuntimeError("pinned yolo11n artifact is missing or has a checksum mismatch")
+        raise RuntimeError("pinned detector artifact is missing or has a checksum mismatch")
     import torch
     from ultralytics import YOLO
     device = select_device("auto", torch.cuda.is_available())
@@ -84,7 +84,9 @@ def main():
                     {"labels": [names[int(value)] for value in boxes.cls.tolist()],
                      "scores": boxes.conf.tolist(), "boxes": boxes.xyxy.tolist(),
                      "image_dimensions": [int(output.orig_shape[1]), int(output.orig_shape[0])]},
-                    frame, trackers[feed["id"]], image_size=640, max_fps=args.max_fps,
+                    frame, trackers[feed["id"]],
+                    model_id=yolo_artifact.get("model_id") or weights.stem,
+                    image_size=640, max_fps=args.max_fps,
                     started_monotonic=started)
                 result["runtime"] = {"device": device, "fallback": device == "cpu"}
             except RuntimeError as error:

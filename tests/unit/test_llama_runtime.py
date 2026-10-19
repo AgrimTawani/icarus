@@ -6,6 +6,7 @@ adapter's, not the model's.
 """
 
 import contextlib
+import dataclasses
 import hashlib
 import json
 import tempfile
@@ -15,7 +16,10 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from python.dcm.contract import DeadlineExceeded, RuntimeDescriptor
+from python.dcm.contract import (
+    DeadlineExceeded,
+    RuntimeDescriptor,
+)
 from python.dcm.llama_runtime import LlamaCppRuntime
 
 
@@ -25,6 +29,7 @@ class StubHandler(BaseHTTPRequestHandler):
     delay_s = 0.0
     reply = '{"action":"none","arguments":{}}'
     trickle = False
+    last_request = None
 
     def log_message(self, *_):
         pass
@@ -35,7 +40,9 @@ class StubHandler(BaseHTTPRequestHandler):
         self.wfile.write(b'{"status":"ok"}')
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        request_body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if request_body:
+            self.__class__.last_request = json.loads(request_body.decode("utf-8"))
         if self.trickle:
             # Send headers, then dribble bytes forever. Each individual socket
             # read succeeds, so a per-operation timeout never fires; only a
@@ -116,6 +123,7 @@ class DeadlineTests(unittest.TestCase):
             raw = runtime.propose({"state": {}})
             self.assertEqual(json.loads(raw)["action"], "none")
 
+
     def test_slow_response_raises_deadline_exceeded(self):
         class Slow(StubHandler):
             delay_s = 3.0
@@ -140,7 +148,7 @@ class DeadlineTests(unittest.TestCase):
                 runtime.propose({"state": {}})
             self.assertLess(time.monotonic() - started, 2.5)
 
-    def test_missed_deadline_restarts_the_server(self):
+    def test_missed_deadline_stops_the_server(self):
         class Slow(StubHandler):
             delay_s = 3.0
         runtime = StubRuntime(descriptor(300), Slow)
@@ -148,7 +156,7 @@ class DeadlineTests(unittest.TestCase):
         try:
             with self.assertRaises(DeadlineExceeded):
                 runtime.propose({"state": {}})
-            self.assertEqual(runtime.restarts, 1)
+            self.assertEqual(runtime.restarts, 0)
         finally:
             runtime.stop()
 
@@ -162,6 +170,30 @@ class DeadlineTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+
+    def test_explicit_sampling_reaches_native_request_and_provenance(self):
+        settings = dict(temperature=.6, top_p=.95, top_k=20, min_p=0,
+                        presence_penalty=0, repetition_penalty=1, seed=0)
+        configured = dataclasses.replace(descriptor(2000), **settings)
+        class Fast(StubHandler):
+            pass
+        with StubRuntime(configured, Fast) as runtime:
+            runtime.decide([{"role": "user", "content": "test"}], [])
+            for field, value in settings.items():
+                wire_name = "repeat_penalty" if field == "repetition_penalty" else field
+                self.assertEqual(Fast.last_request[wire_name], value)
+                self.assertEqual(runtime.as_record()[field], value)
+            self.assertNotIn("repetition_penalty", Fast.last_request)
+
+    def test_legacy_request_does_not_override_optional_server_sampling_defaults(self):
+        class Fast(StubHandler):
+            pass
+        with StubRuntime(descriptor(2000), Fast) as runtime:
+            runtime.decide([{"role": "user", "content": "test"}], [])
+            self.assertEqual(Fast.last_request["temperature"], 0)
+            for field in ("top_p", "top_k", "min_p", "presence_penalty", "repeat_penalty", "seed"):
+                self.assertNotIn(field, Fast.last_request)
+
     def test_descriptor_type_is_enforced(self):
         with self.assertRaises(TypeError):
             LlamaCppRuntime({"model_id": "not-a-descriptor"})

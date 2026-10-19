@@ -15,9 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT), str(ROOT / "build/generated/python"),
                 str(Path(__file__).resolve().parent)]
 
+from run_mission import MissionClient
+
 from python.dcm.contract import DeadlineExceeded
 from python.dcm.fly import fly_mission
-from run_mission import MissionClient
 
 
 class TimeoutThenNoneRuntime:
@@ -53,7 +54,7 @@ def main():
             raise RuntimeError("a timed-out DCM reached the action path")
         report["status"] = "passed"
         return 0
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - persist any acceptance failure
         report["error"] = str(error)
         print("FAIL:", error, flush=True)
         return 1

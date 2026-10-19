@@ -35,7 +35,6 @@ def main():
                         help="Open the Unreal city viewport (FlyWithMe) instead of running off-screen.")
     args = parser.parse_args()
     entrypoint = find_entrypoint(args.install_dir.resolve(), args.scene)
-    reference = ROOT / "config/simulation/airsim" / f"airvln-env-{args.scene}-reference.json"
     settings = GUI_SETTINGS if args.gui else SETTINGS
     command = [
         str(ROOT / "scripts/start-airsim-stack"),
@@ -56,8 +55,6 @@ def main():
             "--binary-arg=-ResX=1280",
             "--binary-arg=-ResY=720",
         ])
-    if reference.is_file():
-        command.extend(["--mission-reference", str(reference)])
     subprocess.run(command, cwd=ROOT, check=True)
 
 

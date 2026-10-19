@@ -25,7 +25,7 @@ from python.dcm.v2_feedback import aggregate, review_proposals
 
 ACTION_NAMES = {
     "Arm", "Disarm", "Takeoff", "Goto", "ExecuteRoute", "Hold",
-    "ReturnHome", "Land", "Orbit", "CancelAction",
+    "ReturnHome", "Land", "Orbit", "Yaw", "CancelAction",
 }
 PRIVATE_FIELDS = {"session_id", "control_lease_id", "client_id", "lease_id"}
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,8 +34,52 @@ DECISION_SCHEMA = json.loads(
         encoding="utf-8"))
 
 
-def _safe_message(message):
+# proto3 scalars without explicit presence are omitted by MessageToDict when
+# they hold their default (0 / false).  For these fields zero is a real,
+# safety-relevant reading, not "unset": a LiDAR map observed this millisecond
+# has local_map_age_ms == 0 (the C++ producer reports UINT32_MAX when there is
+# no map), and path_ahead_clear == false means blocked.  Dropping them made
+# contract.assess_freshness reject a fresh map as "perception has no map age".
+# The producers always populate these fields, so emitting the zero is truthful.
+# Other defaults stay omitted so key absence keeps its existing meaning.
+ZERO_MEANINGFUL_FIELDS = {
+    "icarus.v1.PerceptionSummary": (
+        "local_map_age_ms", "local_map_available", "path_ahead_clear"),
+    "icarus.v1.SourceHealth": ("age_ms",),
+    "icarus.v1.LinkState": ("heartbeat_age_ms",),
+}
+
+
+def _restore_meaningful_zeros(message, value):
+    """Re-insert zero-valued fields listed in ZERO_MEANINGFUL_FIELDS."""
+    if not isinstance(value, dict):
+        return
+    descriptor = message.DESCRIPTOR
+    for name in ZERO_MEANINGFUL_FIELDS.get(descriptor.full_name, ()):
+        field = descriptor.fields_by_name.get(name)
+        if field is not None and name not in value:
+            value[name] = getattr(message, name)
+    for field in descriptor.fields:
+        if field.message_type is None or field.message_type.GetOptions().map_entry:
+            continue
+        if field.is_repeated:
+            items = value.get(field.name)
+            if isinstance(items, list):
+                for child, child_value in zip(getattr(message, field.name), items):
+                    _restore_meaningful_zeros(child, child_value)
+        elif message.HasField(field.name) and field.name in value:
+            _restore_meaningful_zeros(getattr(message, field.name),
+                                      value[field.name])
+
+
+def _message_to_dict(message):
     value = MessageToDict(message, preserving_proto_field_name=True)
+    _restore_meaningful_zeros(message, value)
+    return value
+
+
+def _safe_message(message):
+    value = _message_to_dict(message)
 
     def clean(item):
         if isinstance(item, dict):
@@ -50,7 +94,7 @@ def _safe_message(message):
 
 def _replay_message(message):
     """Retain command semantics while replacing volatile session identifiers."""
-    value = MessageToDict(message, preserving_proto_field_name=True)
+    value = _message_to_dict(message)
 
     def clean(item):
         if isinstance(item, dict):

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Capture one native Gazebo RGB camera frame as a PPM image.
 
 This is a simulator adapter, not the production camera driver. Its output is a
@@ -19,8 +19,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument(
-        "--topic", default="/icarus/sensors/rgbd/image",
-        choices=("/icarus/sensors/rgbd/image", "/icarus/sensors/rgbd_down/image"),
+        "--topic", default="/icarus/sensors/d435i/image",
+        choices=("/icarus/sensors/d435i/image", "/icarus/sensors/brio_down"),
         help="Normalized simulator RGB topic; the default preserves the forward camera adapter.",
     )
     args = parser.parse_args()
@@ -35,6 +35,7 @@ def main():
         try:
             os.kill(int(session["launcher_pid"]), 0)
             os.environ["GZ_PARTITION"] = session["partition"]
+            os.environ["GZ_IP"] = session.get("gz_ip", "127.0.0.1")
         except (KeyError, ValueError, ProcessLookupError):
             raise SystemExit("Active simulator session is stale")
     else:
@@ -51,7 +52,8 @@ def main():
         if width <= 0 or height <= 0 or step != width * 3 or len(payload) != height * step:
             result["error"] = "camera frame is not packed RGB"
         else:
-            result.update(width=width, height=height, payload=payload)
+            result.update(width=width, height=height, payload=payload,
+                          received_at_unix_ms=int(time.time() * 1000))
         received.set()
 
     node = Node()
@@ -71,7 +73,8 @@ def main():
         f"P6\n{result['width']} {result['height']}\n255\n".encode() + result["payload"])
     metadata = {
         "schema": "icarus.camera.frame.v1",
-        "captured_at_unix_ms": int(time.time() * 1000),
+        "captured_at_unix_ms": result["received_at_unix_ms"],
+        "timestamp_basis": "transport_callback_reception",
         "width": result["width"], "height": result["height"],
         "encoding": "rgb8", "source": "gazebo:" + args.topic,
         "image": str(args.output.resolve()),

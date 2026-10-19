@@ -87,6 +87,8 @@ class DroneApiServer final : public v1::SessionService::Service,
                     v1::ActionReceipt*) override;
   grpc::Status Orbit(grpc::ServerContext*, const v1::OrbitRequest*,
                      v1::ActionReceipt*) override;
+  grpc::Status Yaw(grpc::ServerContext*, const v1::YawRequest*,
+                   v1::ActionReceipt*) override;
   grpc::Status CancelAction(grpc::ServerContext*,
                             const v1::CancelActionRequest*,
                             v1::ActionReceipt*) override;

@@ -44,6 +44,8 @@ done
 
 export GZ_SIM_SYSTEM_PLUGIN_PATH="${GAZEBO_DIR}/build${GZ_SIM_SYSTEM_PLUGIN_PATH:+:${GZ_SIM_SYSTEM_PLUGIN_PATH}}"
 export GZ_SIM_RESOURCE_PATH="${GAZEBO_DIR}/models:${GAZEBO_DIR}/worlds${GZ_SIM_RESOURCE_PATH:+:${GZ_SIM_RESOURCE_PATH}}"
+export GZ_PARTITION="icarus_iris_smoke_${RUN_ID}_$$"
+export GZ_IP="127.0.0.1"
 
 setsid gz sim -s -r -v 4 iris_runway.sdf \
   >"${LOG_DIR}/gazebo.log" 2>&1 &

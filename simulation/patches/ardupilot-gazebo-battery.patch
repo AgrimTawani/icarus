@@ -1,0 +1,71 @@
+--- a/src/ArduPilotPlugin.cc
++++ b/src/ArduPilotPlugin.cc
+@@ -20,6 +20,7 @@
+ #include <rapidjson/writer.h>
+ 
+ #include <gz/msgs/imu.pb.h>
++#include <gz/msgs/battery_state.pb.h>
+ #include <gz/msgs/laserscan.pb.h>
+ 
+ #include <algorithm>
+@@ -274,6 +275,20 @@
+     imuMsgValid = true;
+   }
+ 
++  // Optional authoritative physical battery. Missing/stale samples must not
++  // silently fall back to SITL's unrelated nominal battery.
++  public: bool batteryConfigured{false};
++  public: gz::msgs::BatteryState batteryMsg;
++  public: bool batteryValid{false};
++  public: std::mutex batteryMutex;
++  public: void BatteryCb(const gz::msgs::BatteryState &_msg)
++  {
++    std::lock_guard<std::mutex> lock(this->batteryMutex);
++    batteryMsg = _msg;
++    batteryValid = std::isfinite(_msg.voltage()) && _msg.voltage() >= 0 &&
++      std::isfinite(_msg.current());
++  }
++
+   // Range sensors
+ 
+   /// \brief This mutex must be used when accessing ranges
+@@ -470,6 +485,14 @@
+     this->dataPtr->worldName = this->dataPtr->world.Name(_ecm).value();
+   }
+ 
++  if (sdfClone->HasElement("battery_state_topic"))
++  {
++    this->dataPtr->batteryConfigured = true;
++    this->dataPtr->node.Subscribe(
++      sdfClone->Get<std::string>("battery_state_topic"),
++      &ArduPilotPluginPrivate::BatteryCb, this->dataPtr.get());
++  }
++
+   // modelXYZToAirplaneXForwardZDown brings us from gazebo model frame:
+   // x-forward, y-right, z-down
+   // to the aerospace convention: x-forward, y-left, z-up
+@@ -1923,6 +1946,24 @@
+     writer.Key("timestamp");
+     writer.Double(timestamp);
+ 
++    if (this->dataPtr->batteryConfigured)
++    {
++      std::lock_guard<std::mutex> lock(this->dataPtr->batteryMutex);
++      const auto &battery = this->dataPtr->batteryMsg;
++      const double stamp = battery.header().stamp().sec() +
++        battery.header().stamp().nsec() * 1e-9;
++      const bool fresh = this->dataPtr->batteryValid &&
++        timestamp >= stamp && timestamp - stamp <= 2.0;
++      writer.Key("battery");
++      writer.StartObject();
++      writer.Key("voltage");
++      writer.Double(fresh ? battery.voltage() : 0.0);
++      writer.Key("current");
++      // LinearBatteryPlugin defaults to positive discharge current.
++      writer.Double(fresh ? battery.current() : 0.0);
++      writer.EndObject();
++    }
++
+     writer.Key("imu");
+     writer.StartObject();
+     writer.Key("gyro");

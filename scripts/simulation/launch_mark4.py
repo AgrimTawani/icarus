@@ -66,6 +66,7 @@ def main():
         )
     env = os.environ.copy()
     env["GZ_PARTITION"] = "icarus_mark4_" + run_id
+    env["GZ_IP"] = "127.0.0.1"
     env["GZ_SIM_RESOURCE_PATH"] = str(ROOT / "simulation/models")
     env["GZ_SIM_SYSTEM_PLUGIN_PATH"] = (
         str(build) + ":" + str(ROOT / "third_party/ardupilot_gazebo/build")
@@ -124,6 +125,7 @@ def main():
             {
                 "commands": commands,
                 "partition": env["GZ_PARTITION"],
+                "gz_ip": env["GZ_IP"],
                 "world": "mark4_validation",
                 "sha256": hashes,
                 "revisions": revisions,

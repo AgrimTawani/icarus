@@ -19,6 +19,14 @@ and an explicit deprecation release establish that no automated workflow calls
 it. Generated `__pycache__` folders and runtime logs are ignored artifacts,
 not maintained scripts.
 
+Gazebo sensor integration is owned by `simulation/autopilot_sensor_bridge.py`
+and the Gazebo-only `simulation/parameters/gazebo_sensors.parm` defaults (at
+repository root). `simulation/test_autopilot_sensors.py --fly --faults
+--proximity-stop`, run with the ArduPilot venv after `start-sim --profile
+edge-vision`, tests the three autopilot sensor inputs in a real simulated
+flight. See `docs/simulation/GAZEBO-HARDWARE-FIDELITY.md`; this does not change
+AirSim or a physical aircraft configuration.
+
 The V2 audit removed no tracked public command: every root file is either a
 documented compatibility wrapper or a current build/setup entry point. New
 implementation code lives under `scripts/simulation/airsim/`, `scripts/autonomy/`

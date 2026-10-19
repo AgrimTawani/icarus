@@ -54,6 +54,7 @@ point clouds:
 - `ReturnHome`
 - `Land`
 - `Orbit`
+- `Yaw`
 - `CancelAction`
 - `GetActionStatus`
 - `WatchActionStatus`
@@ -93,7 +94,10 @@ digest of the original request.
 
 ## Coordinates and Units
 
-Units are SI. Angular state is radians; explicit heading requests are degrees.
+Units are SI. Angular state is radians; explicit heading and relative-yaw
+requests are degrees. Relative yaw is bounded to 1–360 degrees of magnitude,
+uses an explicit direction sign, and is physically completed only after the
+executor accumulates the requested live attitude change.
 Geographic positions identify whether altitude is AMSL, above home or above
 terrain. Local positions use north-east-down and name their origin. Commands
 with missing or incompatible frames are rejected rather than guessed.

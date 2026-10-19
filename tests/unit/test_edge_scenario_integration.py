@@ -5,7 +5,6 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -16,7 +15,7 @@ def test_edge_people_building_generates_headlessly_with_ground_truth():
     world, truth = [Path(line) for line in completed.stdout.splitlines()]
     data = json.loads(truth.read_text())
     rendered = world.read_text()
-    assert "north_building" in rendered
+    assert "building_01" in rendered
     assert '<actor name="person_01">' in rendered
     assert "gazebo_fuel_cache" in rendered
     assert {target["id"] for target in data["targets"]} == {
@@ -24,15 +23,8 @@ def test_edge_people_building_generates_headlessly_with_ground_truth():
     assert data["unique_person_count"] == 4
     scenario = json.loads((ROOT / "simulation/scenarios/edge_people_building.json").read_text())
     assert scenario["obstacles"][0]["center_m"] == [0, 18, 3]  # Gazebo ENU: north is +Y.
-    assert scenario["ground_truth"]["known_landmarks"][0]["local_ned_m"] == [18, 0, -3]
-    assert scenario["ground_truth"]["primary_target_id"] == "north_building"
-    assert scenario["ground_truth"]["known_landmarks"][0]["hover_waypoint"] == {
-        "north_m": 18, "east_m": 0, "altitude_agl_m": 9}
-    assert scenario["ground_truth"]["known_landmarks"][0]["orbit"]["radius_m"] == 10
-    assert scenario["ground_truth"]["known_landmarks"][0]["inspection_waypoint"] == {
-        "north_m": 4, "east_m": 0, "altitude_agl_m": 4, "heading_deg": 0}
-    assert scenario["ground_truth"]["known_landmarks"][0]["person_observation_waypoint"] == {
-        "north_m": 4, "east_m": 0, "altitude_agl_m": 4, "heading_deg": 0}
+    assert "known_landmarks" not in scenario["ground_truth"]
+    assert "primary_target_id" not in scenario["ground_truth"]
     building = scenario["obstacles"][0]
     bx, by, _ = building["center_m"]
     sx, sy, _ = building["size_m"]

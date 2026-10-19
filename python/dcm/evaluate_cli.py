@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--history", action="store_true",
                         help="show the model the actions already completed"
                              " (contract v2) instead of only the last result")
-    parser.add_argument("--context", choices=("v2", "v3"), default="v3",
+    parser.add_argument("--context", choices=("v2",), default="v2",
                         help="context contract (default: compact reviewed v3 "
                              "mission contract; v2 remains a historical baseline)")
     parser.add_argument("--macro-id",

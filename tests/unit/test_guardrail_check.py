@@ -30,10 +30,20 @@ def disarmed_state(**overrides):
         "vehicle_id": "icarus-01", "sequence": "1",
         "observed_at_unix_ms": "1000000000000",
         "flight_phase": "FLIGHT_PHASE_DISARMED", "armed": False,
-        "landed": True, "battery": {"remaining_percent": 80.0},
+        "local_position_ned": {"origin_id": "ekf-origin", "down_m": -5.0},
+        "relative_altitude_m": 5.0, "velocity_ned_mps": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "local_position_received_at_unix_ms": "1000000000000",
+        "relative_altitude_received_at_unix_ms": "1000000000000",
+        "local_position_time_boot_ms": 1000,
+        "relative_altitude_time_boot_ms": 1000,
+        "landed": True, "battery": {"level": "HEALTH_LEVEL_HEALTHY", "remaining_percent": 80.0, "voltage_v": 24.0,
+                                   "current_a": 0.0, "received_at_unix_ms": "1000000000000"},
         "estimator": {"level": "HEALTH_LEVEL_HEALTHY",
                       "horizontal_position_valid": True},
-        "home": {"local_ned": {"north_m": 0.0, "east_m": 0.0, "down_m": 0.0}},
+        "position": {"geo": {"latitude_deg": 47.0, "longitude_deg": 8.0,
+                             "frame": "COORDINATE_FRAME_WGS84_ABOVE_HOME"}},
+        "home": {"geo": {"latitude_deg": 47.0, "longitude_deg": 8.0,
+                             "frame": "COORDINATE_FRAME_WGS84_ABOVE_HOME"}},
     }
     state.update(overrides)
     return state
@@ -63,7 +73,8 @@ class RealGuardrailTests(unittest.TestCase):
     def test_arming_below_the_takeoff_battery_threshold_is_rejected(self):
         # config/safety/v1.yaml sets minimum_takeoff_percent: 50.0.
         result = check_proposal(
-            "arm", {}, disarmed_state(battery={"remaining_percent": 10.0}))
+            "arm", {}, disarmed_state(battery={"level": "HEALTH_LEVEL_HEALTHY", "remaining_percent": 10.0, "voltage_v": 24.0,
+                     "current_a": 0.0, "received_at_unix_ms": "1000000000000"}))
         self.assertFalse(result["would_execute"])
         self.assertEqual(result["reason_code"],
                          "REASON_CODE_BATTERY_BELOW_THRESHOLD")
@@ -92,6 +103,27 @@ class RealGuardrailTests(unittest.TestCase):
         result = check_proposal(
             "orbit", {"center_north_m": 10.0, "center_east_m": 10.0,
                      "radius_m": 5.0, "altitude_agl_m": 5.0},
+            airborne)
+        self.assertTrue(result["would_execute"], result)
+
+    def test_a_face_point_goto_is_accepted(self):
+        airborne = disarmed_state(
+            flight_phase="FLIGHT_PHASE_AIRBORNE", armed=True, landed=False)
+        result = check_proposal(
+            "goto", {"north_m": 12.0, "east_m": 18.0, "altitude_agl_m": 5.0,
+                     "face_point": {"north_m": 15.0, "east_m": 18.0},
+                     "minimum_clearance_m": 3.0},
+            airborne)
+        self.assertTrue(result["would_execute"], result)
+
+    def test_a_centre_facing_viewpoint_orbit_is_accepted(self):
+        airborne = disarmed_state(
+            flight_phase="FLIGHT_PHASE_AIRBORNE", armed=True, landed=False)
+        result = check_proposal(
+            "orbit", {"center_north_m": 10.0, "center_east_m": 10.0,
+                     "radius_m": 5.0, "altitude_agl_m": 5.0,
+                     "face_center": True, "viewpoints": 4,
+                     "viewpoint_dwell_ms": 2_000},
             airborne)
         self.assertTrue(result["would_execute"], result)
 

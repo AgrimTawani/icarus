@@ -22,6 +22,7 @@ def main():
     ]
     results = []
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+        occupied.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         occupied.bind(("127.0.0.1", 5760))
         occupied.listen()
         result = subprocess.run(
@@ -54,6 +55,8 @@ def main():
         "recorder_exit",
         "gazebo_exit",
         "sitl_exit",
+        "optical_flow_exit",
+        "autopilot_sensors_exit",
     ):
         before = set((ROOT / "logs/simulation").glob("compact_flight_*"))
         with (folder / (case + ".log")).open("w") as log:
@@ -93,12 +96,13 @@ def main():
                     )
                     results.append({"case": "duplicate_launcher", "status": "passed"})
                     parent.send_signal(signal.SIGINT)
-                elif case in ("recorder_exit", "gazebo_exit", "sitl_exit"):
+                elif case in ("recorder_exit", "gazebo_exit", "sitl_exit", "optical_flow_exit", "autopilot_sensors_exit"):
                     child = case.removesuffix("_exit")
                     os.kill(runtime["children"][child], signal.SIGTERM)
                 else:
                     env = os.environ.copy()
                     env["GZ_PARTITION"] = runtime["partition"]
+                    env["GZ_IP"] = runtime.get("gz_ip", "127.0.0.1")
                     reply = subprocess.run(
                         [
                             "gz",
@@ -135,6 +139,10 @@ def main():
                     assert "gazebo" in result["error"]
                 if case == "sitl_exit":
                     assert "sitl" in result["error"]
+                if case == "optical_flow_exit":
+                    assert "optical_flow" in result["error"]
+                if case == "autopilot_sensors_exit":
+                    assert "autopilot_sensors" in result["error"]
                 # Every process group belongs to this test's launcher only.
                 runtime = json.loads((directory / "runtime.json").read_text())
                 for pid in runtime["children"].values():
@@ -144,7 +152,10 @@ def main():
                         continue
                     raise AssertionError(f"Process group {pid} was left behind")
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port:
+                    port.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                     port.bind(("127.0.0.1", 5760))
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as port:
+                    port.bind(("127.0.0.1", 14562))
                 controller = directory / "controller.log"
                 assert (
                     not controller.exists()

@@ -46,11 +46,16 @@
       "type": "object",
       "required": ["schema", "mission_type", "objectives", "pending", "completed"],
       "properties": {
-        "schema": {"const": "icarus.dcm.mission-contract.v1"},
+        "schema": {"const": "icarus.dcm.mission-contract.v2-objectives"},
         "mission_type": {"type": "string"},
+        "planner_status": {"type": ["string", "null"]},
+        "understood_intent": {"type": ["string", "null"]},
+        "coverage": {"type": "string"},
         "objectives": {"type": "array"},
         "pending": {"type": "array", "items": {"type": "string"}},
         "completed": {"type": "array", "items": {"type": "string"}},
+        "defaults_applied": {"type": "array", "items": {"type": "string"}},
+        "macro": {"type": "object"},
         "permitted_actions": {"type": "array", "items": {"type": "string"}}
       },
       "additionalProperties": true

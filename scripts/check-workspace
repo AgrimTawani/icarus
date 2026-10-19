@@ -51,7 +51,9 @@ from pathlib import Path
 lock = json.loads(Path(sys.argv[1]).read_text())
 root = Path(sys.argv[2])
 for name, item in lock["repositories"].items():
-    checkout = root / name
+    # The lock key is identifier-safe for scripts/config, while the upstream
+    # checkout intentionally keeps its canonical dotted repository name.
+    checkout = root / ("llama.cpp" if name == "llama_cpp" else name)
     if not (checkout / ".git").is_dir():
         raise SystemExit(f"Missing checkout: {checkout}")
     revision = subprocess.check_output(

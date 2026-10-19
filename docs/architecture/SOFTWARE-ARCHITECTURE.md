@@ -1,5 +1,10 @@
 # Icarus Software Architecture
 
+Current Phase 1 extension (2026-10-02): [adaptive missions](PHASE1-ADAPTIVE-MISSIONS.md)
+adds bounded control flow, runtime references, concurrent evidence and measured
+surface actions without changing flight authority. Its new flight acceptance is
+pending manual testing; dated historical maturity notes below are not that gate.
+
 ## Scope and Maturity
 
 As of 2026-09-19, the deterministic stack through Phase 9 is implemented:
@@ -70,7 +75,7 @@ arbitrary MAVLink messages, shell commands or filesystem/network operations.
 | Local planner | `cpp/local_planner` | Short-horizon collision-safe motion planning; effective clearance is `max(policy minimum, action-request minimum)` |
 | Autonomy core | `cpp/autonomy_core` | Composition root and service lifecycle |
 | Perception | `perception/` | Sensor adapters, calibration, detections and obstacle map |
-| DCM | `python/dcm` | Model-facing reasoning loop and action selection; V3 is the default versioned context with reviewed/enforced mission macros and no expanded authority; V2 remains a compatibility baseline |
+| DCM | `python/dcm` | One preflight LLM semantic plan with ready/clarify/unsupported outcomes, provenance-validated ordered objectives and an exact YOLO/VLM schedule; a minimal deterministic executor sequences the validated plan but never reinterprets language |
 | Model runtime | `python/model_runtime` | Qwen/Llama/provider abstraction and resource controls |
 | Evaluation | `python/evaluation` | Frozen campaigns, metrics and comparisons |
 | Dataset tools | `python/dataset_tools` | Episode validation, curation, export and replay preparation |
@@ -94,9 +99,12 @@ are accepted. Bulk camera or lidar data never travels through the action RPC.
 | --- | --- | --- |
 | Vehicle commands/state | MAVLink to ArduPilot SITL | MAVLink to Pixhawk 6X |
 | Dynamics/environment | Gazebo Harmonic | Physical airframe/environment |
-| Camera | Gazebo camera/depth plugin | OAK-D or selected camera SDK |
-| Lidar | Gazebo GPU lidar | Unitree MID-360 driver |
-| Downward range | Gazebo lidar/range sensor | LightWare LW20 driver |
+| Forward camera/depth | D435i-shaped Gazebo RGB-D + IMU streams | Intel RealSense D435i SDK |
+| Downward RGB | BRIO-shaped Gazebo RGB stream | Logitech BRIO/USB camera adapter |
+| Lidar | MID-360-envelope Gazebo GPU lidar + IMU | Livox MID-360 SDK2 driver |
+| Optical flow/range | ARK Flow ray/IMU plus derived simulation flow | ARK Flow DroneCAN adapter |
+| Position/heading | H-RTK NavSat + RM3100-role magnetometer | Holybro H-RTK ZED-F9P/RM3100 adapter |
+| Flight-controller sensors | Triple IMU, dual pressure and onboard-mag public streams | Pixhawk 6X Pro / ArduPilot sensor stack |
 | Position | SITL truth/noisy GPS | GNSS and estimator output |
 | Scenario/fault input | Versioned JSON and deterministic seed | Test plan and controlled fault injection |
 
@@ -115,16 +123,17 @@ Landing-surface assessment is a separate deterministic depth boundary. It
 accepts a calibrated float32 depth frame and the camera optical axis in
 body-FRD, then returns coverage, plane slope, residual roughness and a bounded
 ``suitable`` result. It refuses a source that is not calibrated within 15° of
-downward. The active source is the belly-mounted
-`/icarus/sensors/rgbd_down/depth_image` stream, calibrated to `[0, 0, 1]` in
-body-FRD; `scripts/capture-depth-frame` and `scripts/assess-landing-zone`
+downward. The active Gazebo source is the belly-mounted simulation-only
+`/icarus/sensors/landing_depth_proxy/depth_image` stream, calibrated to
+`[0, 0, 1]` in body-FRD. The physical BRIO is RGB-only and is never represented
+as a depth camera. `scripts/capture-depth-frame` and `scripts/assess-landing-zone`
 provide the Gazebo adapter and offline analyzer respectively. The active source
 and optical-axis calibration live in `config/perception/landing_zone.json`, so
 a hardware source replaces configuration/adapter data rather than mission or
 DCM code. A suitable result remains inspection evidence, not landing authority.
 
 The adapter was exercised against a real headless `empty_validation` Gazebo
-session on 2026-09-21. It captured the native downward stream as a 640×480
+session on 2026-09-21. That historical run captured the then-native downward stream as a 640×480
 float32-metres frame and assessed it as `assessable: true`, `suitable: true`,
 with 1.0 footprint coverage, 0.0741° slope and 0.00985 m roughness. Evidence:
 `logs/landing-zone-validation/20260921T112534/assessment.json`. This validates
@@ -203,8 +212,11 @@ detector accuracy or any autonomous visual-flight capability.
 V2 Phase 1 adds a separately-versioned `dcm-contract-v3-compact` context
 builder. It begins with the existing curated allow-list, then adds deterministic
 failure/repetition facts, compact normalized obstacle sectors and semantic live
-deployment facts. A reviewed macro, target reference and measured completion
-evidence compile into one `MissionContract`; macro prose, empty world-fact text,
+deployment facts. An LLM semantic planner emits one ordered `MissionContract`
+with value provenance; deterministic code validates schema, grounding,
+capabilities and safety without becoming a competing NLP compiler. Explicit
+macro policy may constrain it, while
+macro prose, empty world-fact text,
 duplicate action/freshness fields, filesystem paths and hashes do not reach the
 model. It is read-only while a mission runs, and the macro's action subset is
 enforced. Full macro/profile provenance and the final visible-context hash

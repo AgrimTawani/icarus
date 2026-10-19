@@ -10,7 +10,7 @@
 
 namespace
 {
-constexpr float GeometryOriginAboveCgCm = 5.9009901f;
+const FVector GeometryOriginRelativeToCgCm(-0.51726450f, -0.14904459f, 5.19852106f);
 
 const TCHAR* VisualAssetPaths[] = {
     TEXT("/Game/Icarus7FlightControlReview/Meshes/SM_Icarus7_AGXCooling.SM_Icarus7_AGXCooling"),
@@ -72,7 +72,7 @@ AIcarus7AirSimPawn::AIcarus7AirSimPawn()
     // at the component-derived centre of gravity, 59.009901 mm below it.
     VisualRoot = CreateDefaultSubobject<USceneComponent>(TEXT("VisualRoot"));
     VisualRoot->SetupAttachment(VehicleRoot);
-    VisualRoot->SetRelativeLocation(FVector(0.0f, 0.0f, GeometryOriginAboveCgCm));
+    VisualRoot->SetRelativeLocation(GeometryOriginRelativeToCgCm);
 
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(VisualAssetPaths); ++Index) {
         const FString Name = FString::Printf(TEXT("Icarus7Visual%02d"), Index);
@@ -112,11 +112,11 @@ AIcarus7AirSimPawn::AIcarus7AirSimPawn()
                     FVector(-8.5f, 8.5f, 5.2f), -45.0f);
 
     // Exact names are consumed in AFlyingPawn::initializeForBeginPlay().
-    FrontCenterCamera = AddCamera(TEXT("FrontCenterCamera"), FVector(11.99f, 0.0f, 5.10f), FRotator::ZeroRotator);
-    FrontRightCamera = AddCamera(TEXT("FrontRightCamera"), FVector(11.99f, 3.0f, 5.10f), FRotator::ZeroRotator);
-    FrontLeftCamera = AddCamera(TEXT("FrontLeftCamera"), FVector(11.99f, -3.0f, 5.10f), FRotator::ZeroRotator);
-    BackCenterCamera = AddCamera(TEXT("BackCenterCamera"), FVector(-10.0f, 0.0f, 5.0f), FRotator(0.0f, 180.0f, 0.0f));
-    BottomCenterCamera = AddCamera(TEXT("BottomCenterCamera"), FVector(10.10f, 0.0f, -2.09f), FRotator(-90.0f, 0.0f, 0.0f));
+    FrontCenterCamera = AddCamera(TEXT("FrontCenterCamera"), FVector(11.47273550f, -0.14904459f, 4.39852106f), FRotator::ZeroRotator);
+    FrontRightCamera = AddCamera(TEXT("FrontRightCamera"), FVector(11.47273550f, 2.85095541f, 4.39852106f), FRotator::ZeroRotator);
+    FrontLeftCamera = AddCamera(TEXT("FrontLeftCamera"), FVector(11.47273550f, -3.14904459f, 4.39852106f), FRotator::ZeroRotator);
+    BackCenterCamera = AddCamera(TEXT("BackCenterCamera"), FVector(-10.51726450f, -0.14904459f, 4.30147894f), FRotator(0.0f, 180.0f, 0.0f));
+    BottomCenterCamera = AddCamera(TEXT("BottomCenterCamera"), FVector(9.58273550f, -0.14904459f, -2.79147894f), FRotator(-90.0f, 0.0f, 0.0f));
 }
 
 UStaticMeshComponent* AIcarus7AirSimPawn::AddVisualMesh(const TCHAR* ComponentName,

@@ -47,7 +47,8 @@ AerialClaw movement and pose APIs are intentionally excluded.
 ## Edge vision provenance
 
 The experimental, simulation-only `edge-vision` profile uses
-`ultralytics/yolo11` (`yolo11n`) for continuous 640 px detection/tracking.
+`ultralytics/yolo11` (currently `yolo11s`, selected by the perception manifest)
+for 640 px detection. Historical runs used `yolo11n`.
 Ultralytics is AGPL-3.0; this dependency is research-only until a commercial
 licensing decision or a permissively licensed replacement is made. Qwen2-VL
 (`Qwen/Qwen2-VL-2B-Instruct` converted to the pinned Q4 GGUF plus f16 visual

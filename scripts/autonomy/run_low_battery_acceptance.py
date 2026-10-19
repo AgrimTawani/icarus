@@ -53,7 +53,7 @@ def main():
             raise RuntimeError("aircraft armed despite low-battery rejection")
         report["status"] = "passed"
         return 0
-    except Exception as error:  # retain a failed episode as evidence too
+    except Exception as error:  # noqa: BLE001 - retain failed evidence
         report["error"] = str(error)
         print("FAIL:", error, flush=True)
         return 1

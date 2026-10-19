@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/simulation"))
 
-from scenario_config import load_scenario  # noqa: E402
+from scenario_config import load_scenario
 
 
 class ScenarioConfigTests(unittest.TestCase):

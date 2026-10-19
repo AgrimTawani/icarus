@@ -11,7 +11,9 @@ change DCM authority or autonomous-promotion thresholds.
 | --- | --- | --- |
 | Context builder | `python/dcm/v2_context.py` | Pure/read-only transformation of an already curated observation |
 | V3 contract entry | `python/dcm/contract.py:curate_v3` | Retains V1 allow-list, adds `dcm-contract-v3-compact` context fields |
-| Mission contract compiler | `python/dcm/v2_context.py:compile_mission_contract` | Combines selected macro policy, reviewed target and completion evidence into one model-visible structure without choosing the next action |
+| Semantic planner | `python/dcm/semantic_planner.py` | The LLM interprets operator intent and returns schema-constrained ready, clarification, or unsupported output with typed objectives and value provenance |
+| Deterministic plan validator | `python/dcm/semantic_planner.py:compile_semantic_plan` | Checks action bounds, numeric/class grounding, capability routing, provenance, lifecycle safety and ordering; it may apply only the two reviewed lifecycle defaults and never reinterpret the sentence |
+| Mission contract renderer | `python/dcm/v2_context.py:compile_mission_contract` | Renders the current ordered plan and active objective into one model-visible structure |
 | Generated BODY | `python/dcm/v2_profiles.py` + live `MissionClient.capability_profile()` | Full manifest/provenance is audit-only; the model sees connected simulator, firmware, camera, LiDAR and airframe semantics without a duplicate action list |
 | Static SOUL/world facts | `config/dcm/profiles/` | Full reviewed documents and hashes are audit evidence; compact V3 renders only three SOUL principles and keeps world-fact prose audit-only |
 | Mission macros | `config/dcm/macros/` | Structured model policy plus human Markdown guidance; prose and hashes remain audit-only |
@@ -27,9 +29,9 @@ change DCM authority or autonomous-promotion thresholds.
    arrays are neither accepted nor rendered.
 3. Failure count, consecutive failures and repeated actions are computed in
    code. The model is not asked to infer them from unbounded history.
-4. An explicit `mission_metadata.macro_id` overrides selection. Otherwise a
-   small deterministic intent resolver can select one reviewed macro. The
-   selected macro's action subset is enforced before Drone API execution;
+4. A reviewed macro is applied only through explicit
+   `mission_metadata.macro_id`/`--macro-id`. Keyword matching no longer selects
+   a control overlay. The selected macro's action subset is enforced before Drone API execution;
    hold/RTL/land/none remain universally available safety exits.
 5. Macro/profile hashes remain in the audit record and a final context SHA-256
    identifies exactly the compact model-visible semantics. The hash and byte
@@ -45,7 +47,10 @@ change DCM authority or autonomous-promotion thresholds.
    recovery probe is allowed if the mission is still active. Airborne recovery
    selects typed `hold`, then terminal `return_home`, through the normal Drone
    API and safety layers while the circuit is open.
-8. The system prompt contains the fixed action contract, three compact reviewed
+8. Before flight, the semantic planner receives the operator text, blank
+   environment context, reviewed default policy, live aircraft state and
+   motion limits. Scenario truth and named landmarks are excluded. The action
+   system prompt then contains the fixed action contract, three compact reviewed
    operating principles and semantic live BODY facts. The user message contains
    the exact mission once, a single `MissionContract`, current state/perception,
    one evidence-health summary and bounded history. Empty world facts, macro

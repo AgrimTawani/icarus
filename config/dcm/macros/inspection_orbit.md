@@ -13,7 +13,7 @@ evidence_links:
 model_policy:
   phases: [launch, stage, orbit, collect_evidence, recover]
   recovery_actions: [hold, return_home, land]
-  evidence_requirements: [reviewed_orbit_geometry, requested_detection]
+  evidence_requirements: [operator_grounded_orbit_geometry, requested_detection]
 ---
 # Inspection orbit
 

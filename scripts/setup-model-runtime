@@ -22,11 +22,21 @@ LOG_DIR="${PROJECT_ROOT}/logs/model-runtime"
 LOG_FILE="${LOG_DIR}/setup-$(date +%Y%m%dT%H%M%S).log"
 
 WEIGHTS_DIR="${WEIGHTS_DIR:-$HOME/models/qwen}"
-CUDA_ARCH="${CUDA_ARCH:-89}"   # RTX 4050 Laptop = Ada Lovelace = sm_89
+CUDA_ARCH="${CUDA_ARCH:-native}"   # Build for the local CUDA device unless explicitly targeted.
 
-HF_REPO="bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF"
-PRIMARY="Qwen_Qwen3-4B-Instruct-2507-Q5_K_M.gguf"
-SECONDARY="Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+HF_REPO="${HF_REPO:-bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF}"
+PRIMARY="${PRIMARY:-Qwen_Qwen3-4B-Instruct-2507-Q5_K_M.gguf}"
+SECONDARY="${SECONDARY:-Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf}"
+MODEL_FAMILY="${MODEL_FAMILY:-qwen}"
+PRIMARY_QUANT="${PRIMARY_QUANT:-q5_k_m}"
+SECONDARY_QUANT="${SECONDARY_QUANT:-q4_k_m}"
+MODEL_REVISION="${MODEL_REVISION:-}"
+CONTEXT_LENGTH="${CONTEXT_LENGTH:-8192}"
+DEADLINE_MS="${DEADLINE_MS:-15000}"
+REASONING_MODE="${REASONING_MODE:-auto}"
+REASONING_BUDGET="${REASONING_BUDGET:-null}"
+GPU_LAYERS="${GPU_LAYERS:-auto}"
+GPU_MEMORY_MARGIN_MIB="${GPU_MEMORY_MARGIN_MIB:-512}"
 
 TOTAL_STEPS=8
 STEP=0
@@ -203,6 +213,11 @@ fi
 
 # ------------------------------------------------------- 7. download weights
 begin_step "Download Qwen weights (~5 GiB)"
+PUBLISHER_METADATA="${WEIGHTS_DIR}/PUBLISHER_METADATA.json"
+REVISION_ARGS=()
+[[ -z "${MODEL_REVISION}" ]] || REVISION_ARGS=(--revision "${MODEL_REVISION}")
+MODEL_REV=$(PYTHONPATH="${PROJECT_ROOT}" "${VENV}/bin/python" -m python.dcm.model_provenance \
+    --repository "${HF_REPO}" --cache "${PUBLISHER_METADATA}" "${REVISION_ARGS[@]}") || fail "publisher revision metadata unavailable"
 download_one() {
   local name="$1" label="$2"
   if [[ -f "${WEIGHTS_DIR}/${name}" ]]; then
@@ -211,45 +226,80 @@ download_one() {
   fi
   note "${label}: downloading..."
   "${VENV}/bin/hf" download "${HF_REPO}" "${name}" \
-    --local-dir "${WEIGHTS_DIR}" >>"${LOG_FILE}" 2>&1
+    --revision "${MODEL_REV}" --local-dir "${WEIGHTS_DIR}" >>"${LOG_FILE}" 2>&1
   [[ -f "${WEIGHTS_DIR}/${name}" ]] || return 1
   note "${label}: done ($(du -h "${WEIGHTS_DIR}/${name}" | cut -f1))"
 }
-download_one "${PRIMARY}"   "primary   Q5_K_M" || fail "primary download failed"
-download_one "${SECONDARY}" "secondary Q4_K_M" || fail "secondary download failed"
+download_one "${PRIMARY}"   "primary ${PRIMARY_QUANT}" || fail "primary download failed"
+download_one "${SECONDARY}" "secondary ${SECONDARY_QUANT}" || fail "secondary download failed"
 ok "both artifacts present"
 
 # ---------------------------------------------------------- 8. pin provenance
 begin_step "Checksum and pin provenance"
 MANIFEST="${WEIGHTS_DIR}/MANIFEST.json"
 note "hashing, a few seconds per GiB..."
+PYTHONPATH="${PROJECT_ROOT}" "${VENV}/bin/python" -m python.dcm.model_provenance \
+    --repository "${HF_REPO}" --cache "${PUBLISHER_METADATA}" \
+    --verify "${WEIGHTS_DIR}/${PRIMARY}" "${WEIGHTS_DIR}/${SECONDARY}" \
+    >>"${LOG_FILE}" 2>&1 || fail "local model bytes do not match pinned publisher metadata"
 SHA_PRIMARY=$(sha256sum "${WEIGHTS_DIR}/${PRIMARY}" | cut -d' ' -f1)
 SHA_SECONDARY=$(sha256sum "${WEIGHTS_DIR}/${SECONDARY}" | cut -d' ' -f1)
-cat >"${MANIFEST}" <<JSON
+cat >"${MANIFEST}.pending" <<JSON
 {
   "recorded_at": "$(date -Is)",
   "repository": "${HF_REPO}",
+  "family": "${MODEL_FAMILY}",
+  "revision": "${MODEL_REV}",
   "llama_cpp_revision": "${LLAMA_REV}",
   "llama_cpp_binary": "${LLAMA_DIR}/build/bin/llama-cli",
-  "cuda_arch": "sm_${CUDA_ARCH}",
+  "cuda_arch": "${CUDA_ARCH}",
+  "context_length": ${CONTEXT_LENGTH},
+  "deadline_ms": ${DEADLINE_MS},
+  "reasoning_mode": "${REASONING_MODE}",
+  "reasoning_budget": ${REASONING_BUDGET},
+  "gpu_layers": "${GPU_LAYERS}",
+  "gpu_memory_margin_mib": ${GPU_MEMORY_MARGIN_MIB},
   "artifacts": [
     {
       "role": "primary",
+      "family": "${MODEL_FAMILY}",
+      "repository": "${HF_REPO}",
+      "revision": "${MODEL_REV}",
+      "runtime": "llama_cpp",
       "path": "${WEIGHTS_DIR}/${PRIMARY}",
-      "quantization": "q5_k_m",
+      "quantization": "${PRIMARY_QUANT}",
       "sha256": "${SHA_PRIMARY}"
     },
     {
       "role": "secondary",
+      "family": "${MODEL_FAMILY}",
+      "repository": "${HF_REPO}",
+      "revision": "${MODEL_REV}",
+      "runtime": "llama_cpp",
       "path": "${WEIGHTS_DIR}/${SECONDARY}",
-      "quantization": "q4_k_m",
+      "quantization": "${SECONDARY_QUANT}",
       "sha256": "${SHA_SECONDARY}"
     }
   ]
 }
 JSON
-note "Q5_K_M  ${SHA_PRIMARY:0:32}..."
-note "Q4_K_M  ${SHA_SECONDARY:0:32}..."
+PYTHONPATH="${PROJECT_ROOT}" "${VENV}/bin/python" - "${MANIFEST}.pending" "${MANIFEST}" <<'PYVALIDATE' || fail "invalid runtime manifest controls; installed manifest left unchanged"
+import json, sys
+from pathlib import Path
+from python.dcm.edge_provisioning import flight_artifact
+pending, destination = map(Path, sys.argv[1:])
+manifest = json.loads(pending.read_text())
+if manifest["gpu_layers"].isdecimal():
+    manifest["gpu_layers"] = int(manifest["gpu_layers"])
+# One selected file needs no duplicate fallback role or second download.
+if manifest["artifacts"][0]["path"] == manifest["artifacts"][1]["path"]:
+    manifest["artifacts"] = manifest["artifacts"][:1]
+flight_artifact(manifest, "primary", verify=False)
+pending.write_text(json.dumps(manifest, indent=2) + "\n")
+pending.replace(destination)
+PYVALIDATE
+note "${PRIMARY_QUANT}  ${SHA_PRIMARY:0:32}..."
+note "${SECONDARY_QUANT}  ${SHA_SECONDARY:0:32}..."
 ok "manifest written"
 
 summary

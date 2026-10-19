@@ -1,0 +1,14 @@
+{
+  "generator": {
+    "converter": "pinned llama.cpp json_schema_to_grammar(force_gbnf=true)",
+    "source_sha256": "d5a82fff5d611abd1198ff27c328b20376ffe9f110b4771d579c8bd20c70541f"
+  },
+  "boolean": {
+    "schema_sha256": "2ff66e7cebc40d763a8816d87804f447fd6c80dd25cbae528a2ee55a6a57f754",
+    "grammar": "answer ::= \"\\\"\" char{0,300} \"\\\"\"\nanswer-kv ::= \"\\\"answer\\\"\" space \":\" space answer\nboolean ::= (\"true\" | \"false\")\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\nfound ::= boolean | null\nfound-kv ::= \"\\\"found\\\"\" space \":\" space found\nnull ::= \"null\"\nroot ::= \"{\" space found-kv \",\" space answer-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
+  },
+  "count": {
+    "schema_sha256": "62fe66e59e049b664444dfbb1d10de5d25046d9d5e3ca0c31d7f18de6fe7f2f3",
+    "grammar": "answer ::= \"\\\"\" char{0,300} \"\\\"\"\nanswer-kv ::= \"\\\"answer\\\"\" space \":\" space answer\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\ncount ::= count-0 | null\ncount-0 ::= ([0] | [1-9] [0-9]{0,15})\ncount-kv ::= \"\\\"count\\\"\" space \":\" space count\nnull ::= \"null\"\nroot ::= \"{\" space count-kv \",\" space answer-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
+  }
+}

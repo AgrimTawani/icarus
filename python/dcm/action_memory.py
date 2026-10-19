@@ -1,0 +1,126 @@
+"""Read-only access to retained action receipts; no mission interpretation."""
+import copy
+import json
+
+MAX_REPLY_BYTES = 2000
+
+
+def _size(value):
+    return len(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+
+
+def indexed_results(actions):
+    index = 0
+    for entry in actions:
+        items = entry['result'].get('actions', []) if entry['action'] == 'execute_sequence' else [
+            {'name': entry['action'], 'arguments': entry.get('arguments', {}), 'result': entry['result']}]
+        for item in items:
+            index += 1
+            yield index, {'action': item['name'], 'arguments': item.get('arguments', {}),
+                          'result': item['result']}
+
+
+def read_action_result(actions, action_index, path=(), offset=0, limit=8):
+    if type(action_index) is not int or action_index < 1:
+        raise ValueError('action_index must be a positive receipt index')
+    if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 16:
+        raise ValueError('offset/limit are invalid')
+    value = next((item for index, item in indexed_results(actions) if index == action_index), None)
+    if value is None:
+        raise ValueError('No retained action result has that index')
+    receipt = value
+    for key in path:
+        if isinstance(value, dict) and isinstance(key, str) and key in value:
+            value = value[key]
+        elif isinstance(value, list) and type(key) is int and 0 <= key < len(value):
+            value = value[key]
+        else:
+            raise ValueError('Path does not identify retained receipt data')
+    result = {'action_index': action_index, 'path': list(path),
+              'historical_action': receipt['action'],
+              'historical_status': receipt['result'].get('status'), 'current_evidence': False}
+    if isinstance(value, str) and _size(value) > MAX_REPLY_BYTES:
+        text = value[offset:offset + 400]
+        result.update(data=text, total_characters=len(value),
+                      next_offset=offset + len(text) if offset + len(text) < len(value) else None)
+    elif isinstance(value, list) and (_size(value) > MAX_REPLY_BYTES or offset):
+        chunk = value[offset:offset + limit]
+        while chunk and _size(chunk) > MAX_REPLY_BYTES:
+            chunk.pop()
+        if chunk or offset >= len(value):
+            result.update(data=copy.deepcopy(chunk), total_items=len(value),
+                          next_offset=offset + len(chunk) if offset + len(chunk) < len(value) else None)
+        else:
+            result.update(total_items=len(value),
+                          next_path=[*path, offset],
+                          message='This item needs a narrower path; append its index to path.')
+    elif isinstance(value, dict) and _size(value) > MAX_REPLY_BYTES:
+        keys = list(value)[offset:offset + limit]
+        result.update(fields=[{'key': key, 'type': type(value[key]).__name__,
+                               'path': [*path, key]} for key in keys],
+                      total_fields=len(value),
+                      next_offset=offset + len(keys) if offset + len(keys) < len(value) else None)
+    else:
+        result['data'] = copy.deepcopy(value)
+    return result
+
+
+def archive_older_observations(observations, keep_recent=2):
+    """Keep small factual fields; older large details stay addressable by index.
+
+    Counts, short answers, timestamps and failures remain visible. No input,
+    receipt or stored workflow is modified. Unfamiliar evidence fields are
+    listed with their exact lookup path rather than silently dropped.
+    """
+    result = copy.deepcopy(observations)
+    for entry in result[:-keep_recent] if keep_recent else result:
+        evidence = entry.get('evidence')
+        if not isinstance(evidence, dict):
+            continue
+        index = entry['after_action_index']
+        details = []
+        for key, value in list(evidence.items()):
+            threshold = 512 if isinstance(value, str) else 160
+            if _size(value) > threshold:
+                del evidence[key]
+                path = ['result', 'evidence', key]
+                details.append({'field': key, 'path': path,
+                                **({'items': len(value), 'latest_path': [*path, len(value)-1]}
+                                   if isinstance(value, list) and value else {})})
+        if details:
+            entry['retained_details'] = {'tool': 'read_action_result', 'action_index': index,
+                                         'fields': details}
+    return result
+
+
+def observation_memory_view(observations, history_bytes=2000, keep_recent=2):
+    projected = archive_older_observations(observations, keep_recent=keep_recent)
+    # A single long scan can exceed the window even before it becomes history.
+    # Expose exact paging paths, including the latest station, instead of
+    # silently cutting a station array or treating missing evidence as false.
+    for index, entry in enumerate(projected):
+        if _size(entry) > 4000:
+            projected[index] = archive_older_observations([entry], keep_recent=0)[0]
+    archived = []
+    while len(projected) > keep_recent and _size(
+            projected[:-keep_recent] if keep_recent else projected) > history_bytes:
+        archived.append(projected.pop(0)['after_action_index'])
+    view = {'observations': projected}
+    if archived:
+        view['archived_observations'] = {
+            'tool': 'read_action_result', 'action_indices': archived,
+            'path': ['result', 'evidence'],
+            'reason': 'Older evidence retained outside the decision context; fetch when needed.'}
+    return view
+
+
+def lean_execution_receipt(entry):
+    """Preserve action identity/status; large arguments/diagnostics stay readable."""
+    result = copy.deepcopy(entry)
+    index = result.get('through_index', result['index'])
+    for key, path in (('arguments', ['arguments']), ('motion', ['result','motion']),
+                      ('message', ['result','message'])):
+        if key in result and _size(result[key]) > 256:
+            result[key] = {'retained_action_index': index, 'path': path,
+                           'tool': 'read_action_result'}
+    return result

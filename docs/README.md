@@ -6,6 +6,8 @@ quickly establish the truth of the repository.
 
 ## Recommended Reading Order
 
+Latest Phase 1 change: [adaptive mission implementation and manual test handoff](architecture/PHASE1-ADAPTIVE-MISSIONS.md).
+
 1. [`GOAL.md`](GOAL.md) — what Icarus is building and what success means.
 2. [`MASTER-PLAN.md`](MASTER-PLAN.md) — phases, gates and immediate work.
 3. [`NEXT-STEPS.md`](NEXT-STEPS.md) — current agent handoff and next actions.
@@ -29,6 +31,10 @@ quickly establish the truth of the repository.
    environment.
 13. [`guides/SIMULATION-OPERATIONS.md`](guides/SIMULATION-OPERATIONS.md) — run,
    test and stop scenarios.
+14. [`simulation/GAZEBO-HARDWARE-FIDELITY.md`](simulation/GAZEBO-HARDWARE-FIDELITY.md)
+   — exact Icarus7 sensor mounts, topics, rates, vendor-spec mappings and
+   explicit Gazebo approximations, ArduPilot proximity/range/flow integration
+   and its headless flight/fault acceptance command.
 
 For the current data and DCM work, continue with
 [`simulation/PHASE-10-EPISODES.md`](simulation/PHASE-10-EPISODES.md),
@@ -36,6 +42,9 @@ For the current data and DCM work, continue with
 [`architecture/DCM-MODEL-SELECTION.md`](architecture/DCM-MODEL-SELECTION.md).
 The implemented V2 planner-context and feedback architecture is documented in
 [`architecture/DCM-V2-FEEDBACK.md`](architecture/DCM-V2-FEEDBACK.md).
+The current ordered mission compiler, exact prompt contents, perception routing
+and relative-yaw path are documented in
+[`architecture/DCM-OBJECTIVE-PIPELINE.md`](architecture/DCM-OBJECTIVE-PIPELINE.md).
 Its measured Phase-1 result and AirSim end-to-end evidence are in
 [`architecture/V2-PHASE1-IMPLEMENTATION.md`](architecture/V2-PHASE1-IMPLEMENTATION.md).
 The V2 research decision, including the AerialClaw adoption boundary, AirSim

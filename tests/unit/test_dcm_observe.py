@@ -148,7 +148,7 @@ class ObserveTests(unittest.TestCase):
             contract = summary["contract"]
             self.assertEqual(contract["contract_version"], "dcm-contract-v1")
             self.assertEqual(contract["vocabulary_version"],
-                             "dcm-actions-v4-vision-inspection")
+                             "dcm-actions-v5-relative-yaw")
             self.assertEqual(contract["prompt_version"],
                              "dcm-prompt-v6-mission-evidence")
             self.assertIn("none", contract["allowed_actions"])

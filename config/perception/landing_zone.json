@@ -1,10 +1,12 @@
 {
-  "version": 1,
+  "version": 2,
   "active_source": {
-    "sensor_id": "downward_rgbd",
-    "topic": "/icarus/sensors/rgbd_down/depth_image",
+    "sensor_id": "simulation_only_landing_depth_proxy",
+    "topic": "/icarus/sensors/landing_depth_proxy/depth_image",
+    "simulation_only": true,
+    "physical_camera": "logitech_brio_4k_rgb_only",
     "optical_axis_body_frd": [0.0, 0.0, 1.0],
-    "horizontal_fov_deg": 87.0,
-    "vertical_fov_deg": 67.15
+    "horizontal_fov_deg": 82.1492203,
+    "vertical_fov_deg": 52.2338454
   }
 }

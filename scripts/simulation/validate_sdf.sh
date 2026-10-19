@@ -12,6 +12,7 @@ if [[ -d "${PROJECT_ROOT}/third_party/ardupilot_gazebo/build" ]]; then
 fi
 export GZ_SIM_SYSTEM_PLUGIN_PATH="${PROJECT_ROOT}/simulation/plugins/build${GZ_SIM_SYSTEM_PLUGIN_PATH:+:${GZ_SIM_SYSTEM_PLUGIN_PATH}}"
 export GZ_PARTITION="icarus_sdf_validation_$$"
+export GZ_IP="127.0.0.1"
 validation_logs="$(mktemp -d "${PROJECT_ROOT}/logs/sdf_validation_XXXXXX")"
 
 mapfile -d '' sdf_files < <(find "${PROJECT_ROOT}/simulation" -type f -name '*.sdf' -print0 | sort -z)

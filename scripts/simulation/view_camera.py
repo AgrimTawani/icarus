@@ -10,11 +10,6 @@ import threading
 import time
 from pathlib import Path
 
-import gi
-
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst
-
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_SESSION = ROOT / "logs/simulation/active_session.json"
@@ -22,10 +17,18 @@ ACTIVE_SESSION = ROOT / "logs/simulation/active_session.json"
 
 def receiver_pipeline(streams, latency_ms):
     """Compose trusted session streams in a two-column labeled grid."""
+    if not streams:
+        raise ValueError("at least one camera stream is required")
+    columns = min(2, len(streams))
+    rows = (len(streams) + columns - 1) // columns
+    cell_width = max(int(stream["width"]) for stream in streams)
+    cell_height = max(int(stream["height"]) for stream in streams)
+    canvas_width = columns * cell_width
+    canvas_height = rows * cell_height
     compositor = ["compositor name=grid background=black"]
     branches = []
     for index, stream in enumerate(streams):
-        xpos, ypos = (index % 2) * stream["width"], (index // 2) * stream["height"]
+        xpos, ypos = (index % columns) * cell_width, (index // columns) * cell_height
         compositor.append(f"sink_{index}::xpos={xpos} sink_{index}::ypos={ypos}")
         branches.append(
             f"udpsrc port={stream['port']} "
@@ -34,7 +37,19 @@ def receiver_pipeline(streams, latency_ms):
             "! rtph264depay ! avdec_h264 ! videoconvert "
             f"! textoverlay text=\"{stream['label']}\" valignment=top halignment=left shaded-background=true "
             f"! queue ! grid.sink_{index}")
-    return " ".join(compositor) + " ! videoconvert ! autovideosink name=display sync=false " + " ".join(branches)
+    # Explicit output caps make the video sink create a correctly sized window
+    # before the first RTP keyframe arrives.  Without them many sinks initially
+    # expose a tiny title-bar-sized window which has to be found and resized.
+    output_caps = (
+        f"video/x-raw,width={canvas_width},height={canvas_height},"
+        "pixel-aspect-ratio=1/1"
+    )
+    return (
+        " ".join(compositor)
+        + f" ! videoconvert ! {output_caps} "
+        + "! autovideosink name=display sync=false "
+        + " ".join(branches)
+    )
 
 
 def session_video_streams():
@@ -48,13 +63,18 @@ def session_video_streams():
     video = session.get("video", {})
     if video.get("transport") != "rtp-h264":
         return []
-    streams = video.get("streams") or [{"id": "forward_rgbd", "label": "Forward RGB-D", "port": video["port"]}]
+    streams = video.get("streams") or [{"id": "forward_d435i", "label": "Forward Intel RealSense D435i", "port": video["port"]}]
     return [{"id": str(stream["id"]), "label": str(stream["label"]), "port": int(stream["port"]),
              "width": int(video.get("width", 640)), "height": int(video.get("height", 480))}
             for stream in streams]
 
 
 def main():
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--port",
@@ -64,8 +84,8 @@ def main():
     parser.add_argument("--latency-ms", type=int, default=75)
     args = parser.parse_args()
     streams = session_video_streams() or [
-        {"id": "forward_rgbd", "label": "Forward RGB-D", "port": 5600, "width": 640, "height": 480},
-        {"id": "downward_rgbd", "label": "Downward RGB-D", "port": 5601, "width": 640, "height": 480},
+        {"id": "forward_d435i", "label": "Forward Intel RealSense D435i", "port": 5600, "width": 640, "height": 480},
+        {"id": "downward_brio", "label": "Downward Logitech BRIO 4K", "port": 5601, "width": 640, "height": 480},
     ]
     if args.port is not None:
         for index, stream in enumerate(streams):

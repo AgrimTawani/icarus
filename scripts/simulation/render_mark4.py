@@ -86,7 +86,9 @@ def main():
     sdf.write(world_path, encoding="unicode")
     env = os.environ.copy()
     env["GZ_PARTITION"] = "icarus_render_" + uuid.uuid4().hex
+    env["GZ_IP"] = "127.0.0.1"
     os.environ["GZ_PARTITION"] = env["GZ_PARTITION"]
+    os.environ["GZ_IP"] = env["GZ_IP"]
     from gz.msgs10.image_pb2 import Image
     from gz.transport13 import Node
 

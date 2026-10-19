@@ -1,4 +1,4 @@
-# Mark4 427 mm / 4.343 kg provisional simulation profile, fresh EEPROM each run.
+# Icarus custom 427 mm / 4.4745 kg hardware-fidelity simulation profile, fresh EEPROM each run.
 FRAME_CLASS 1
 FRAME_TYPE 1
 AHRS_EKF_TYPE 3
@@ -29,6 +29,9 @@ ATC_RAT_YAW_I 0.015
 ATC_ANG_RLL_P 3.5
 ATC_ANG_PIT_P 3.5
 ATC_ANGLE_MAX 30
+# Guided waypoint-yaw ceiling. Icarus commands remain bounded to 5..60 deg/s;
+# a natural-language "slowly" request selects the 5 deg/s contract minimum.
+ATC_RATE_WPY_MAX 60
 WP_SPD 3
 WP_SPD_UP 1.5
 WP_SPD_DN 1

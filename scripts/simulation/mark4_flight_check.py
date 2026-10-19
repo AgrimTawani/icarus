@@ -205,6 +205,12 @@ def run(args):
             "max_tilt_deg": max(s["tilt_deg"] for s in samples),
         }
         if args.world == "compact_flight":
+            model_report = (
+                Path(__file__).resolve().parents[2]
+                / "simulation/models/akshu_compact_sitl/mass_properties.json"
+            )
+            reference_mass_kg = float(
+                json.loads(model_report.read_text())["total_mass_kg"])
             pwm_rows = [s["motor_pwm"] for s in samples if "motor_pwm" in s]
             if len(pwm_rows) < 40:
                 raise RuntimeError(
@@ -227,8 +233,9 @@ def run(args):
             )
             result["hover"]["curve_predicted_total_thrust_kgf"] = mean_thrust
             result["hover"]["thrust_weight_relative_error"] = (
-                abs(mean_thrust - 4.343) / 4.343
+                abs(mean_thrust - reference_mass_kg) / reference_mass_kg
             )
+            result["hover"]["reference_mass_kg"] = reference_mass_kg
             if result["hover"]["thrust_weight_relative_error"] > 0.05:
                 raise RuntimeError(
                     "Hover thrust inconsistent with reference curve and mass"

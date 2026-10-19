@@ -1,18 +1,41 @@
 # Next Steps / Agent Handoff
 
-Status originally written 2026-09-19; current addendum 2026-09-27. Read this with [`MASTER-PLAN.md`](MASTER-PLAN.md) and
+## Latest — 2026-10-02 adaptive Phase 1
+
+Start with [the adaptive mission handoff](architecture/PHASE1-ADAPTIVE-MISSIONS.md).
+Implementation and offline verification are complete; **manual simulator/model
+acceptance is next**, deliberately not run during this development pass.
+Do not resurrect source-text regex/numeric grounding. Do not start Phase 2 yet.
+The handoff documents supported conditionals, runtime references, camera
+concurrency, surface limits, sensor summaries and all four launch terminals.
+
+Status originally written 2026-09-19; current addendum 2026-09-28. Read this with [`MASTER-PLAN.md`](MASTER-PLAN.md) and
 [`reference/PROJECT-STATUS.md`](reference/PROJECT-STATUS.md). This is a handoff,
 not a claim that Phase 10 or Phase 11 has passed its full exit gate.
 
-## Current addendum — 2026-09-27
+## Current addendum — 2026-09-28
 
 The historical sections below describe the route taken; they do not describe
 the current implementation state by themselves.
 
+Prompt v9 corrects a transcript-proven fixed-target failure in prompt v8. The
+live V3 path now asks Qwen to semantically compile every free-form prompt into
+ordered objectives, while deterministic code validates copied source coverage,
+arguments, capabilities and geometry. It labels YOLO/VLM requirements, refuses
+invalid or incomplete coverage before arming,
+supports typed relative yaw with accumulated-angle verification, filters
+scenario landmarks unless explicitly named, and prints objective results and
+operator answers at mission end. Macros are explicit overlays only. The new
+prompt and yaw path pass unit/C++ tests and two fresh headless live missions:
+one unseen-paraphrase yaw flight and one YOLO+VLM mission, both with complete
+replay. A full frozen promotion campaign is still required; the 2026-09-27 v8
+flights below remain historical evidence, not v9 promotion evidence. See
+[`architecture/DCM-OBJECTIVE-PIPELINE.md`](architecture/DCM-OBJECTIVE-PIPELINE.md).
+
 ## V2 Phase-1 closeout — 2026-09-23
 
 Phase-1 implementation is complete, but promotion is intentionally not. The
-compact V3 contract, five enforced/auto-resolved macros, semantic live BODY,
+compact V3 contract, five reviewed macros, semantic live BODY,
 one compiled mission contract, closed reason-code trace, automatic sealed
 feedback queue, suppressing circuit breaker, independent control-lease
 heartbeat, AirSim/ArduPilot full stack and conformance tests are implemented.
@@ -22,7 +45,7 @@ better recovery. The later compact prompt removed model-visible hashes, paths,
 empty facts, duplicate vocabulary and duplicate freshness/mission
 representations; its representative rendered size fell 41%. It has not
 inherited the old evaluation result. V3 is the CLI context default, with
-`--context v2` retained for comparison. Hardened prompt v8 now limits progress
+`--context v2` retained for comparison. Historical prompt v8 limited progress
 vocabulary to the active objective, enforces mission completion after inference
 and has passing live Gazebo evidence for alternative wording, visual building
 inspection, nearest-entry orbit, four-person forward-camera detection, building
@@ -44,7 +67,7 @@ evidence. The full closeout is
 The simulation-only edge-vision implementation is complete and has a dedicated
 closeout record at [`simulation/EDGE-VISION-V1.md`](simulation/EDGE-VISION-V1.md).
 It adds Qwen Q4/4096 edge configuration, pinned YOLO11n and Qwen2-VL artifacts,
-the deterministic north-building/person scenario, sealed edge evidence,
+the deterministic building/person scenario, sealed edge evidence,
 dual-camera grid streaming, and targeted tests. The retained early episode is
 replay-valid but semantic-count-invalid. The corrected acceptance mission now
 passes in `20260927T041123_0a62e3f27053`; rerun the documented workflow after

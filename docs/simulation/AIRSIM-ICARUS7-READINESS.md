@@ -45,7 +45,7 @@ Six of the ten implementation and acceptance gates are complete:
    arm and landing-gear collision boxes are provided, and the four propellers
    have AirSim-driven rotating pivots.
 4. **Physics overlay — compiled and tested.** The pinned AirSim 1.8 source
-   recognizes `Model=Icarus7` and instantiates the 4.343 kg design mass,
+   recognizes `Model=Icarus7` and instantiates the 4.4745 kg design mass,
    component-derived inertia, rotor positions, 10-inch propeller, thrust and
    torque baseline. The executable AirLib parameter test passes.
 5. **Sensors and profiles — complete as configuration.** Separate GUI and
@@ -87,7 +87,7 @@ The final four gates remain open:
    equivalent to the Gazebo shear/turbulence/wake model, so tolerances and
    evidence must be defined separately.
 10. **Run and score the complete architecture.** Execute a prompt such as
-   “arm, take off, inspect that building, hover over it, count the visible
+   “arm, take off, inspect the gray house driveway, hover over it, count the visible
    people, then return home” through the compact V3 context, DCM, typed Drone
    API, guardrails, ArduPilot SITL and the custom pawn. RGB/depth/LiDAR must
    come from the custom vehicle. Seal and replay the decision episode, verify
@@ -123,8 +123,9 @@ only when one retained run demonstrates all of the following together:
   VLM/detector and the normalized perception layer.
 - A recorded wind profile is active and its application is independently
   verifiable.
-- The mission arms, takes off, inspects the reviewed building, reaches and
-  holds the reviewed waypoint, performs detection, returns/lands and disarms.
+- The mission arms, takes off, flies only to explicit operator-provided local
+  coordinates, inspects the current camera view, holds, performs detection,
+  returns/lands and disarms.
 - Ground-truth-backed perception scoring, safety results, timestamps,
   configuration hashes and a sealed/replayable decision episode are retained.
 - The run meets explicit tolerances without regressing the Gazebo baseline.

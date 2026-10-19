@@ -27,6 +27,7 @@ def measure_rtf(world_path, world_name, seed):
     env = os.environ.copy()
     partition = "icarus_phase5_test_" + uuid.uuid4().hex
     env["GZ_PARTITION"] = partition
+    env["GZ_IP"] = "127.0.0.1"
     env["GZ_SIM_RESOURCE_PATH"] = str(ROOT / "simulation/models")
     env["GZ_SIM_SYSTEM_PLUGIN_PATH"] = (
         str(ROOT / "simulation/plugins/build") + ":" + str(ROOT / "third_party/ardupilot_gazebo/build")
@@ -43,7 +44,9 @@ def measure_rtf(world_path, world_name, seed):
         )
         values = []
         previous_partition = os.environ.get("GZ_PARTITION")
+        previous_gz_ip = os.environ.get("GZ_IP")
         os.environ["GZ_PARTITION"] = partition
+        os.environ["GZ_IP"] = "127.0.0.1"
         node = Node()
 
         def callback(message):
@@ -77,6 +80,10 @@ def measure_rtf(world_path, world_name, seed):
                 os.environ.pop("GZ_PARTITION", None)
             else:
                 os.environ["GZ_PARTITION"] = previous_partition
+            if previous_gz_ip is None:
+                os.environ.pop("GZ_IP", None)
+            else:
+                os.environ["GZ_IP"] = previous_gz_ip
     result = {"world": world_name, "measurement": "steady-state final 8 simulation seconds after warm-up",
               "measured_real_time_factor": rtf, "samples": len(values), "status": "passed" if rtf >= 0.8 else "failed"}
     (log_dir / "results.json").write_text(json.dumps(result, indent=2) + "\n")

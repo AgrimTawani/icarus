@@ -51,10 +51,32 @@ bool LocalPlanner::SegmentClear(
 PlanResult LocalPlanner::Plan(
     const v1::LocalPositionNed& start, const v1::LocalPositionNed& goal,
     const std::vector<perception::Point3>& obstacles,
-    double requested_clearance_m) const {
+    double requested_clearance_m, double departure_clearance_floor_m) const {
   PlanResult result;
   const double clearance_m = std::max(clearance_m_, requested_clearance_m);
-  if (SegmentClear(start, goal, obstacles, clearance_m)) {
+  // A caller may distinguish the live clearance floor from a soft planning
+  // margin. Only the departure edge may leave that margin, and every nearby
+  // return must get no closer; its endpoint must regain the full envelope.
+  const auto departure_clear = [&](const v1::LocalPositionNed& to) {
+    if (!(departure_clearance_floor_m > 0.0) ||
+        departure_clearance_floor_m > clearance_m) return false;
+    for (const auto& point : obstacles) {
+      if (std::abs(point.z_m - start.down_m()) > 2.0) continue;
+      const double distance = std::hypot(start.north_m() - point.x_m,
+                                         start.east_m() - point.y_m);
+      if (distance < departure_clearance_floor_m) return false;
+      if (std::hypot(to.north_m() - point.x_m, to.east_m() - point.y_m) < clearance_m)
+        return false;
+      if (distance < clearance_m) {
+        const double outward = (start.north_m() - point.x_m) * (to.north_m() - start.north_m()) +
+                               (start.east_m() - point.y_m) * (to.east_m() - start.east_m());
+        if (outward < 0.0) return false;
+      } else if (PointSegmentDistance(point.x_m, point.y_m, start.north_m(),
+                   start.east_m(), to.north_m(), to.east_m()) < clearance_m) return false;
+    }
+    return true;
+  };
+  if (SegmentClear(start, goal, obstacles, clearance_m) || departure_clear(goal)) {
     result.success = true;
     result.direct_path = true;
     result.reason = "direct path clear";
@@ -107,6 +129,44 @@ PlanResult LocalPlanner::Plan(
     return result;
   }
 
+  // Spatial buckets keep exact edge checks local rather than scanning every
+  // LiDAR return for each of up to eight neighbors of every search cell.
+  std::vector<std::vector<const perception::Point3*>> buckets(cell_count);
+  for (const auto& point : obstacles) {
+    if (point.x_m < min_n - clearance_m || point.x_m > max_n + clearance_m ||
+        point.y_m < min_e - clearance_m || point.y_m > max_e + clearance_m) continue;
+    const auto [x, y] = coordinate(point.x_m, point.y_m);
+    buckets[index(x, y)].push_back(&point);
+  }
+  const auto edge_clear = [&](const v1::LocalPositionNed& from,
+                              const v1::LocalPositionNed& to) {
+    const auto [lo_x, lo_y] = coordinate(
+        std::min(from.north_m(), to.north_m()) - clearance_m,
+        std::min(from.east_m(), to.east_m()) - clearance_m);
+    const auto [hi_x, hi_y] = coordinate(
+        std::max(from.north_m(), to.north_m()) + clearance_m,
+        std::max(from.east_m(), to.east_m()) + clearance_m);
+    for (int y = lo_y; y <= hi_y; ++y) {
+      for (int x = lo_x; x <= hi_x; ++x) {
+        for (const auto* point : buckets[index(x, y)]) {
+          if (std::abs(point->z_m - from.down_m()) <= 2.0 &&
+              PointSegmentDistance(point->x_m, point->y_m,
+                  from.north_m(), from.east_m(), to.north_m(), to.east_m()) < clearance_m)
+            return false;
+        }
+      }
+    }
+    return true;
+  };
+  const auto position = [&](int cell) {
+    if (cell == index(sx, sy)) return start;
+    if (cell == index(gx, gy)) return goal;
+    auto point = goal;
+    point.set_north_m(min_n + (cell % width) * resolution_m_);
+    point.set_east_m(min_e + (cell / width) * resolution_m_);
+    return point;
+  };
+
   struct QueueItem { double score; int cell; };
   struct Greater { bool operator()(const QueueItem& a, const QueueItem& b) const {
     return a.score > b.score;
@@ -135,6 +195,10 @@ PlanResult LocalPlanner::Plan(
       if (occupied[next]) continue;
       const double candidate = cost[cell] + std::hypot(dx, dy);
       if (candidate >= cost[next]) continue;
+      // Free endpoints do not imply a clear diagonal or off-grid connection.
+      // Use the actual start/goal poses, not their rounded grid centers.
+      if (!edge_clear(position(cell), position(next)) &&
+          !(cell == start_cell && departure_clear(position(next)))) continue;
       cost[next] = candidate;
       parent[next] = cell;
       open.push({candidate + std::hypot(gx - nx, gy - ny), next});
@@ -151,25 +215,22 @@ PlanResult LocalPlanner::Plan(
   std::reverse(cells.begin(), cells.end());
   std::vector<v1::LocalPositionNed> full_path;
   full_path.reserve(cells.size());
-  for (std::size_t i = 0; i < cells.size(); ++i) {
-    const int cell = cells[i];
-    v1::LocalPositionNed point;
-    point.set_origin_id(goal.origin_id());
-    point.set_north_m(min_n + (cell % width) * resolution_m_);
-    point.set_east_m(min_e + (cell / width) * resolution_m_);
-    point.set_down_m(goal.down_m());
-    if (i + 1 == cells.size()) point = goal;
-    full_path.push_back(point);
-  }
+  for (const int cell : cells) full_path.push_back(position(cell));
   v1::LocalPositionNed anchor = start;
   std::size_t cursor = 0;
   while (cursor < full_path.size()) {
-    std::size_t farthest = cursor;
+    std::size_t farthest = full_path.size();
     for (std::size_t candidate = full_path.size(); candidate-- > cursor;) {
-      if (SegmentClear(anchor, full_path[candidate], obstacles, clearance_m)) {
+      if (SegmentClear(anchor, full_path[candidate], obstacles, clearance_m) ||
+          (cursor == 0 && departure_clear(full_path[candidate]))) {
         farthest = candidate;
         break;
       }
+    }
+    if (farthest == full_path.size()) {
+      result.waypoints.clear();
+      result.reason = "no clear connection while simplifying local route";
+      return result;
     }
     result.waypoints.push_back(full_path[farthest]);
     anchor = full_path[farthest];

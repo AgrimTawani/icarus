@@ -67,15 +67,25 @@ def report(episode):
     person_detects = [item for item in actions if item.get("action") == "detect"
                       and item.get("outcome") == "SUCCEEDED"
                       and "person" in item.get("arguments", {}).get("classes", [])]
-    action_count = (person_detects[-1].get("result") or {}).get(
-        "unique_person_count") if person_detects else None
-    count_evidence = ((person_detects[-1].get("result") or {}).get(
-        "camera_evidence") or {}) if person_detects else {}
+    # A scan intentionally records one bounded detection result per viewpoint.
+    # Its mission measurement is the largest same-frame count observed at any
+    # declared viewpoint, not the final viewpoint (which may face empty space).
+    # This is the same conservative aggregation used by completion_report and
+    # never sums cameras or frames.
+    def person_count(item):
+        value = (item.get("result") or {}).get("unique_person_count")
+        return value if type(value) in (int, float) else -1
+
+    best_person_detect = max(person_detects, key=person_count, default=None)
+    action_count = ((best_person_detect.get("result") or {}).get(
+        "unique_person_count") if best_person_detect else None)
+    count_evidence = (((best_person_detect.get("result") or {}).get(
+        "camera_evidence") or {}) if best_person_detect else {})
     count_camera = (max(
         count_evidence,
         key=lambda camera: count_evidence[camera].get(
             "max_simultaneous_persons", -1)) if count_evidence else
-        last.get("camera", {}).get("id", "downward_rgbd"))
+        last.get("camera", {}).get("id", "downward_brio"))
     # The bounded count window recorded by the executed detect action is the
     # mission measurement. The observer's cumulative IoU track IDs can split
     # one moving person into several IDs and are diagnostics only.
@@ -88,7 +98,6 @@ def report(episode):
         if not person_detects:
             semantic["reasons"].append("requested person count has no successful detect evidence")
         else:
-            action_count = person_detects[-1].get("result", {}).get("unique_person_count")
             if action_count == expected:
                 semantic["satisfied"].append("unique_person_count")
             else:
@@ -99,7 +108,8 @@ def report(episode):
                 semantic["reasons"].append("requested person count was collected before the requested orbit")
     if not isinstance(recorded_semantic, dict) and requested_building_count:
         semantic["required"].append("visual_building_count")
-        semantic["reasons"].append("stock YOLO11n has no building class; use the committed north_building landmark")
+        semantic["reasons"].append(
+            "stock YOLO11n has no building class; use qualitative current-camera VLM evidence")
     if not isinstance(recorded_semantic, dict):
         semantic["success"] = not semantic["reasons"]
     semantic_actions = {"detect", "inspect_scene", "assess_landing_zone"}
@@ -133,7 +143,7 @@ def report(episode):
         "yolo": {"mean_inference_latency_ms": _mean(yolo_latencies),
                  "observed_fps": round((len(timestamps) - 1) / elapsed_s, 3) if elapsed_s else None,
                  "max_fps": 5,
-                 "camera_feeds": sorted({item.get("camera", {}).get("id", "downward_rgbd")
+                 "camera_feeds": sorted({item.get("camera", {}).get("id", "downward_brio")
                                          for item in detections})},
         "vlm_latency_ms": _mean([item["latency_ms"] for item in vlm if item.get("latency_ms") is not None]),
         "resources": resources,

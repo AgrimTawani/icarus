@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -25,6 +26,11 @@ class ActionStore {
                   v1::ReasonCode reason, std::string message,
                   double progress = 0.0,
                   const v1::DroneState* terminal_state = nullptr);
+  // Report progress inside the EXECUTING state without a state transition,
+  // e.g. which orbit viewpoint is being held. False once the action is no
+  // longer executing.
+  bool UpdateProgress(const std::string& action_id, double progress,
+                      std::string message, std::uint32_t active_viewpoint = 0);
   [[nodiscard]] std::optional<std::string> ActiveConflictingAction() const;
 
  private:

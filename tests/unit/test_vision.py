@@ -15,9 +15,8 @@ class VisionContractTests(unittest.TestCase):
 
     def test_invalid_or_excessive_class_requests_are_refused(self):
         for values in ([], [""], ["x" * 65], list(map(str, range(17)))):
-            with self.subTest(values=values):
-                with self.assertRaises(ValueError):
-                    normalize_classes(values)
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                normalize_classes(values)
 
     def test_result_has_complete_counts_and_only_requested_classes(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -84,8 +84,11 @@ def main():
 
     collision("chassis_collision", [0, 0, -0.026], [0.22, 0.105, 0.042])
     collision("battery_collision", [0, 0, -0.11], [0.18, 0.075, 0.055])
-    collision("lidar_collision", [0, 0, 0.016], [0.045, 0.045, 0.022])
-    collision("camera_collision", [0.121, 0, -0.028], [0.022, 0.070, 0.024])
+    collision("mid360_collision", [0.070, 0, 0.081], [0.065, 0.065, 0.060])
+    collision("d435i_collision", [0.106, 0, -0.008], [0.025, 0.090, 0.025])
+    collision("brio_collision", [0.101, 0, -0.06475], [0.0265, 0.102, 0.027])
+    collision("ark_flow_collision", [0.055, 0, -0.105], [0.030, 0.030, 0.014])
+    collision("h_rtk_collision", [-0.091, -0.057, 0.044], [0.078, 0.078, 0.022])
     for side in (-1, 1):
         node = collision(
             f"landing_{side}", [0, side * 0.085, -0.1841], [0.18, 0.018, 0.012]
@@ -174,7 +177,7 @@ def main():
     ET.indent(tree)
     tree.write(target / "model.sdf", encoding="unicode")
     (target / "model.config").write_text(
-        '<model><name>Icarus compact SITL</name><version>0.4</version><sdf version="1.9">model.sdf</sdf><description>Component-derived rigid-body model with rotors, physical-noise sensors and ArduPilot.</description></model>\n'
+        '<model><name>Icarus compact SITL</name><version>0.5</version><sdf version="1.9">model.sdf</sdf><description>Component-derived rigid-body model with hardware-specific sensor approximations, rotors and ArduPilot.</description></model>\n'
     )
     (target / "mass_properties.json").write_text(
         json.dumps(

@@ -1,0 +1,282 @@
+{
+  "source_episode": "20261003T000225_f715c3e2c9b4",
+  "events_sha256": "0985cac2bd2cebda306b87831ae8445f841b9b52d2bc5cc374657188579ea9a7",
+  "provenance_note": "Retained event evidence; logs do not establish an exact snapshot of all uncommitted source files. Original checkout was inspected, not the older task worktree.",
+  "records": [
+    {
+      "sequence": 1724,
+      "kind": "mission_planning",
+      "status": "accepted",
+      "error": null,
+      "plan": {
+        "understood_intent": "Arm, take off to 7m, turn 180 degrees, then approach a building until 3m from surface",
+        "status": "ready",
+        "objectives": [
+          {
+            "kind": "takeoff",
+            "altitude_m": 7
+          },
+          {
+            "kind": "turn",
+            "angle_deg": 180
+          },
+          {
+            "kind": "search",
+            "query": "building",
+            "stop_when": "found",
+            "speed": "slowly"
+          },
+          {
+            "kind": "approach",
+            "target": {
+              "observed": "building"
+            },
+            "standoff_m": 3
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 4884,
+      "kind": "runtime_target_objective",
+      "approach": {
+        "corrected_range_m": 11.05,
+        "error_m": 8.05,
+        "live_range_m": 10.77,
+        "range_bias_correction_m": 0.28,
+        "reached": false,
+        "readings": [
+          {
+            "corrected_range_m": 13.96,
+            "east_m": -0.01,
+            "live_range_m": 13.68,
+            "north_m": 0.02,
+            "surface": {
+              "east_m": 0.14,
+              "north_m": 13.7
+            }
+          },
+          {
+            "corrected_range_m": 11.05,
+            "east_m": -0.01,
+            "live_range_m": 10.77,
+            "north_m": 3.07,
+            "surface": {
+              "east_m": 2.07,
+              "north_m": 13.64
+            }
+          },
+          {
+            "corrected_range_m": 9.99,
+            "east_m": 0.58,
+            "live_range_m": 9.71,
+            "north_m": 6.11,
+            "surface": {
+              "east_m": -4.04,
+              "north_m": 14.65
+            }
+          }
+        ],
+        "requested_clearance_m": 2.0,
+        "segments": 2,
+        "standoff_m": 3.0,
+        "target_live_range_m": 3.0,
+        "tolerance_m": 0.5
+      },
+      "failure": {
+        "action_failed": false,
+        "category": "inconsistent",
+        "phase": "approach",
+        "reason": "the target surface moved 6.2 m between LiDAR reads"
+      }
+    },
+    {
+      "sequence": 7197,
+      "kind": "mission_planning",
+      "status": "rejected",
+      "error": "save_as on this action has no defined result binding",
+      "plan": {
+        "understood_intent": "Arm, take off to 10 meters, fly above the building directly in front, then slowly descend and land on it",
+        "status": "ready",
+        "objectives": [
+          {
+            "kind": "takeoff",
+            "altitude_m": 10
+          },
+          {
+            "kind": "goto",
+            "target": {
+              "observed": "the building right in front of me"
+            }
+          },
+          {
+            "kind": "hold",
+            "duration_s": 5,
+            "save_as": "above_building_position"
+          },
+          {
+            "kind": "move",
+            "direction": "down",
+            "distance_m": "a bit",
+            "save_as": "descent_to_building"
+          },
+          {
+            "kind": "land_on",
+            "target": {
+              "ref": "above_building_position"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 7282,
+      "kind": "mission_planning",
+      "status": "rejected",
+      "error": "save_as on this action has no defined result binding",
+      "plan": {
+        "understood_intent": "Arm, take off to 10 meters, fly above the building directly in front, descend slowly, and land on the building",
+        "status": "ready",
+        "objectives": [
+          {
+            "kind": "takeoff",
+            "altitude_m": 10
+          },
+          {
+            "kind": "goto",
+            "target": {
+              "observed": "the building right in front of me"
+            }
+          },
+          {
+            "kind": "hold",
+            "duration_s": 5,
+            "save_as": "above_building"
+          },
+          {
+            "kind": "move",
+            "direction": "down",
+            "distance_m": "a bit",
+            "save_as": "descent_to_building"
+          },
+          {
+            "kind": "land_on",
+            "target": {
+              "ref": "above_building"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 8393,
+      "kind": "mission_planning",
+      "status": "accepted",
+      "error": null,
+      "plan": {
+        "understood_intent": "Detect people count and conditionally take off with altitude based on count",
+        "status": "ready",
+        "objectives": [
+          {
+            "kind": "observe",
+            "save_as": "people_count",
+            "tool": "vlm",
+            "query": "number of people in front of you",
+            "camera": "forward_d435i"
+          },
+          {
+            "kind": "if",
+            "condition": {
+              "evidence": "people_count",
+              "test": "found",
+              "max_age_s": 30
+            },
+            "then": [
+              {
+                "kind": "takeoff",
+                "altitude_m": 5
+              },
+              {
+                "kind": "move",
+                "direction": "forward",
+                "distance_m": 5
+              }
+            ],
+            "else": [
+              {
+                "kind": "takeoff",
+                "altitude_m": 10
+              },
+              {
+                "kind": "move",
+                "direction": "forward",
+                "distance_m": 10
+              }
+            ],
+            "on_unknown": "stop"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 8613,
+      "kind": "adaptive_mission",
+      "payload": {
+        "event": "observation",
+        "name": "people_count",
+        "result": {
+          "answer": "Error: Failed to initialize samplers: std::exception",
+          "camera": "forward_d435i",
+          "capture_pose": {
+            "attitude": {
+              "pitch_rad": -0.00036554463440552354,
+              "roll_rad": -0.0007890367996878922,
+              "yaw_rad": -0.07089834660291672
+            },
+            "local_position_ned": {
+              "down_m": -0.8916839957237244,
+              "east_m": -0.17633765935897827,
+              "north_m": 0.32418695092201233,
+              "origin_id": "ekf-origin"
+            },
+            "observed_at_unix_ms": "1790966375401",
+            "relative_altitude_m": 0.502
+          },
+          "capture_pose_quality": {
+            "exposure_synchronized": false,
+            "heading_uncertainty_deg": 0.01,
+            "method": "pre_capture_pose_with_bracket_motion_bound",
+            "position_uncertainty_m": 0.003
+          },
+          "capture_started_at_unix_ms": 1790966375423,
+          "captured_at_unix_ms": 1790966375560,
+          "flight_authority": false,
+          "found": null,
+          "ground_truth_verified": false,
+          "latency_ms": 4352.332,
+          "observed_at_unix_ms": 1790966383429,
+          "query": "number of people in front of you",
+          "question": "number of people in front of you",
+          "tool": "vlm",
+          "uncertainty": "VLM did not return a typed boolean"
+        },
+        "unix_ms": 1790966383440
+      }
+    },
+    {
+      "sequence": 8616,
+      "kind": "adaptive_mission",
+      "payload": {
+        "condition": {
+          "evidence": "people_count",
+          "max_age_s": 30,
+          "test": "found"
+        },
+        "event": "condition",
+        "evidence_time": 1790966375560,
+        "unix_ms": 1790966383441,
+        "value": null
+      }
+    }
+  ]
+}

@@ -32,7 +32,6 @@ from python.dcm.contract import (
     RuntimeDescriptor,
     assess_freshness,
     curate,
-    curate_v3,
     is_flight_action,
     render_prompt,
     validate_decision,
@@ -93,8 +92,8 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
     episode = Path(episode)
     if not isinstance(timeout_ms, int) or timeout_ms <= 0:
         raise ValueError("timeout_ms must be positive")
-    if context_version not in ("v2", "v3"):
-        raise ValueError("context_version must be v2 or v3")
+    if context_version != "v2":
+        raise ValueError("Only historical v2 action replay is available; live missions use direct-agent-v1")
     verified = replay(episode, check_guardrails=check_guardrails)
     manifest = json.loads((episode / "manifest.json").read_text())
     stream_path = episode / "events.jsonl"
@@ -135,14 +134,10 @@ def observe_episode(episode, runtime, output_root, timeout_ms=5000,
                 elapsed = None
                 if include_elapsed and episode_started_ms is not None:
                     elapsed = event["unix_ms"] - episode_started_ms
-                build_context = curate_v3 if context_version == "v3" else curate
-                context_args = {}
-                if context_version == "v3":
-                    context_args["mission_metadata"] = mission_metadata
-                observation = build_context(
+                observation = curate(
                     payload["state"], perception, previous_result,
                     manifest["mission"], event, history=completed,
-                    elapsed_ms=elapsed, **context_args)
+                    elapsed_ms=elapsed)
                 raw = None
                 proposal = None
                 reason_code = None

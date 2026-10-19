@@ -3,6 +3,10 @@
 > Historical acceptance record. The nominal/noisy profiles described below were
 > replaced later on 2026-09-12 by one physical-noise sensor model, and aggregate
 > mass allocations were replaced by the component-derived mass-property pipeline.
+> On 2026-09-28 the current vehicle was superseded again by the 4.4745 kg
+> hardware-specific Icarus7 sensor profile. The figures below remain historical
+> evidence and do not describe the current model; see
+> [Gazebo hardware fidelity](GAZEBO-HARDWARE-FIDELITY.md).
 
 Status: **passed**, using the user's explicit approval: “Use the automated
 simulation gate.” Five consecutive automated flights replace the original five

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,9 @@ struct RangeScan {
   SensorFrame frame = SensorFrame::kBodyFlu;
   double minimum_range_m = 0.0;
   double maximum_range_m = 0.0;
+  // Highest beam elevation of the sensor in its own frame. NaN when the
+  // adapter cannot state it; cluster tops are then reported as clipped.
+  double maximum_elevation_rad = std::numeric_limits<double>::quiet_NaN();
   std::vector<Point3> points;
 };
 

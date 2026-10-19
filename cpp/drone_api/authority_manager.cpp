@@ -61,12 +61,18 @@ v1::ControlLeaseResponse AuthorityManager::Acquire(
 v1::ControlLeaseResponse AuthorityManager::Renew(
     const v1::RenewControlRequest& request) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (!current_ || ExpiredLocked() || session_id_ != request.session_id() ||
-      current_->lease_id() != request.lease_id()) {
+  if (!current_ || ExpiredLocked()) {
     current_.reset();
     session_id_.clear();
     return Denied(v1::REASON_CODE_CONTROL_LEASE_EXPIRED,
                   "control lease is absent, expired or not owned by session");
+  }
+  // A late renewal from a preempted client cannot revoke the new owner's
+  // valid authority. Only expiry or the matching owner may mutate this lease.
+  if (session_id_ != request.session_id() ||
+      current_->lease_id() != request.lease_id()) {
+    return Denied(v1::REASON_CODE_CONTROL_LEASE_EXPIRED,
+                  "control lease is not owned by session");
   }
   const auto duration = std::clamp(request.requested_lease_ms(), 250U,
                                    maximum_lease_ms_);

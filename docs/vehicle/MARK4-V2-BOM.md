@@ -122,7 +122,7 @@ operating condition.
 
 | Component | Selection | Placement rule |
 | --- | --- | --- |
-| Flight controller | Pixhawk 6X module with standard baseboard | At the center of gravity, arrow forward, on vibration isolation |
+| Flight controller | Pixhawk 6X Pro module with Mini Baseboard | At the center of gravity, arrow forward, on vibration isolation |
 | Onboard compute | Jetson T5000 128 GB production module on a flight-suitable carrier | Centered and slightly aft on an upper structural deck |
 | Thor operating envelope | Use the T5000 70 W power mode initially | Do not design around the 120/130 W modes |
 | Compute power | Dedicated regulated supply designed for the selected carrier | Electrically isolated from noisy motor power as required by the final design |
@@ -141,16 +141,14 @@ twin in this order:
 
 | Sensor | Purpose | Initial mounting position |
 | --- | --- | --- |
-| Holybro H-RTK ZED-F9P Ultralight-class GNSS/compass | Global position, home, heading backup | Rear mast, above the power wiring and propeller plane |
-| LightWare LW20/C-class rangefinder | Low-altitude and landing height | Bottom center, unobstructed view downward |
-| Forward stereo/depth camera | Visual perception and forward depth | Nose center, level, outside propeller arcs |
-| Livox Mid-360-class lidar | 360-degree obstacle geometry | Top center, above the upper deck with an unobstructed field of view |
+| Holybro H-RTK ZED-F9P/RM3100 GNSS/compass | Global position, home and external heading | Rear/top mount from the Icarus7 package |
+| ARK Flow MR | Downward optical flow, time-of-flight range and auxiliary IMU | Bottom center with unobstructed downward view |
+| Intel RealSense D435i | Forward RGB-D perception and inertial stream | Nose center, level, outside propeller arcs |
+| Logitech BRIO 4K | Downward RGB perception | Bottom/front, downward-facing |
+| Livox MID-360 | 360-degree obstacle geometry and auxiliary IMU | Top/front with an unobstructed field of view |
 
-The Mid-360 reference is 65 x 65 x 60 mm, 265 g, and averages 6.5 W. The LW20/C
-reference is 30 x 20 x 43 mm and 19 g with cable. The camera is initially
-modeled as an OAK-D-Lite-class stereo RGB/depth device. Exact camera mass,
-enclosure, and optics remain parameters until the physical camera variant is
-chosen.
+The exact mounts, topics, simulated rates and fidelity limits are recorded in
+[`../simulation/GAZEBO-HARDWARE-FIDELITY.md`](../simulation/GAZEBO-HARDWARE-FIDELITY.md).
 
 ## Mass and Center-of-Gravity Budget
 
@@ -160,29 +158,30 @@ chosen.
 | Four motors | 0.500 kg |
 | Propellers | 0.080 kg |
 | ESC, distribution, and motor wiring | 0.150 kg |
-| Pixhawk 6X and baseboard | 0.074 kg |
-| GNSS | 0.064 kg provisional |
-| Downward rangefinder | 0.019 kg |
+| Pixhawk 6X Pro and Mini Baseboard | 0.0765 kg |
+| Holybro H-RTK ZED-F9P/RM3100 | 0.117 kg |
+| ARK Flow MR | 0.019 kg |
 | Thor compute assembly | 0.900 kg maximum allocation |
-| 360-degree lidar | 0.265 kg |
-| Stereo/depth camera | 0.061 kg provisional |
+| Livox MID-360 | 0.265 kg |
+| Intel RealSense D435i | 0.072 kg |
+| Logitech BRIO 4K | 0.065 kg |
 | Regulators and data harnesses | 0.250 kg |
 | Battery | 1.350 kg provisional |
 | Mounts, guards, and landing structure | 0.250 kg |
 | Fasteners, adhesive, and mass-reconciliation allowance | 0.030 kg |
-| **Estimated takeoff mass** | **4.343 kg** |
+| **Estimated takeoff mass** | **4.4745 kg** |
 
 Freeze **4.5 kg as the design and simulated takeoff-mass limit**. At the nominal
-4.343 kg estimate, hover requires approximately 1,086 g per rotor. Linear
-interpolation of the published static curve puts hover near 46% throttle.
+4.4745 kg estimate, hover requires approximately 1,119 g per rotor. Linear
+interpolation of the published static curve puts hover near 46.2% throttle.
 
-| Throttle test point | Total thrust | Ratio at 4.343 kg | Ratio at 4.5 kg |
+| Throttle test point | Total thrust | Ratio at 4.4745 kg | Ratio at 4.5 kg |
 | ---: | ---: | ---: | ---: |
-| 40% | 3.044 kgf | 0.70:1 | 0.68:1 |
-| 50% | 5.344 kgf | 1.23:1 | 1.19:1 |
-| 60% | 7.484 kgf | 1.72:1 | 1.66:1 |
-| 70% operational ceiling | 9.804 kgf | 2.26:1 | 2.18:1 |
-| 100% short test point | 18.592 kgf | 4.28:1 | 4.13:1 |
+| 40% | 3.044 kgf | 0.68:1 | 0.68:1 |
+| 50% | 5.344 kgf | 1.19:1 | 1.19:1 |
+| 60% | 7.484 kgf | 1.67:1 | 1.66:1 |
+| 70% operational ceiling | 9.804 kgf | 2.19:1 | 2.18:1 |
+| 100% short test point | 18.592 kgf | 4.15:1 | 4.13:1 |
 
 Use 70% as the initial software motor-output ceiling. This preserves a little
 over 2:1 thrust-to-weight at the design mass without treating the motor's short
@@ -215,11 +214,12 @@ first model.
 
 | Real component | Gazebo Harmonic representation | Icarus path |
 | --- | --- | --- |
-| Pixhawk IMUs | SDF `imu` sensor, following the official Iris example | ArduPilot Gazebo JSON bridge into SITL |
-| GNSS/compass | SDF `navsat` plus magnetometer/noise model | SITL flight state; normalized State Engine fields |
-| LW20/C | One-beam SDF lidar/ray sensor | Gazebo Transport adapter; optionally MAVLink `DISTANCE_SENSOR` |
-| OAK-D Lite-class camera | SDF RGB camera plus depth camera | Gazebo Transport adapter into the perception service |
-| Mid-360-class lidar | Configurable SDF GPU lidar with 360 x 59 degree field of view | Gazebo Transport point cloud into the perception service |
+| Pixhawk 6X Pro | Three SDF IMUs, two air-pressure sensors and one magnetometer; separate bridge IMU | Recorded redundant public streams; JSON bridge IMU into SITL |
+| H-RTK ZED-F9P/RM3100 | SDF NavSat plus independent magnetometer/noise model | Recorded public streams; normalized State Engine remains SITL-derived |
+| ARK Flow MR | 8×4 SDF ray grid, IMU and simulation-only phase-correlation bridge | Gazebo Transport; optical flow explicitly not EKF-fused |
+| Intel RealSense D435i | SDF RGB-D camera plus IMU | Gazebo Transport into perception and operator stream |
+| Logitech BRIO 4K | SDF RGB camera; no physical depth channel | Gazebo Transport into perception and operator stream |
+| Livox MID-360 | SDF GPU lidar with 360° × 59° envelope and 200k points/s budget | Gazebo Transport into local avoidance; separate IMU stream |
 | Motors/propellers | Published thrust/RPM/current lookup data | ArduPilot motor outputs through the official Gazebo plugin |
 
 Gazebo Harmonic already provides IMU, lidar, camera, depth-camera, and NavSat
@@ -287,9 +287,11 @@ Phase 0.1 is accepted for simulation when:
 - [NVIDIA Jetson Thor power modes](https://docs.nvidia.com/jetson/archives/r39.2.1/DeveloperGuide/SD/PlatformPowerAndPerformance/JetsonThor.html)
 - [NVIDIA Jetson Thor module datasheet](https://developer.nvidia.com/embedded/downloads)
 - [Hobbywing XRotor 3115 specifications and thrust data](https://www.hobbywing.com/en/products/xrotor3115)
-- [Holybro Pixhawk 6X specifications](https://holybro.com/products/pixhawk-6x-rev3)
+- [Holybro Pixhawk 6X Pro specifications](https://docs.holybro.com/autopilot/pixhawk-6x-pro/technical-specification)
+- [Holybro H-RTK ZED-F9P/RM3100 specifications](https://docs.holybro.com/gps-and-rtk-system/zed-f9p-h-rtk-series/specification)
 - [Livox Mid-360 specifications](https://www.livoxtech.com/mid-360/specs)
-- [Luxonis OAK-D Lite specifications](https://docs.luxonis.com/hardware/products/OAK-D%20Lite)
-- [LightWare LW20/C specifications](https://lightwarelidar.com/shop/lw20-c-100-m/)
+- [Intel RealSense D435i specifications](https://www.intel.com/content/www/us/en/products/sku/190004/intel-realsense-depth-camera-d435i/specifications.html)
+- [Logitech BRIO datasheet](https://www.logitech.com/content/dam/logitech/en_us/video-collaboration/pdf/brio-datasheet.pdf)
+- [ARK Flow specifications](https://docs.arkelectron.com/products/sensor/ark-flow)
 - [Gazebo Harmonic sensor documentation](https://gazebosim.org/docs/harmonic/sensors/)
 - [Official ArduPilot Gazebo plugin](https://github.com/ArduPilot/ardupilot_gazebo)

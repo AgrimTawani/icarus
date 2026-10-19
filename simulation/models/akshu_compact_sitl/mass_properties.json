@@ -1,51 +1,51 @@
 {
   "status": "component source of truth; replace design-target inputs with as-built measurements when available",
   "component_manifest": "config/simulation/vehicle_components.json",
-  "component_manifest_sha256": "25bdaee84fdb3a8b7708c3e0c193098f037625780c3af56f03f4920f1836c5a8",
-  "total_mass_kg": 4.343,
+  "component_manifest_sha256": "05b60776a3857b49fd6d71f506d76d6fb10e0f13fad5864d256a372e92604abf",
+  "total_mass_kg": 4.4745,
   "total_cg_m": [
-    0.0010460511167395816,
-    9.985744162887445e-20,
-    -0.05900990099009903
+    0.005172644988266848,
+    -0.0014904458598726114,
+    -0.051985210638060116
   ],
   "total_inertia_kg_m2": [
     [
-      0.02980443463170561,
-      -7.026076122520109e-07,
-      0.0001342980198019801
+      0.035659956751155984,
+      -0.0006420779770390042,
+      -0.001641414950217902
     ],
     [
-      -7.026076122520109e-07,
-      0.030297574180412904,
-      -2.710505431213761e-20
+      -0.0006420779770390042,
+      0.03788160773110601,
+      0.0006401253697452226
     ],
     [
-      0.0001342980198019801,
-      -2.710505431213761e-20,
-      0.04153972866360365
+      -0.001641414950217902,
+      0.0006401253697452226,
+      0.04435680325130074
     ]
   ],
-  "base_mass_kg": 4.263,
+  "base_mass_kg": 4.3945,
   "base_cg_m": [
-    0.0010656814449917903,
-    0.0,
-    -0.060117288294628216
+    0.005266810786210037,
+    -0.0015175787916714078,
+    -0.05293157924678576
   ],
   "base_inertia_kg_m2": [
     [
-      0.026792906175491914,
-      -6.056962174594283e-07,
-      0.0001292671592775037
+      0.03271191582010094,
+      -0.0006426090573506938,
+      -0.0016633186516668576
     ],
     [
-      -6.056962174594283e-07,
-      0.02815635089870799,
-      1.0842021724855044e-19
+      -0.0006426090573506938,
+      0.035801962637269764,
+      0.0006464367019968142
     ],
     [
-      0.0001292671592775037,
-      1.0842021724855044e-19,
-      0.036954792695827875
+      -0.0016633186516668576,
+      0.0006464367019968142,
+      0.039769596047190645
     ]
   ],
   "components": [
@@ -118,89 +118,106 @@
       "provenance": "selected ESC plus harness mass budget"
     },
     {
-      "id": "pixhawk_6x",
+      "id": "pixhawk_6x_pro_mini",
       "link": "base_link",
-      "mass_kg": 0.074,
+      "mass_kg": 0.0765,
       "center_m": [
         0,
         0,
-        -0.026
+        0.03345
       ],
       "shape": "box",
       "dimensions_m": [
-        0.09,
-        0.06,
-        0.032
+        0.0728,
+        0.0434,
+        0.0443
       ],
-      "provenance": "Pixhawk 6X and standard baseboard specification"
+      "provenance": "Holybro Pixhawk 6X Pro 50 g plus Mini Baseboard 26.5 g; custom-package mounting centre"
     },
     {
-      "id": "gnss_compass",
+      "id": "holybro_h_rtk_f9p",
       "link": "base_link",
-      "mass_kg": 0.064,
+      "mass_kg": 0.117,
       "center_m": [
-        -0.077,
-        0,
-        -0.001
+        -0.091,
+        -0.057,
+        0.044
       ],
       "shape": "box",
       "dimensions_m": [
-        0.028,
-        0.028,
-        0.008
+        0.078,
+        0.078,
+        0.022
       ],
-      "provenance": "selected GNSS class mass and modeled mount"
+      "provenance": "Holybro H-RTK F9P published 117 g mass; custom-package Y-right coordinate converted to Gazebo FLU"
     },
     {
-      "id": "mid360_lidar",
+      "id": "livox_mid360",
       "link": "base_link",
       "mass_kg": 0.265,
       "center_m": [
-        0,
-        0,
-        0.016
-      ],
-      "shape": "box",
-      "dimensions_m": [
-        0.045,
-        0.045,
-        0.022
-      ],
-      "provenance": "Livox MID-360 published mass; collision envelope represents mounted payload"
-    },
-    {
-      "id": "depth_camera",
-      "link": "base_link",
-      "mass_kg": 0.061,
-      "center_m": [
-        0.121,
-        0,
-        -0.028
-      ],
-      "shape": "box",
-      "dimensions_m": [
-        0.022,
         0.07,
-        0.024
+        0,
+        0.081
       ],
-      "provenance": "OAK-D-Lite-class published device mass"
+      "shape": "box",
+      "dimensions_m": [
+        0.065,
+        0.065,
+        0.06
+      ],
+      "provenance": "Livox MID-360 published 265 g mass and 65 x 65 x 60 mm envelope; custom-package mounting centre"
     },
     {
-      "id": "downward_rangefinder",
+      "id": "intel_realsense_d435i",
+      "link": "base_link",
+      "mass_kg": 0.072,
+      "center_m": [
+        0.106,
+        0,
+        -0.008
+      ],
+      "shape": "box",
+      "dimensions_m": [
+        0.025,
+        0.09,
+        0.025
+      ],
+      "provenance": "Intel D435i published 72 g mass and 90 x 25 x 25 mm envelope; custom-package mounting centre"
+    },
+    {
+      "id": "logitech_brio_4k",
+      "link": "base_link",
+      "mass_kg": 0.065,
+      "center_m": [
+        0.101,
+        0,
+        -0.06475
+      ],
+      "shape": "box",
+      "dimensions_m": [
+        0.0265,
+        0.102,
+        0.027
+      ],
+      "provenance": "Logitech BRIO published 65 g camera-only mass and custom-package mounting centre"
+    },
+    {
+      "id": "ark_flow_mr",
       "link": "base_link",
       "mass_kg": 0.019,
       "center_m": [
-        0.11,
+        0.055,
         0,
-        -0.096
+        -0.105
       ],
       "shape": "box",
       "dimensions_m": [
-        0.022,
-        0.024,
-        0.02
+        0.03,
+        0.03,
+        0.014
       ],
-      "provenance": "LW20/C published device mass"
+      "provenance": "ARK Flow 30 x 30 x 14 mm vendor envelope and prior 19 g payload allocation; verify mass on the as-built module"
     },
     {
       "id": "regulators_and_data_harness",

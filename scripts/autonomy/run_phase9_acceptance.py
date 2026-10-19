@@ -45,6 +45,7 @@ def main() -> int:
             "./scripts/start-sim --profile simulation-perception-stress"
         )
     os.environ["GZ_PARTITION"] = session["partition"]
+    os.environ["GZ_IP"] = session.get("gz_ip", "127.0.0.1")
 
     from gz.msgs10.pose_v_pb2 import Pose_V
     from gz.msgs10.stringmsg_pb2 import StringMsg
@@ -144,7 +145,7 @@ def main() -> int:
             origin_id="home",
             north_m=start.north_m + 12.0,
             east_m=start.east_m + 18.0,
-            down_m=-3.0,
+            altitude_above_home_m=3.0,
         )
         goto = client.action_api.Goto(
             action_pb2.GotoRequest(

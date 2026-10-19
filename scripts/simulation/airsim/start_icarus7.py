@@ -27,7 +27,6 @@ def main() -> None:
     parser.add_argument("--gui", action="store_true")
     parser.add_argument("--graphics-adapter", type=int, default=0)
     parser.add_argument("--startup-timeout", type=float, default=90)
-    parser.add_argument("--mission-reference", type=Path)
     args = parser.parse_args()
 
     install = args.install_dir.resolve()
@@ -58,8 +57,6 @@ def main() -> None:
         "--binary-arg=-NoSound", "--binary-arg=-NoVSync",
         f"--binary-arg=-GraphicsAdapter={args.graphics_adapter}",
     ]
-    if args.mission_reference:
-        command.extend(["--mission-reference", str(args.mission_reference.resolve())])
     if args.gui:
         command.extend([
             "--no-render-offscreen", "--binary-arg=-windowed",

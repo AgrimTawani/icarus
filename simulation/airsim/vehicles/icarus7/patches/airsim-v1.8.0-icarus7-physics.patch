@@ -15,7 +15,7 @@ index fd624e0..8961ccf 100644
 +            // Values are generated from Icarus's versioned component manifest.
 +            // They remain design targets until replaced by as-built measurements.
 +            params.rotor_count = 4;
-+            params.mass = 4.343f;
++            params.mass = 4.4745f;
 +            params.body_box = Vector3r(0.228f, 0.180f, 0.140f);
 +
 +            // Hobbywing XRotor 3115 / HQ 10x4.5x3 frozen simulation baseline.
@@ -30,32 +30,32 @@ index fd624e0..8961ccf 100644
 +            params.rotor_params.calculateMaxThrust();
 +
 +            const Vector3r rotor_normal(0.0f, 0.0f, -1.0f);
-+            const real_T rotor_z = -0.0590099010f;
++            const real_T rotor_z = -0.0519852106f;
 +            params.rotor_poses.clear();
 +            // ArduPilot Quad-X order in body FRD: FR, RL, FL, RR.
 +            params.rotor_poses.emplace_back(
-+                Vector3r(0.1384983492f, 0.1733868713f, rotor_z), rotor_normal,
++                Vector3r(0.1333257042f, 0.1718964254f, rotor_z), rotor_normal,
 +                RotorTurningDirection::RotorTurningDirectionCCW);
 +            params.rotor_poses.emplace_back(
-+                Vector3r(-0.1384933424f, -0.1733872604f, rotor_z), rotor_normal,
++                Vector3r(-0.1436659874f, -0.1748777063f, rotor_z), rotor_normal,
 +                RotorTurningDirection::RotorTurningDirectionCCW);
 +            params.rotor_poses.emplace_back(
-+                Vector3r(0.1385076265f, -0.1733864822f, rotor_z), rotor_normal,
++                Vector3r(0.1333349815f, -0.1748769281f, rotor_z), rotor_normal,
 +                RotorTurningDirection::RotorTurningDirectionCW);
 +            params.rotor_poses.emplace_back(
-+                Vector3r(-0.1385126333f, 0.1733868713f, rotor_z), rotor_normal,
++                Vector3r(-0.1436852783f, 0.1718964254f, rotor_z), rotor_normal,
 +                RotorTurningDirection::RotorTurningDirectionCW);
 @@ -40,2 +80,11 @@ namespace airlib
 -            // Only Generic for now
 -            setupFrameGenericQuad(params);
 +            // Component-derived tensor converted from FLU to AirSim body FRD.
 +            params.inertia = Matrix3x3r::Zero();
-+            params.inertia(0, 0) = 0.0298044346f;
-+            params.inertia(0, 1) = 0.0000007026f;
-+            params.inertia(0, 2) = -0.0001342980f;
-+            params.inertia(1, 0) = 0.0000007026f;
-+            params.inertia(1, 1) = 0.0302975742f;
-+            params.inertia(1, 2) = 0.0f;
-+            params.inertia(2, 0) = -0.0001342980f;
-+            params.inertia(2, 1) = 0.0f;
-+            params.inertia(2, 2) = 0.0415397287f;
++            params.inertia(0, 0) = 0.0356599568f;
++            params.inertia(0, 1) = 0.0006420780f;
++            params.inertia(0, 2) = 0.0016414150f;
++            params.inertia(1, 0) = 0.0006420780f;
++            params.inertia(1, 1) = 0.0378816077f;
++            params.inertia(1, 2) = 0.0006401254f;
++            params.inertia(2, 0) = 0.0016414150f;
++            params.inertia(2, 1) = 0.0006401254f;
++            params.inertia(2, 2) = 0.0443568033f;

@@ -143,7 +143,7 @@ def layer_label(number, label, y1, y2, color):
 title = "Icarus V2 Phase 1 — Prompt-to-Motors Architecture"
 bb = d.textbbox((0, 0), title, font=font(49, True))
 d.text(((W - (bb[2] - bb[0])) / 2, 30), title, font=font(49, True), fill=COLORS["ink"])
-subtitle = "Hardened V3 prompt v8 • one active objective per decision • deterministic authority remains outside the LLM"
+subtitle = "One semantic mission plan • preflight visual schedule • minimal deterministic sequencing • independent safety authority"
 bb = d.textbbox((0, 0), subtitle, font=font(19))
 d.text(((W - (bb[2] - bb[0])) / 2, 94), subtitle, font=font(19), fill=COLORS["muted"])
 
@@ -171,38 +171,38 @@ for n, label, y1, y2, color, x2 in frames:
 # -------------------------------------------------------------- operator row
 box((340, 205, 770, 305), "Natural-language mission", ["Operator text is preserved verbatim"], "blue", 42)
 box((900, 205, 1390, 305), "dcm-fly + control lease", ["CLI / SDK session, authority request", "V3 context is the default"], "blue", 42)
-box((1510, 205, 2225, 305), "Mission memory", ["Original mission • completed actions/results", "Rejections and bounded failure history"], "blue", 56)
+box((1510, 205, 2225, 305), "Validated mission + visual plan", ["Ready • clarification • unsupported", "Objectives and YOLO/VLM calls fixed before flight"], "blue", 56)
 arrow([(770, 255), (900, 255)], "blue")
 arrow([(1390, 255), (1510, 255)], "blue")
 
 # ------------------------------------------------------ prompt source assembly
-d.text((335, 372), "DETERMINISTIC CONTEXT SOURCES", font=font(20, True), fill=COLORS["gold"])
+d.text((335, 372), "SEMANTIC NLP + DETERMINISTIC CONTEXT", font=font(20, True), fill=COLORS["gold"])
 source_boxes = [
-    ((340, 415, 690, 520), "Live state + perception", ["Flight phase, pose, battery", "freshness, obstacle sectors"]),
-    ((340, 540, 690, 645), "Reviewed reference", ["Landmark ID + exact waypoint", "audit input to compiler"]),
-    ((340, 665, 690, 770), "Completion evidence", ["Measured objective status", "audit input to compiler"]),
-    ((340, 790, 690, 895), "History + failures", ["Successful typed actions", "repeat/failure counters"]),
+    ((340, 415, 690, 520), "LLM semantic planner", ["Intent + safe obvious defaults", "ready / clarify / unsupported"]),
+    ((340, 540, 690, 645), "Narrow plan validator", ["Schema • bounds • provenance", "no regex plan or semantic rewrite"]),
+    ((340, 665, 690, 770), "Visual-plan compiler", ["Exact YOLO/VLM call budget", "trigger + capture window"]),
+    ((340, 790, 690, 895), "Compiled objective plan", ["Ordered typed actions", "one result unlocks the next"]),
 ]
 for xy, t, lines in source_boxes:
     box(xy, t, lines, "gold", 31, 20, 14)
 
 profile_boxes = [
-    ((725, 415, 1050, 500), "SOUL", ["3 compact principles", "full text stays audit-only"]),
-    ((725, 515, 1050, 600), "BODY", ["Live airframe + simulator", "no hashes or action duplicate"]),
-    ((725, 615, 1050, 700), "WORLD FACTS", ["Omitted when empty", "provenance stays audit-only"]),
-    ((725, 715, 1050, 800), "MISSION MACRO", ["Structured phases + subset", "prose stays audit-only"]),
-    ((725, 815, 1050, 895), "ACTION CONTRACT", ["Vocabulary + argument bounds", "freshness limits"]),
+    ((725, 415, 1050, 500), "EXACT OPERATOR TEXT", ["Preserved verbatim", "one semantic authority"]),
+    ((725, 515, 1050, 600), "SOUL + LIVE BODY", ["3 compact principles", "airframe limits, no world facts"]),
+    ((725, 615, 1050, 700), "ENVIRONMENT CONTEXT", ["Always blank at planning", "only live perception reveals the world"]),
+    ((725, 715, 1050, 800), "REVIEWED DEFAULT POLICY", ["Lifecycle prerequisites", "bounded safe defaults only"]),
+    ((725, 815, 1050, 895), "CAPABILITY CONTRACT", ["Actions + argument bounds", "YOLO/VLM availability"]),
 ]
 for xy, t, lines in profile_boxes:
     box(xy, t, lines, "gold", 30, 19, 14)
 
-box((1100, 445, 1435, 865), "V3 context builder", [
-    "Allow-list fields only", "Resolve macro deterministically",
-    "Compile one MissionContract", "Strip duplicate/audit-only data",
-    "Select active objective + progress actions",
-    "One evidence-health summary", "Budget ≤ 8 KB",
-    "Hash final visible context",
-    "Freshness check before inference"], "gold", 31, 23, 16)
+box((1100, 445, 1435, 865), "Preflight planning input", [
+    "Allow-list fields only", "Exact user prompt",
+    "Reviewed defaults + limits", "Empty environment context",
+    "No scenario landmarks or truth",
+    "One LLM call before flight", "Schema-constrained output",
+    "One bounded repair attempt",
+    "No per-action LLM context"], "gold", 31, 23, 16)
 
 # converging source arrows
 for y in (468, 592, 717, 842):
@@ -212,34 +212,34 @@ for y in (457, 557, 657, 757, 855):
 
 # --------------------------------------------------------- actual prompt block
 rounded_box((1485, 390, 2245, 900), COLORS["blue_fill"], COLORS["blue"], 22, 5)
-d.text((1515, 410), "ACTUAL TWO-MESSAGE PROMPT", font=font(24, True), fill=COLORS["blue"])
+d.text((1515, 410), "ONE PREFLIGHT SEMANTIC-PLANNING PROMPT", font=font(22, True), fill=COLORS["blue"])
 box((1515, 458, 2215, 655), "SYSTEM message", [
-    "Real multirotor embodiment + safety contract",
-    "active progress actions + bounded safety exits",
-    "compact flight-state and mission-order rules",
-    "3 operating principles + semantic live BODY",
-    "no hashes, paths, empty facts or macro prose"], "blue", 61, 21, 15)
-box((1515, 685, 2215, 865), "USER message: Current situation", [
-    "exact original mission text",
-    "one compiled MissionContract",
-    "live state/perception + one evidence-health summary",
-    "completed actions + failure signals",
-    "Respond with one JSON object"], "blue", 61, 21, 15)
+    "Semantic mission-planner role; no flight authority",
+    "typed objectives + argument/provenance rules",
+    "safe defaults + clarification boundary",
+    "YOLO/VLM scheduling rules",
+    "never invent targets, coordinates or world facts"], "blue", 61, 21, 15)
+box((1515, 685, 2215, 865), "USER message: Plan this mission", [
+    "exact operator text",
+    "reviewed policy + limited live flight state",
+    "motion limits + perception capability",
+    "environment_context = empty",
+    "Return one structured mission object"], "blue", 61, 21, 15)
 arrow([(1435, 655), (1485, 655)], "blue")
 
 # ----------------------------------------------------- DCM and validation row
-box((2325, 390, 2745, 550), "Local Qwen DCM", ["llama.cpp chat template", "temperature 0", "chooses one next action"], "blue", 35, 24, 16)
-box((2325, 590, 2745, 720), "Typed JSON proposal", ["action • arguments • reason_code", "No free-form rationale or control authority"], "blue", 38, 22, 15)
-box((2325, 760, 2745, 900), "Post-model checks", ["schema + bounds + macro/objective subset", "freshness + state recheck + failure breaker"], "blue", 39, 22, 15)
+box((2325, 390, 2745, 550), "Local Qwen DCM", ["one semantic planning inference", "fills only reviewed safe gaps", "asks when mission meaning is ambiguous"], "blue", 35, 24, 16)
+box((2325, 590, 2745, 720), "Typed mission JSON", ["status • objectives • arguments", "provenance • defaults • clarification"], "blue", 38, 22, 15)
+box((2325, 760, 2745, 900), "Plan + visual compiler", ["grounding • bounds • capability • safety", "exact YOLO/VLM triggers and maximum calls"], "blue", 39, 22, 15)
 arrow([(2245, 500), (2325, 500)], "blue")
 arrow([(2535, 550), (2535, 590)], "blue")
 arrow([(2535, 720), (2535, 760)], "blue")
 
 # ------------------------------------------------------- authority/control row
-box((340, 990, 700, 1095), "Approval gate", ["Human approval by default", "or autonomous simulation"], "orange", 32)
+box((340, 990, 700, 1095), "Whole-plan approval", ["Objectives + visual budget", "or autonomous simulation"], "orange", 32)
 box((790, 990, 1160, 1095), "Drone API", ["gRPC + Protobuf", "typed command boundary"], "orange", 30)
 box((1250, 990, 1690, 1095), "Lease + C++ guardrails", ["Authority, mode, geofence", "limits and failsafes"], "orange", 39)
-box((1780, 990, 2250, 1095), "Action executor + planner", ["Heading-confirmed goto • nearest-entry orbit", "vision actions stay non-flight"], "orange", 42)
+box((1780, 990, 2250, 1095), "Minimal plan executor", ["next validated step or stop", "no NLP and no per-action LLM call"], "orange", 42)
 arrow([(2535, 900), (2535, 960), (520, 960), (520, 990)], "blue")
 arrow([(700, 1042), (790, 1042)], "orange")
 arrow([(1160, 1042), (1250, 1042)], "orange")
@@ -247,10 +247,10 @@ arrow([(1690, 1042), (1780, 1042)], "orange")
 
 # Vision side path within authority layer
 box((340, 1145, 825, 1268), "Semantic perception boundary", ["detect → YOLO person counts", "inspect_scene → CPU Qwen2-VL description", "camera evidence has no flight authority"], "green", 42, 21, 14)
-box((910, 1145, 1395, 1268), "Result → mission history", ["Typed success/failure + evidence", "next decision sees updated obligations"], "green", 42, 21, 14)
+box((910, 1145, 1395, 1268), "Result → plan progress", ["Typed success/failure + evidence", "next objective unlocks only on success"], "green", 42, 21, 14)
 arrow([(2015, 1095), (2015, 1118), (582, 1118), (582, 1145)], "green", width=4)
 arrow([(825, 1207), (910, 1207)], "green", width=4)
-arrow([(1152, 1145), (1152, 920), (1120, 920), (1120, 865)], "green", width=4, dashed=True)
+arrow([(1395, 1207), (1470, 1207), (1470, 1120), (2015, 1120), (2015, 1095)], "green", width=4, dashed=True)
 
 # Safety supervisor
 box((1515, 1145, 2250, 1278), "Independent safety supervisor", [
@@ -275,20 +275,19 @@ for x in (635, 1305, 1965):
 dashed_rect((2320, 950, 2745, 1745), COLORS["green"], width=3, dash=15, gap=10)
 d.text((2370, 970), "FEEDBACK & LEARNING", font=font(22, True), fill=COLORS["green"])
 box((2350, 1020, 2715, 1140), "Vehicle feedback", ["Telemetry • perception", "action status • errors"], "green", 31, 21, 15)
-box((2350, 1180, 2715, 1300), "Sealed episode", ["Prompt • proposal • decision", "state • results • media"], "green", 31, 21, 15)
+box((2350, 1180, 2715, 1300), "Sealed episode", ["Prompt • plan • mission steps", "state • results • media"], "green", 31, 21, 15)
 box((2350, 1340, 2715, 1460), "Offline aggregation", ["Reliability • regression", "safety and performance"], "green", 31, 21, 15)
 box((2350, 1500, 2715, 1630), "Human review + promotion", ["Proposals cannot self-promote", "no path back into live control"], "green", 31, 21, 15)
 arrow([(2532, 1140), (2532, 1180)], "green", dashed=True)
 arrow([(2532, 1300), (2532, 1340)], "green")
 arrow([(2532, 1460), (2532, 1500)], "green")
-arrow([(2320, 1080), (2280, 1080), (2280, 925), (1140, 925), (1140, 865)], "green", width=4, dashed=True)
 arrow([(2250, 1415), (2300, 1415), (2300, 1080), (2350, 1080)], "green", width=4, dashed=True)
 d.text((2380, 1662), "Offline only — never writes live policy", font=font(17, True), fill=COLORS["green"])
 
 # Footer notes
-d.text((330, 1778), "Prompt molding is deterministic and compact: one MissionContract replaces repeated macro, reference and obligation prose.",
+d.text((330, 1778), "The LLM understands intent once; deterministic checks enforce schema, provenance, bounds, capability, sequencing and execution safety.",
        font=font(18, True), fill=COLORS["ink"])
-d.text((330, 1810), "Control remains deterministic: only validated typed actions cross the Drone API; safety software and ArduPilot retain final authority.",
+d.text((330, 1810), "No per-action LLM loop: only the validated plan crosses the Drone API one step at a time; safety software and ArduPilot retain final authority.",
        font=font(18), fill=COLORS["muted"])
 
 img.save(OUT, optimize=True)

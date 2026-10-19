@@ -1,4 +1,5 @@
 #include "drone_api/drone_api_server.hpp"
+#include "drone_api/capability_metadata.hpp"
 
 #include <algorithm>
 #include <array>
@@ -89,12 +90,25 @@ grpc::Status DroneApiServer::GetCapabilities(
   response->set_autopilot("ARDUPILOT_COPTER");
   response->set_autopilot_version("runtime-discovered");
   for (const auto* name : {"arm", "disarm", "takeoff", "goto", "route",
-                           "hold", "return_home", "land", "orbit",
+                           "hold", "return_home", "land", "orbit", "yaw",
                            "state_stream", "event_stream"}) {
     AddCapability(response, name, true);
   }
   AddCapability(response, "perception", true, "1");
   AddCapability(response, "local_avoidance", true, "1");
+  // Target-relative flight primitives: goto/orbit FACE_POINT heading, orbit
+  // viewpoint stops, the live LiDAR clearance floor and the runtime-target
+  // geofence (TARGET_SOURCE_RUNTIME_ESTIMATE).
+  AddCapability(response, "heading_face_point", true, "1");
+  AddCapability(response, "orbit_viewpoints", true, "1");
+  AddCapability(response, "live_clearance_floor", true, "1");
+  AddCapability(response, "runtime_target_geofence", true, "1");
+  // Prevent clients sending an altitude override to older servers that would
+  // silently discard the unknown protobuf field and execute down=0.
+  AddCapability(response, "home_relative_local_targets", true, "1");
+  // Advertise the policy actually enforced by this server so clients can
+  // describe executable action parameters without copying machine limits.
+  *response->add_capabilities() = MotionLimitsCapability(guardrails_.policy());
   AddCapability(response, "precision_land", false, "reserved-phase-9");
   return grpc::Status::OK;
 }
@@ -220,6 +234,7 @@ grpc::Status DroneApiServer::GetPerception(
     v1::PerceptionSummary* response) {
   if (!SessionValid(request->session_id())) return InvalidSession();
   *response = perception_.Summary();
+  if (!request->include_nearby_obstacles()) response->clear_nearby_obstacles();
   return grpc::Status::OK;
 }
 
@@ -230,7 +245,8 @@ grpc::Status DroneApiServer::WatchPerception(
   const auto rate = std::clamp(request->maximum_rate_hz(), 1U, 20U);
   std::uint64_t last_sequence = 0;
   while (!context->IsCancelled()) {
-    const auto summary = perception_.Summary();
+    auto summary = perception_.Summary();
+    if (!request->include_nearby_obstacles()) summary.clear_nearby_obstacles();
     if (summary.sequence() != last_sequence) {
       if (!writer->Write(summary)) break;
       last_sequence = summary.sequence();
@@ -282,6 +298,9 @@ grpc::Status DroneApiServer::ValidateAction(
     case v1::ActionCommand::kOrbit:
       command_context = &request->command().orbit().context();
       break;
+    case v1::ActionCommand::kYaw:
+      command_context = &request->command().yaw().context();
+      break;
     default:
       break;
   }
@@ -316,6 +335,7 @@ ICARUS_SUBMIT_METHOD(Hold, hold, HoldRequest)
 ICARUS_SUBMIT_METHOD(ReturnHome, return_home, ReturnHomeRequest)
 ICARUS_SUBMIT_METHOD(Land, land, LandRequest)
 ICARUS_SUBMIT_METHOD(Orbit, orbit, OrbitRequest)
+ICARUS_SUBMIT_METHOD(Yaw, yaw, YawRequest)
 
 #undef ICARUS_SUBMIT_METHOD
 
@@ -345,14 +365,25 @@ grpc::Status DroneApiServer::WatchActionStatus(
     grpc::ServerWriter<v1::ActionStatus>* writer) {
   if (!SessionValid(request->session_id())) return InvalidSession();
   v1::ActionState last = v1::ACTION_STATE_UNSPECIFIED;
+  std::uint32_t last_viewpoint = 0;
+  auto last_emitted = std::chrono::steady_clock::now() -
+                      std::chrono::milliseconds(200);
   while (!context->IsCancelled()) {
     const auto status = actions_.Find(request->action_id());
     if (!status) {
       return {grpc::StatusCode::NOT_FOUND, "action does not exist"};
     }
-    if (status->state() != last) {
+    // Entering or leaving an orbit viewpoint is also streamed, so a client
+    // can capture while the vehicle holds there.
+    const auto now = std::chrono::steady_clock::now();
+    if (status->state() != last ||
+        status->active_viewpoint() != last_viewpoint ||
+        (request->periodic_updates() &&
+         now - last_emitted >= std::chrono::milliseconds(200))) {
       if (!writer->Write(*status)) break;
       last = status->state();
+      last_viewpoint = status->active_viewpoint();
+      last_emitted = now;
     }
     if (Terminal(status->state())) break;
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -423,6 +454,9 @@ grpc::Status DroneApiServer::Submit(v1::ActionCommand command,
       break;
     case v1::ActionCommand::kOrbit:
       context = &command.orbit().context();
+      break;
+    case v1::ActionCommand::kYaw:
+      context = &command.yaw().context();
       break;
     default:
       return {grpc::StatusCode::INVALID_ARGUMENT, "action is empty"};

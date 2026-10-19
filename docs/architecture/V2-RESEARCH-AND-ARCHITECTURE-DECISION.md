@@ -1,5 +1,9 @@
 # Version 2 research and architecture decision
 
+2026-10-02 follow-up: the [adaptive Phase 1 implementation](PHASE1-ADAPTIVE-MISSIONS.md)
+adds the approved conditional/runtime-evidence design. This extension has offline
+verification only; manual flight/model tests remain. Phase 2 is still deferred.
+
 Status: research complete and Phase-1 implementation executed on 2026-09-23.
 V3 became the DCM CLI default by explicit operator decision on 2026-09-24;
 V2 remains selectable for comparison. The frozen promotion experiment still
@@ -15,8 +19,9 @@ AirSim demonstration:
 - mission code now publishes completion obligations rather than a forced next
   action, so a successful demonstration no longer masquerades as independent
   DCM planning;
-- reviewed macros resolve deterministically from distinctive intent (with
-  explicit ID override) and their action subsets are enforced;
+- reviewed macros are explicit `--macro-id` overlays and their action subsets
+  are enforced; keyword-only selection was removed after transcript evidence
+  showed it could constrain unrelated mission clauses;
 - BODY includes live connected deployment facts. SOUL/BODY/world/macro were
   initially explicit sections and are now compacted as documented below;
 - the second observation check detects material aircraft/perception changes,

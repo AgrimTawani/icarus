@@ -112,6 +112,7 @@ bool ActionStore::Transition(const std::string& action_id, v1::ActionState next,
   status.set_reason_code(reason);
   status.set_message(std::move(message));
   status.set_progress(progress);
+  status.set_active_viewpoint(0);
   if (next == v1::ACTION_STATE_EXECUTING &&
       status.started_at_unix_ms() == 0) {
     status.set_started_at_unix_ms(clock_.NowUnixMs());
@@ -122,6 +123,21 @@ bool ActionStore::Transition(const std::string& action_id, v1::ActionState next,
       *status.mutable_terminal_state() = *terminal_state;
     }
   }
+  return true;
+}
+
+bool ActionStore::UpdateProgress(const std::string& action_id,
+                                 double progress, std::string message,
+                                 std::uint32_t active_viewpoint) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  const auto found = actions_.find(action_id);
+  if (found == actions_.end() ||
+      found->second.state() != v1::ACTION_STATE_EXECUTING) {
+    return false;
+  }
+  found->second.set_progress(progress);
+  found->second.set_message(std::move(message));
+  found->second.set_active_viewpoint(active_viewpoint);
   return true;
 }
 
@@ -153,6 +169,8 @@ v1::ActionType ActionStore::TypeOf(const v1::ActionCommand& command) {
       return v1::ACTION_TYPE_LAND;
     case v1::ActionCommand::kOrbit:
       return v1::ACTION_TYPE_ORBIT;
+    case v1::ActionCommand::kYaw:
+      return v1::ACTION_TYPE_YAW;
     case v1::ActionCommand::REQUEST_NOT_SET:
       return v1::ACTION_TYPE_UNSPECIFIED;
     default:
@@ -181,6 +199,8 @@ const v1::CommandContext* ActionStore::ContextOf(
       return &command.land().context();
     case v1::ActionCommand::kOrbit:
       return &command.orbit().context();
+    case v1::ActionCommand::kYaw:
+      return &command.yaw().context();
     case v1::ActionCommand::REQUEST_NOT_SET:
       return nullptr;
     default:

@@ -97,12 +97,16 @@ message WatchEventsRequest {
 message GetPerceptionRequest {
   string session_id = 1;
   string vehicle_id = 2;
+  // Opt in to per-cluster LiDAR geometry (PerceptionSummary.nearby_obstacles).
+  // Off by default so periodic samplers keep the compact summary.
+  bool include_nearby_obstacles = 3;
 }
 
 message WatchPerceptionRequest {
   string session_id = 1;
   string vehicle_id = 2;
   uint32 maximum_rate_hz = 3;
+  bool include_nearby_obstacles = 4;
 }
 
 message ValidateActionRequest {
@@ -118,6 +122,9 @@ message GetActionStatusRequest {
 message WatchActionStatusRequest {
   string session_id = 1;
   string action_id = 2;
+  // Opt-in 5 Hz repeats for an adaptive controller's evidence/deadline poll.
+  // Default false retains the historical transition-only stream.
+  bool periodic_updates = 3;
 }
 
 service SessionService {
@@ -155,6 +162,7 @@ service ActionService {
   rpc ReturnHome(ReturnHomeRequest) returns (ActionReceipt);
   rpc Land(LandRequest) returns (ActionReceipt);
   rpc Orbit(OrbitRequest) returns (ActionReceipt);
+  rpc Yaw(YawRequest) returns (ActionReceipt);
   rpc CancelAction(CancelActionRequest) returns (ActionReceipt);
   rpc GetActionStatus(GetActionStatusRequest) returns (ActionStatus);
   rpc WatchActionStatus(WatchActionStatusRequest) returns (stream ActionStatus);

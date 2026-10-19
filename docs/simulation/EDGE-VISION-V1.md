@@ -1,5 +1,8 @@
 # Edge Autonomous Vision V1
 
+This is a historical V1 record. For current direct-agent commands, models and
+evidence semantics, use the [operator guide](../guides/SIMULATION-OPERATIONS.md#edge-vision-profile-simulation-only).
+
 **Status:** Phase-1 hardening complete; simulation-only and experimental. This
 document records the Version 1 boundary, operator workflow, verification, and
 known failures. It is not a real-aircraft readiness claim.
@@ -16,7 +19,7 @@ RTX 4050 Laptop GPU (6 GB VRAM) and 16 GB system RAM. It combines:
 - pinned YOLO11n detection and per-camera IoU tracking;
 - on-demand Qwen2-VL-2B-Instruct Q4 qualitative inspection, forced to CPU on
   the 6 GB development host;
-- a passive, local forward/downward RGB-D camera grid; and
+- a passive, local forward D435i / downward BRIO RGB camera grid; and
 - sealed episode evidence, deterministic replay, and an edge evidence report.
 
 No visual component has flight authority. Models cannot access shell commands,
@@ -44,32 +47,35 @@ commercial-license or replacement decision. Qwen2-VL is Apache-2.0. See
 ## Deterministic scenario and coordinate contract
 
 `simulation/scenarios/edge_people_building.json` creates a fixed-seed world
-with `north_building`, four human actor targets, obstacles, a safe route, and
-an expected unique-person count of four.
+with an unlabeled building, four human actor targets, obstacles, a private
+scoring route, and an expected unique-person count of four.
 
 Gazebo uses ENU: `+X` is east and `+Y` is north. The Drone API uses local NED.
-Accordingly, the building is placed in Gazebo at `(east=0, north=18, up=3)` and
-the model receives the committed local-NED landmark `(north=18, east=0,
-down=-3)`. This mapping is intentionally scenario data, not a YOLO inference.
-It fixes the former axis mismatch where the visual building was east while the
+Accordingly, the building is placed in Gazebo at `(east=0, north=18, up=3)`.
+Those coordinates remain private simulator truth and are never added to an
+LLM prompt or mission plan. This fixes the former axis mismatch where the visual building was east while the
 model was instructed to fly north.
 
 Stock YOLO11n has no dependable `building`, `roof`, or safe-landing class. The
-DCM must use the known landmark to navigate; it must not pretend to visually
-identify arbitrary buildings. Landing safety remains the deterministic
+DCM can ask the VLM about the current camera image, but it must not convert a
+visual noun into navigation geometry. Landing safety remains the deterministic
 downward-depth/LiDAR/geometry path.
 
 ## Cameras and vision scheduling
 
-The headless simulator publishes both mounted RGB-D image feeds:
+The headless simulator publishes both mounted RGB feeds. The D435i also
+publishes depth; the BRIO is deliberately RGB-only:
 
 | Feed | Gazebo topic | RTP port | V1 role |
 | --- | --- | --- | --- |
-| Forward RGB-D | `/icarus/sensors/rgbd/image` | base port (default `5600`) | operator grid, VLM inspection and primary YOLO count view |
-| Downward RGB-D | `/icarus/sensors/rgbd_down/image` | base port + 1 (default `5601`) | operator grid, supplemental YOLO coverage and landing geometry |
+| Forward Intel RealSense D435i | `/icarus/sensors/d435i/image` | base port (default `5600`) | operator grid, VLM inspection and primary YOLO count view |
+| Downward Logitech BRIO | `/icarus/sensors/brio_down` | base port + 1 (default `5601`) | operator grid and supplemental YOLO coverage |
 
-`./scripts/view-camera` composes both RTP/H.264 feeds into a labeled passive
-grid. It sends no vehicle command and retains no recording.
+`./scripts/view-camera` composes both 30 FPS RTP/H.264 feeds into a normal-size
+labeled passive grid. It sends no vehicle command and retains no recording.
+Landing geometry uses `/icarus/sensors/landing_depth_proxy/depth_image`, an
+explicit simulation-only proxy rather than nonexistent BRIO depth. See
+[Gazebo hardware fidelity](GAZEBO-HARDWARE-FIDELITY.md).
 
 The continuous observer round-robins both feeds at a **combined** maximum of
 5 FPS (2.5 FPS per feed with two cameras). Each feed has its own tracker. The
@@ -103,8 +109,8 @@ Use four terminals after `SIMULATOR READY` is printed:
 # Terminal 4
 ./scripts/dcm-fly --runtime llama --role primary --mode autonomous \
   --profile edge-vision --context-length 4096 \
-  --max-decisions 24 \
-  --mission "Arm, take off to 5 metres, fly north to the building, visually inspect it, orbit it, count all visible people, hover for 5 seconds, then return home and land." \
+  --max-decisions 24 --show-prompts \
+  --mission "Arm, take off to 5 metres, inspect whether a building is visible, scan 360 degrees clockwise in 10 degree steps and detect people, hover for 5 seconds, then return home." \
   --json
 ```
 
@@ -115,8 +121,9 @@ After `dcm-fly` prints an episode directory, pass that exact path to:
 ./scripts/test-phase10 logs/episodes/PRINTED_EPISODE_DIRECTORY
 ```
 
-Do not request “count the buildings you see.” That is outside YOLO11n's
-supported semantics. The `north_building` ID is an explicit scenario landmark.
+Building questions are routed to the qualitative VLM, not YOLO11n, and are
+reported as unverified current-camera prose. No scenario object name or
+waypoint enters the planning or decision prompt.
 
 ## Mission scoring and retained evidence
 

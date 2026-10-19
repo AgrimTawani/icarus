@@ -17,12 +17,16 @@ This module has no Drone API, MAVLink or simulator imports, and performs no
 I/O except reading a runtime manifest when explicitly asked.
 """
 
-import dataclasses
-import hashlib
 import json
 import math
-from pathlib import Path
 from typing import Protocol
+
+from python.dcm.runtime_config import (
+    DeadlineExceeded as DeadlineExceeded,  # noqa: PLC0414 - offline compatibility export
+)
+from python.dcm.runtime_config import (
+    RuntimeDescriptor as RuntimeDescriptor,  # noqa: PLC0414 - offline compatibility export
+)
 
 # Two observation variants, selected by configuration so they can be compared
 # under identical conditions. v1 shows only the most recent action result; v2
@@ -41,13 +45,15 @@ HISTORY_LIMIT = 12
 # presenting the payload as an abstract JSON exercise.  It is a model-visible
 # change and must therefore travel with every report.
 PROMPT_VERSION = "dcm-prompt-v6-mission-evidence"
-PROMPT_VERSION_CONTEXT = "dcm-prompt-v8-active-vocabulary"
+PROMPT_VERSION_CONTEXT = "dcm-prompt-v11-plan-once-visual-schedule"
 # The optional ending variant adds extra terminal emphasis above the base v2
 # embodiment guidance. It remains separately versioned for fair comparison.
 PROMPT_VERSION_ENDING = "dcm-prompt-v3-ending"
 # v2 adds goto and orbit. The version changes because a report scored
-# against a different action set is not comparable.
-VOCABULARY_VERSION = "dcm-actions-v4-vision-inspection"
+# against a different action set is not comparable. The optional
+# target-relative arguments (goto face_point, orbit face_center/viewpoints,
+# minimum_clearance_m) leave the action set unchanged and so share v5.
+VOCABULARY_VERSION = "dcm-actions-v5-relative-yaw"
 REASON_CODES = frozenset({
     "MISSION_OBJECTIVE_PENDING",
     "STATE_TRANSITION_REQUIRED",
@@ -68,6 +74,10 @@ ACTIONS = {
         "target_altitude_agl_m": {
             "kind": "number", "required": True, "minimum": 0.5, "maximum": 10.0,
         },
+        "maximum_climb_rate_mps": {
+            "kind": "number", "required": False, "minimum": 0.3, "maximum": 2.0,
+            "description": "requested climb-rate limit; use the live BODY constraint for slowly/quickly",
+        },
     },
     "hold": {
         "duration_ms": {
@@ -76,11 +86,18 @@ ACTIONS = {
     },
     "return_home": {},
     "land": {},
+    # Navigation coordinate bounds describe displacements from measured HOME,
+    # not absolute EKF coordinates. Compiled/local targets use
+    # validate_local_proposal to apply these identical limits after rebasing.
     # Navigation actions. Bounds are deliberately tighter than the safety
     # policy in config/safety/v1.yaml (30 m ceiling, 100 m from home, 2.5 m
     # minimum clearance) so the contract refuses before the guardrails have
     # to. The furthest reachable point is sqrt(50^2 + 50^2) = 70.7 m from
-    # home, and an orbit at the corner of its range reaches 71.6 m.
+    # home, and an orbit at the corner of its range reaches 71.6 m. Targets
+    # computed in flight from perception are further held to the policy's
+    # 30 m runtime fence by the guardrails (actions.build_request
+    # runtime_target=True). minimum_clearance_m can only tighten the policy's
+    # 2.0 m live LiDAR floor, so its minimum is that floor.
     "goto": {
         "north_m": {
             "kind": "number", "required": True, "minimum": -50.0, "maximum": 50.0,
@@ -91,8 +108,25 @@ ACTIONS = {
         "altitude_agl_m": {
             "kind": "number", "required": True, "minimum": 0.5, "maximum": 25.0,
         },
+        "acceptance_radius_m": {
+            "kind": "number", "required": False, "minimum": 0.000001, "maximum": 10.0,
+            "description": "position completion tolerance in metres; semantic navigation derives it from measured displacement",
+        },
         "heading_deg": {
             "kind": "number", "required": False, "minimum": 0.0, "maximum": 360.0,
+        },
+        "face_point": {
+            "kind": "local_point", "required": False, "minimum": -100.0,
+            "maximum": 100.0,
+            "description": "on arrival yaw to look at this point; not with heading_deg",
+        },
+        "maximum_ground_speed_mps": {
+            "kind": "number", "required": False, "minimum": 0.5, "maximum": 3.0,
+            "description": "horizontal navigation speed target (historical field name); actual speed varies during acceleration/settling",
+        },
+        "minimum_clearance_m": {
+            "kind": "number", "required": False, "minimum": 2.0, "maximum": 10.0,
+            "description": "stricter live obstacle clearance",
         },
     },
     "orbit": {
@@ -111,6 +145,46 @@ ACTIONS = {
         "revolutions": {
             "kind": "number", "required": False, "minimum": 0.25, "maximum": 3.0,
         },
+        "clockwise": {
+            "kind": "boolean", "required": False,
+            "description": "orbit direction seen from above; true=clockwise (default), false=counter-clockwise",
+        },
+        "face_center": {
+            "kind": "boolean", "required": False,
+            "description": "true keeps the camera on the centre at every waypoint",
+        },
+        "viewpoints": {
+            "kind": "integer", "required": False, "minimum": 2, "maximum": 12,
+            "description": "stop and hold at this many evenly spaced points; revolutions <= 1",
+        },
+        "viewpoint_dwell_ms": {
+            "kind": "integer", "required": False, "minimum": 0,
+            "maximum": 20_000,
+            "description": "hold at each viewpoint; needs viewpoints",
+        },
+        "maximum_ground_speed_mps": {
+            "kind": "number", "required": False, "minimum": 0.5, "maximum": 3.0,
+            "description": "horizontal navigation speed setpoint; actual speed may be lower while turning or settling",
+        },
+        "minimum_clearance_m": {
+            "kind": "number", "required": False, "minimum": 2.0, "maximum": 10.0,
+            "description": "stricter live obstacle clearance",
+        },
+    },
+    # Relative rather than absolute yaw is essential for scans: a 360-degree
+    # turn begins and ends at the same heading, so an absolute-heading command
+    # cannot demonstrate that the rotation physically happened.
+    "yaw": {
+        "angle_deg": {
+            "kind": "number", "required": True, "minimum": -360.0,
+            "maximum": 360.0,
+            "description": "relative yaw; positive=clockwise/right, negative=counter-clockwise/left",
+        },
+        "rate_deg_s": {
+            "kind": "number", "required": False, "minimum": 5.0,
+            "maximum": 60.0,
+            "description": "bounded yaw rate in degrees per second",
+        },
     },
     # Semantic analysis is not a flight command. It is an explicit request to
     # the pinned vision boundary and cannot reach MAVLink or the action RPC.
@@ -118,6 +192,11 @@ ACTIONS = {
         "classes": {
             "kind": "class_list", "required": True, "minimum_items": 1,
             "maximum_items": 16, "maximum_item_length": 64,
+        },
+        "window_s": {
+            "kind": "number", "required": False, "minimum": 0.2,
+            "maximum": 30.0,
+            "description": "camera observation window; repeated scan steps use a short window",
         },
     },
     # Qualitative visual interpretation is a separate inspection boundary. It
@@ -182,21 +261,21 @@ class StaleObservationError(ValueError):
     """The observation was too old to put in front of a model."""
 
 
-class DeadlineExceeded(Exception):
-    """A runtime did not answer within its deadline and was abandoned.
-
-    Deliberately not a ValueError: a missed deadline is a runtime failure, not
-    a malformed proposal, and the two are counted separately.
-    """
 
 
 def _describe_bounds(spec):
+    if spec["kind"] == "local_point":
+        return (f"object {{north_m, east_m}}, each a number in "
+                f"[{spec['minimum']}, {spec['maximum']}]"
+                + ("" if spec["required"] else ", optional"))
     if spec["kind"] == "class_list":
         return (f"array of {spec['minimum_items']}..{spec['maximum_items']} "
                 f"class-name strings (each <= {spec['maximum_item_length']} chars)")
     if spec["kind"] == "text":
         return (f"text of {spec['minimum_length']}..{spec['maximum_length']} "
                 "characters")
+    if spec["kind"] == "boolean":
+        return "true or false" + ("" if spec["required"] else ", optional")
     kind = "integer" if spec["kind"] == "integer" else "number"
     return (f"{kind} in [{spec['minimum']}, {spec['maximum']}]"
             + ("" if spec["required"] else ", optional"))
@@ -233,6 +312,21 @@ def _check_value(value, spec):
             return (f"must contain {spec['minimum_length']}.."
                     f"{spec['maximum_length']} characters")
         return None
+    if spec["kind"] == "boolean":
+        # Exact type: 1/0 and "true" are not directions.
+        return None if type(value) is bool else "must be true or false"
+    if spec["kind"] == "local_point":
+        if not isinstance(value, dict) or set(value) != {"north_m", "east_m"}:
+            return "must be an object with exactly north_m and east_m"
+        for axis in ("north_m", "east_m"):
+            coordinate = value[axis]
+            if type(coordinate) not in (int, float) or \
+                    not math.isfinite(coordinate):
+                return axis + " must be a finite number"
+            if not spec["minimum"] <= coordinate <= spec["maximum"]:
+                return (f"{axis} must be in "
+                        f"[{spec['minimum']}, {spec['maximum']}]")
+        return None
     if spec["kind"] == "integer":
         # `type(...) is not int` rather than isinstance: bool is a subclass of
         # int, and True must not be accepted as a duration.
@@ -243,6 +337,42 @@ def _check_value(value, spec):
     if not spec["minimum"] <= value <= spec["maximum"]:
         return f"must be in [{spec['minimum']}, {spec['maximum']}]"
     return None
+
+
+def validate_local_proposal(raw, home, actions=ACTIONS):
+    """Validate EKF-local targets against the same *home-relative* envelope.
+
+    Coordinate translation never changes a motion limit. The original local
+    target is returned for transport; only a validation copy is rebased.
+    """
+    try:
+        proposal = json.loads(raw)
+    except (TypeError, ValueError):
+        return validate_proposal(raw, actions)
+    if not isinstance(proposal, dict) or proposal.get("action") not in {"goto", "orbit"}:
+        return validate_proposal(raw, actions)
+    arguments = proposal.get("arguments")
+    if not isinstance(arguments, dict):
+        return validate_proposal(raw, actions)
+    if not isinstance(home, dict) or any(type(home.get(axis)) not in (int, float)
+            or not math.isfinite(home[axis]) for axis in ("north_m", "east_m")):
+        raise ValueError("local navigation bounds need a measured autopilot home")
+    checked = json.loads(raw)
+    destination = checked["arguments"]
+    prefix = "center_" if proposal["action"] == "orbit" else ""
+    def rebase(point, prefix=""):
+        for axis in ("north_m", "east_m"):
+            field = prefix + axis
+            if field in point:
+                value = point[field]
+                if type(value) not in (int, float) or not math.isfinite(value):
+                    raise ValueError(field + " must be a finite local coordinate")
+                point[field] = value - home[axis]
+    rebase(destination, prefix)
+    if isinstance(destination.get("face_point"), dict):
+        rebase(destination["face_point"])
+    validate_proposal(json.dumps(checked), actions)
+    return proposal
 
 
 def is_flight_action(action):
@@ -283,7 +413,34 @@ def validate_proposal(raw, actions=ACTIONS):
         problem = _check_value(arguments[name], spec)
         if problem:
             raise ValueError(name + " " + problem)
+    if action == "yaw" and abs(float(arguments.get("angle_deg", 0.0))) < 1.0:
+        raise ValueError("yaw angle_deg magnitude must be at least 1 degree")
+    _check_combinations(action, arguments)
     return proposal
+
+
+# Matches guardrails::kMinimumFacePointDistanceM: closer than this, "look at
+# that point from here" has no stable heading.
+MINIMUM_FACE_POINT_DISTANCE_M = 0.5
+
+
+def _check_combinations(action, arguments):
+    """Refuse argument pairs that are each in bounds but conflict."""
+    if action == "goto" and "face_point" in arguments:
+        if "heading_deg" in arguments:
+            raise ValueError("goto accepts heading_deg or face_point, not both")
+        point = arguments["face_point"]
+        if math.hypot(point["north_m"] - arguments["north_m"],
+                      point["east_m"] - arguments["east_m"]) < \
+                MINIMUM_FACE_POINT_DISTANCE_M:
+            raise ValueError(
+                "face_point must be at least "
+                f"{MINIMUM_FACE_POINT_DISTANCE_M} m from the destination")
+    if action == "orbit":
+        if "viewpoints" in arguments and arguments.get("revolutions", 1.0) > 1.0:
+            raise ValueError("orbit viewpoints need revolutions <= 1")
+        if "viewpoint_dwell_ms" in arguments and "viewpoints" not in arguments:
+            raise ValueError("viewpoint_dwell_ms needs viewpoints")
 
 
 def validate_decision(raw, actions=ACTIONS, allow_reason_code=False):
@@ -421,39 +578,6 @@ def curate(state, perception, previous_result, mission, event, actions=ACTIONS,
     return observation
 
 
-def curate_v3(state, perception, previous_result, mission, event, actions=ACTIONS,
-              history=None, elapsed_ms=None, macro_directory=None,
-              mission_metadata=None, runtime_body=None):
-    """Build the Phase-1 V2 context without changing the legacy contract.
-
-    The source is first curated by the existing allow-list, then enriched by
-    read-only context/macro/profile artifacts. No raw sensor payload, truth,
-    profile write, or execution interface reaches this function.
-    """
-    from pathlib import Path
-
-    from python.dcm.v2_context import build_context, load_macros
-    from python.dcm.v2_profiles import body, profiles
-
-    base = curate(state, perception, previous_result, mission, event,
-                  actions=actions, history=history, elapsed_ms=elapsed_ms)
-    base["contract_version"] = CONTRACT_VERSION_CONTEXT
-    root = Path(__file__).resolve().parents[2]
-    directory = (Path(macro_directory) if macro_directory is not None else
-                 root / "config" / "dcm" / "macros")
-    catalog = load_macros(directory, actions)
-    static = profiles()
-    generated = body()
-    if runtime_body:
-        generated = dict(generated)
-        generated["deployment"] = runtime_body
-    context = build_context(base, catalog=catalog,
-                            mission_metadata=mission_metadata,
-                            body=generated, soul=static["soul"],
-                            world_facts=static["world_facts"])
-    return context
-
-
 SYSTEM_PROMPT_LEGACY = """\
 You are the decision-making component of a real multirotor aircraft in a \
 physical or simulated 3-D environment. The state and perception data that \
@@ -471,9 +595,9 @@ Allowed actions:
 
 Rules:
 - Choose exactly one action from the list above.
-- Use ``mission_obligations`` as completion criteria, not as executable
-  commands. You must independently choose the next legal action and may choose
-  a safer action when state or perception makes progress unsafe.
+- Follow the operator request and successful action history without inventing
+  a target or geometry. You may choose a safer action when state or perception
+  makes progress unsafe.
 - When a reviewed mission macro is selected, use only its ``allowed_actions``;
   hold, return_home, land and none remain available as safety exits.
 - "arguments" is always an object. Use {{}} when the action takes no arguments.
@@ -487,21 +611,11 @@ Rules:
 - If the aircraft is airborne and safety/perception is uncertain, choose hold
   or return_home rather than another takeoff. If it is landed and a completed
   mission has no further safe task, choose none.
-- If ``mission_reference.visual_requirements.person_count_requires_detect`` is
-  true and the mission asks for a person count, a successful ``detect`` with
-  ``["person"]`` is a mandatory completion requirement. If history does not
-  contain it when the requested hover/navigation is complete, propose it next.
-  A known landmark is a committed navigation reference, not a detector class.
-- If ``mission_reference.visual_requirements.building_inspection_requires_inspect_scene``
-  is true and the mission asks to inspect or check a building, a successful
-  ``inspect_scene`` is a mandatory completion requirement. Independently plan
-  when to request that evidence while respecting the reviewed target, mission
-  order, current state, and selected macro. Ask one concise visual question.
-  Never infer people from qualitative prose when ``detect`` is available.
-- If the mission says "that building" or "the building", use
-  ``mission_reference.primary_target_id`` and the matching reviewed landmark;
-  do not invent coordinates from an image. If it asks to hover over/above that
-  building, first ``goto`` its exact ``hover_waypoint``, then ``hold`` there.
+- Use ``detect`` for structured supported object classes and ``inspect_scene``
+  for qualitative current-camera questions. Neither perception action grants
+  permission to move the aircraft or supplies navigation geometry.
+- The environment is unknown except for live state and live perception. Never
+  invent or infer a waypoint, target, landmark, route, or object location.
 - Before proposing ``return_home``, ``land`` or ``none``, inspect successful
   action history and complete every requested mandatory visual requirement.
 - Honor the operator's explicit task order. If a mission says to orbit and
@@ -510,42 +624,6 @@ Rules:
 {no_action}.{ending}\
 """
 
-
-SYSTEM_PROMPT_COMPACT = """\
-You are the decision-making component of a real multirotor aircraft in a \
-physical or simulated 3-D environment. The state and perception data that \
-follow are its actual current situation. You propose one bounded action; \
-independent safety software validates it and may reject it.
-
-Reply with exactly one JSON object and nothing else. No prose and no code \
-fences. {response_contract}
-
-Allowed actions:
-{vocabulary}
-
-Rules:
-- Choose exactly one action from the list above.
-- Treat ``mission_contract.objectives`` as completion criteria, not executable
-  commands. Independently choose the next legal action.
-- When ``mission_contract.permitted_actions`` exists, use only that subset.
-  Recovery actions remain available only when live evidence makes progress unsafe.
-- "arguments" is always an object. Use {{}} when the action takes no arguments.
-- Never invent an action, an argument, or a unit.
-- Respect current flight state: arm before takeoff; never arm or take off while
-  airborne; navigate or land only after takeoff.
-- Use only reviewed coordinates in ``mission_contract.target`` or objectives.
-- Work only on ``mission_contract.active_objective_id``. First move to its
-  reviewed waypoint when ``staged_at_reviewed_waypoint`` is false; semantic
-  tools inspect only the camera view at the aircraft's current pose.
-- Use only the active objective's ``allowed_progress_actions`` while evidence
-  is safe. For a building inspection ask about the structure, not object counts.
-- A terminal action (return_home, land, or none) is invalid while an earlier
-  objective remains pending unless live evidence requires safety recovery.
-- If airborne evidence is unavailable or progress is unsafe, choose hold or
-  return_home. If landed with no pending objective, choose none.
-- If no action is appropriate or the situation is unclear, reply with \
-{no_action}.{ending}\
-"""
 
 ENDING_GUIDANCE = """
 - Terminal reminder: holding keeps the aircraft airborne and is not a way to \
@@ -560,137 +638,24 @@ def render_vocabulary(actions=ACTIONS):
             lines.append(f'- "{action}": no arguments')
             continue
         described = ", ".join(
-            f"{name} ({_describe_bounds(spec)})"
-            for name, spec in specification.items())
+            f"{name} ({_describe_bounds(spec)}"
+            + (f"; {spec['description']}" if spec.get("description") else "")
+            + ")" for name, spec in specification.items())
         lines.append(f'- "{action}": {described}')
     return "\n".join(lines)
 
 
 def render_prompt(observation, actions=ACTIONS, ending_guidance=False):
-    """Return the versioned system and user text for one decision.
-
-    The vocabulary shown to the model is generated from the same table the
-    validator enforces, so a model cannot be invited to emit something that
-    would then be rejected.
-    """
-    v3 = observation.get("context_version") == "dcm-context-v3-compact"
-    prompt_actions = actions
-    if v3:
-        contract = observation.get("mission_contract") or {}
-        active_id = contract.get("active_objective_id")
-        active = next((item for item in contract.get("objectives", [])
-                       if item.get("id") == active_id), {})
-        progress = set(active.get("allowed_progress_actions") or ())
-        if progress:
-            # The validator and mission gate still own enforcement. Showing
-            # only the current progress vocabulary plus explicit safety exits
-            # prevents the model from fixating on a later semantic action and
-            # also removes irrelevant prompt tokens.
-            visible = progress | {"none", "hold", "return_home", "land"}
-            prompt_actions = {name: specification
-                              for name, specification in actions.items()
-                              if name in visible}
-    response_contract = (
-        'The object has exactly three keys: "action", "arguments", and '
-        '"reason_code". reason_code is one of: '
-        + ", ".join(sorted(REASON_CODES)) + '. '
-        'All action arguments must appear in "arguments".'
-        if v3 else
-        'The object has exactly two keys: "action" and "arguments".')
-    system_template = SYSTEM_PROMPT_COMPACT if v3 else SYSTEM_PROMPT_LEGACY
-    system = system_template.format(
-            vocabulary=render_vocabulary(prompt_actions),
-            response_contract=response_contract,
-            no_action=('{"action":"none","arguments":{},'
-                       '"reason_code":"NO_SAFE_ACTION"}'
-                       if v3 else '{"action":"none","arguments":{}}'),
-            ending=ENDING_GUIDANCE if ending_guidance else "")
-    user_observation = observation
-    if v3:
-        from python.dcm.v2_context import model_visible_payload
-        visible = model_visible_payload(observation)
-        principles = visible["profiles"]["principles"]
-        body = visible["profiles"]["body"]
-        system += "\n\nOPERATING PRINCIPLES\n- " + "\n- ".join(principles)
-        if body:
-            system += "\n\nLIVE BODY\n" + json.dumps(body, sort_keys=True,
-                                                        separators=(",", ":"))
-        user_observation = visible["user"]
+    """Historical offline action replay only; live missions use agent_context."""
+    if observation.get("context_version") == "dcm-context-v3-compact":
+        raise ValueError("The precompiled mission context has been retired")
     return {
-        "prompt_version": (PROMPT_VERSION_CONTEXT if v3 else
-                           PROMPT_VERSION_ENDING if ending_guidance
-                           else PROMPT_VERSION),
-        "system": system,
-        "user": ("Current situation:\n"
-                 + json.dumps(user_observation, sort_keys=True,
-                              separators=(",", ":") if v3 else None,
-                              indent=None if v3 else 2)
-                 + "\n\nRespond with one JSON object."),
+        "prompt_version": PROMPT_VERSION_ENDING if ending_guidance else PROMPT_VERSION,
+        "system": SYSTEM_PROMPT_LEGACY.format(
+            vocabulary=render_vocabulary(actions),
+            response_contract='The object has exactly two keys: "action" and "arguments".',
+            no_action='{"action":"none","arguments":{}}',
+            ending=ENDING_GUIDANCE if ending_guidance else ""),
+        "user": "Current situation:\n" + json.dumps(observation, sort_keys=True, indent=2)
+                + "\n\nRespond with one JSON object.",
     }
-
-
-@dataclasses.dataclass(frozen=True)
-class RuntimeDescriptor:
-    """Everything that must be recorded to make a decision reproducible."""
-
-    model_id: str
-    family: str
-    quantization: str
-    artifact_path: str
-    artifact_sha256: str
-    runtime: str
-    runtime_revision: str
-    context_length: int
-    temperature: float
-    deadline_ms: int
-    prompt_version: str = PROMPT_VERSION
-    contract_version: str = CONTRACT_VERSION
-    vocabulary_version: str = VOCABULARY_VERSION
-
-    @classmethod
-    def from_manifest(cls, manifest_path, role="primary", **overrides):
-        """Build a descriptor from a setup-model-runtime manifest."""
-        manifest = json.loads(Path(manifest_path).read_text())
-        for artifact in manifest["artifacts"]:
-            if artifact["role"] == role:
-                break
-        else:
-            raise ValueError("no artifact with role " + role)
-        fields = {
-            "model_id": Path(artifact["path"]).stem,
-            # A manifest may name its own family (needed once a manifest
-            # holds more than one model family, as the vision manifest does);
-            # falling back to "qwen" keeps existing single-family manifests
-            # working without every one of them needing updating.
-            "family": artifact.get("family", manifest.get("family", "qwen")),
-            "quantization": artifact["quantization"],
-            "artifact_path": artifact["path"],
-            "artifact_sha256": artifact["sha256"],
-            "runtime": "llama_cpp",
-            "runtime_revision": manifest["llama_cpp_revision"],
-            "context_length": 8192,
-            "temperature": 0.0,
-            "deadline_ms": 5_000,
-        }
-        fields.update(overrides)
-        return cls(**fields)
-
-    def verify_artifact(self):
-        """Re-hash the weights so a swapped or truncated file fails loudly."""
-        path = Path(self.artifact_path)
-        if not path.is_file():
-            raise FileNotFoundError("model artifact missing: " + str(path))
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for block in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(block)
-        actual = digest.hexdigest()
-        if actual != self.artifact_sha256:
-            raise ValueError(
-                f"model artifact checksum mismatch for {path}: "
-                f"expected {self.artifact_sha256}, found {actual}")
-        return actual
-
-    def as_record(self):
-        """The provenance block written into every observe report."""
-        return dataclasses.asdict(self)

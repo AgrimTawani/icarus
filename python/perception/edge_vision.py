@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,7 +71,7 @@ class UniqueTrackCounter:
         return output
 
 
-def normalize_yolo_result(result, image_path, tracker, model_id="yolo11n",
+def normalize_yolo_result(result, image_path, tracker, model_id="unspecified_yolo",
                           image_size=640, max_fps=5.0, started_monotonic=None):
     """Normalize one Ultralytics-like result without retaining image pixels."""
     if image_size != 640 or not 0 < max_fps <= 5:
@@ -125,57 +126,116 @@ def summarize_observer_window(records, classes):
     """
     classes = {str(item).strip().lower() for item in classes}
     by_camera = {}
+    maximum_counts = {name: 0 for name in classes}
     for record in records:
         if record.get("schema") != "icarus.edge.yolo.v1":
             continue
         camera = record.get("camera", {}).get("id", "unknown")
-        people = sum(item.get("class") == "person" for item in record.get("detections", []))
+        detections = record.get("detections", [])
+        people = sum(item.get("class") == "person" for item in detections)
+        frame_counts = {name: sum(item.get("class") == name for item in detections)
+                        for name in classes}
+        for name, count in frame_counts.items():
+            maximum_counts[name] = max(maximum_counts[name], count)
         entry = by_camera.setdefault(camera, {"frames": 0, "max_simultaneous_persons": 0})
         entry["frames"] += 1
         entry["max_simultaneous_persons"] = max(entry["max_simultaneous_persons"], people)
     observed = max((item["max_simultaneous_persons"] for item in by_camera.values()), default=0)
     return {"schema": "icarus.edge.count_window.v1", "requested_classes": sorted(classes),
             "camera_evidence": by_camera, "unique_person_count": observed,
+            "counts": maximum_counts,
             "count_method": "maximum_simultaneous_persons_in_one_camera_frame",
             "flight_authority": False}
 
 
+class EdgeDetectorRuntime:
+    """One session-owned pinned detector; warmup never produces evidence."""
+
+    def __init__(self, manifest_path, device="auto"):
+        self.manifest_path, self.device = Path(manifest_path), device
+        self.lock = threading.RLock()
+        self.model = None
+        self.artifact = None
+        self.selected = None
+        self.warmed = False
+        self.closed = False
+
+    def prepare(self, *, warm=True):
+        with self.lock:
+            if self.closed:
+                raise RuntimeError("detector runtime is closed")
+            if self.model is None:
+                manifest = json.loads(self.manifest_path.read_text())
+                validate_edge_manifest(manifest)
+                artifact = next(item for item in manifest["artifacts"] if item["role"] == "yolo")
+                weights = Path(artifact["path"])
+                if not weights.is_file():
+                    raise FileNotFoundError("pinned detector weights unavailable: " + str(weights))
+                if hashlib.sha256(weights.read_bytes()).hexdigest() != artifact["sha256"]:
+                    raise ValueError("pinned detector checksum mismatch")
+                import torch
+                from ultralytics import YOLO
+                self.selected = select_device(self.device, torch.cuda.is_available())
+                self.model = YOLO(str(weights))
+                self.artifact = artifact
+            if warm and not self.warmed:
+                import numpy as np
+                # Exercise kernels before flight, without capturing a camera,
+                # updating trackers, or publishing a synthetic observation.
+                self.model.predict(source=np.zeros((640, 640, 3), dtype=np.uint8),
+                                   imgsz=640, conf=.35, device=self.selected, verbose=False)
+                self.warmed = True
+            return {"device": self.selected, "sha256": self.artifact["sha256"],
+                    "warmed": self.warmed, "observation": False}
+
+    def predict(self, source, confidence):
+        with self.lock:
+            self.prepare(warm=False)
+            return self.model.predict(source=source, imgsz=640, conf=confidence,
+                                      device=self.selected, verbose=False)[0]
+
+    def close(self):
+        with self.lock:
+            self.model = None
+            self.closed = True
+            if self.selected == "cuda":
+                import torch
+                torch.cuda.empty_cache()
+
+
 def detect_edge_image(image_path, manifest_path, tracker, *, device="auto",
-                      max_fps=5.0, confidence=0.35):
+                      max_fps=5.0, confidence=0.35, runtime=None):
     """Run pinned YOLO11n. Importing Ultralytics is deferred until execution."""
-    manifest = json.loads(Path(manifest_path).read_text())
-    validate_edge_manifest(manifest)
-    yolo = next(item for item in manifest["artifacts"] if item["role"] == "yolo")
-    weights = Path(yolo["path"])
-    if not weights.is_file():
-        raise FileNotFoundError("pinned yolo11n weights unavailable: " + str(weights))
-    if hashlib.sha256(weights.read_bytes()).hexdigest() != yolo["sha256"]:
-        raise ValueError("pinned yolo11n checksum mismatch")
-    import torch
-    from ultralytics import YOLO
-    selected = select_device(device, torch.cuda.is_available())
-    started = time.monotonic()
-    # Gazebo's bounded capture adapter emits PPM, which Ultralytics does not
-    # list as an accepted source extension. Convert only inside a temporary
-    # directory: the structured result retains the original frame hash and no
-    # image pixel data enters an episode.
-    from PIL import Image
-    with tempfile.TemporaryDirectory(prefix="icarus-yolo-input-") as temporary:
-        inference_path = Path(temporary) / "frame.png"
-        Image.open(image_path).convert("RGB").save(inference_path)
-        output = YOLO(str(weights)).predict(source=str(inference_path), imgsz=640,
-                                            conf=confidence, device=selected,
-                                            verbose=False)[0]
-    names = output.names
-    boxes = output.boxes
-    result = {"labels": [names[int(value)] for value in boxes.cls.tolist()],
-              "scores": boxes.conf.tolist(), "boxes": boxes.xyxy.tolist(),
-              "image_dimensions": [int(output.orig_shape[1]), int(output.orig_shape[0])]}
-    normalized = normalize_yolo_result(result, image_path, tracker, image_size=640,
-                                       max_fps=max_fps, started_monotonic=started)
-    normalized["runtime"] = {"device": selected, "fallback": selected == "cpu",
-                             "repository": yolo["repository"], "sha256": yolo["sha256"]}
-    return normalized
+    owned = runtime is None
+    runtime = runtime or EdgeDetectorRuntime(manifest_path, device)
+    try:
+        runtime.prepare(warm=False)
+        yolo, selected = runtime.artifact, runtime.selected
+        started = time.monotonic()
+        # Gazebo's bounded capture adapter emits PPM, which Ultralytics does not
+        # list as an accepted source extension. Convert only inside a temporary
+        # directory: the structured result retains the original frame hash and no
+        # image pixel data enters an episode.
+        from PIL import Image
+        with tempfile.TemporaryDirectory(prefix="icarus-yolo-input-") as temporary:
+            inference_path = Path(temporary) / "frame.png"
+            Image.open(image_path).convert("RGB").save(inference_path)
+            output = runtime.predict(str(inference_path), confidence)
+        names = output.names
+        boxes = output.boxes
+        result = {"labels": [names[int(value)] for value in boxes.cls.tolist()],
+                  "scores": boxes.conf.tolist(), "boxes": boxes.xyxy.tolist(),
+                  "image_dimensions": [int(output.orig_shape[1]), int(output.orig_shape[0])]}
+        normalized = normalize_yolo_result(result, image_path, tracker,
+                                           model_id=yolo.get("model_id") or Path(yolo["path"]).stem, image_size=640,
+                                           max_fps=max_fps, started_monotonic=started)
+        normalized["confidence_threshold"] = confidence
+        normalized["runtime"] = {"device": selected, "fallback": selected == "cpu",
+                                 "repository": yolo["repository"], "sha256": yolo["sha256"]}
+        return normalized
+    finally:
+        if owned:
+            runtime.close()
 
 
 def inspect_smolvlm(image_path, question, manifest_path, limiter, *, max_new_tokens=96):

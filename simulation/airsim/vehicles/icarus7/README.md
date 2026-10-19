@@ -16,7 +16,7 @@ Linux binary.
 - Reviewed forward and downward camera positions, LiDAR, GPS/RTK and downward
   range positions in body FRD.
 - A pinned AirSim 1.8 physics overlay selected only by `"Model": "Icarus7"`.
-- Component-derived 4.343 kg mass and FRD inertia, canonical rotor positions,
+- Component-derived 4.4745 kg mass and FRD inertia, canonical rotor positions,
   10-inch propeller geometry, the frozen 15,606 RPM thrust point and the
   existing 0.016 m moment/thrust ratio.
 - Separate headless and GUI settings, an idempotent installer, structural

@@ -18,15 +18,33 @@ if [[ "${#PROTOS[@]}" -eq 0 ]]; then
     exit 1
 fi
 
+# Generate both languages before publishing anything. Unchanged files retain
+# their mtimes so restarting the API does not rebuild every protobuf consumer.
+TEMP_DIR="$(mktemp -d "${OUTPUT_DIR}/.proto.XXXXXX")"
+trap 'rm -rf -- "${TEMP_DIR}"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+mkdir -p "${TEMP_DIR}/python" "${TEMP_DIR}/cpp"
+
 "${PYTHON_BIN}" -m grpc_tools.protoc \
     -I "${PROJECT_ROOT}/proto" \
-    --python_out="${OUTPUT_DIR}/python" \
-    --grpc_python_out="${OUTPUT_DIR}/python" \
+    --python_out="${TEMP_DIR}/python" \
+    --grpc_python_out="${TEMP_DIR}/python" \
     "${PROTOS[@]}"
 
 protoc -I "${PROJECT_ROOT}/proto" \
-    --cpp_out="${OUTPUT_DIR}/cpp" \
-    --grpc_out="${OUTPUT_DIR}/cpp" \
+    --cpp_out="${TEMP_DIR}/cpp" \
+    --grpc_out="${TEMP_DIR}/cpp" \
     --plugin=protoc-gen-grpc="$(command -v grpc_cpp_plugin)" \
     "${PROTOS[@]}"
+# Publish only generator-owned files present in this successful run. Never
+# replace whole directories: they can contain caches and unrelated build files.
+while IFS= read -r -d '' generated_file; do
+    relative_path="${generated_file#"${TEMP_DIR}/"}"
+    destination="${OUTPUT_DIR}/${relative_path}"
+    if ! cmp -s -- "${generated_file}" "${destination}"; then
+        mkdir -p -- "$(dirname -- "${destination}")"
+        mv -f -- "${generated_file}" "${destination}"
+    fi
+done < <(find "${TEMP_DIR}" -type f -print0)
 echo "Generated protobuf outputs in ${OUTPUT_DIR}"

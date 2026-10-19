@@ -16,19 +16,27 @@ from gi.repository import Gst
 
 
 CAMERA_STREAMS = (
-    {"id": "forward_rgbd", "label": "Forward RGB-D", "topic": "/icarus/sensors/rgbd/image"},
-    {"id": "downward_rgbd", "label": "Downward RGB-D", "topic": "/icarus/sensors/rgbd_down/image"},
+    {"id": "forward_d435i", "label": "Forward Intel RealSense D435i",
+     "topic": "/icarus/sensors/d435i/image", "source_width": 848,
+     "source_height": 480, "source_fps": 30},
+    {"id": "downward_brio", "label": "Downward Logitech BRIO 4K",
+     "topic": "/icarus/sensors/brio_down", "source_width": 1280,
+     "source_height": 720, "source_fps": 30},
 )
 
 
-def encoder_pipeline(host, port, width, height, fps, bitrate_kbps):
+def encoder_pipeline(host, port, source_width, source_height, source_fps,
+                     output_width, output_height, output_fps, bitrate_kbps):
     return (
         "appsrc name=source is-live=true format=time do-timestamp=true block=false "
-        f"caps=video/x-raw,format=RGB,width={width},height={height},framerate={fps}/1 "
+        f"caps=video/x-raw,format=RGB,width={source_width},height={source_height},"
+        f"framerate={source_fps}/1 "
         "! queue leaky=downstream max-size-buffers=2 "
-        "! videoconvert "
+        "! videoconvert ! videoscale add-borders=true ! videorate drop-only=true "
+        f"! video/x-raw,format=I420,width={output_width},height={output_height},"
+        f"pixel-aspect-ratio=1/1,framerate={output_fps}/1 "
         f"! x264enc tune=zerolatency speed-preset=ultrafast bitrate={bitrate_kbps} "
-        f"key-int-max={fps} bframes=0 byte-stream=true "
+        f"key-int-max={output_fps} bframes=0 byte-stream=true "
         "! rtph264pay config-interval=1 pt=96 "
         f"! udpsink host={host} port={port} sync=false async=false"
     )
@@ -50,7 +58,10 @@ def main():
     parser.add_argument("--port", type=int, default=5600)
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--fps", type=int, default=15)
+    # Both installed RGB cameras publish at 30 Hz in the physical-fidelity
+    # profile.  Keep the network stream at that rate by default instead of
+    # silently halving it to the legacy 15 FPS preview.
+    parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--bitrate-kbps", type=int, default=1500)
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
@@ -71,7 +82,9 @@ def main():
         if port > 65535:
             raise ValueError("camera stream port range exceeds 65535")
         pipeline = Gst.parse_launch(encoder_pipeline(
-            args.destination, port, args.width, args.height, args.fps, args.bitrate_kbps))
+            args.destination, port, specification["source_width"],
+            specification["source_height"], specification["source_fps"],
+            args.width, args.height, args.fps, args.bitrate_kbps))
         streams.append({**specification, "port": port, "pipeline": pipeline,
                         "source": pipeline.get_by_name("source"), "bus": pipeline.get_bus(),
                         "frames_received": 0, "frames_pushed": 0, "invalid_frames": 0,
@@ -88,7 +101,8 @@ def main():
         with lock:
             stream["frames_received"] += 1
             stream["last_frame_monotonic_s"] = now
-        if not valid_rgb_frame(message, args.width, args.height):
+        if not valid_rgb_frame(
+                message, stream["source_width"], stream["source_height"]):
             with lock:
                 stream["invalid_frames"] += 1
             return
@@ -118,10 +132,11 @@ def main():
             for stream in streams:
                 age = now - stream.get("last_frame_monotonic_s", now)
                 snapshots.append({key: stream[key] for key in (
-                    "id", "label", "topic", "port", "frames_received", "frames_pushed",
+                    "id", "label", "topic", "port", "source_width",
+                    "source_height", "source_fps", "frames_received", "frames_pushed",
                     "invalid_frames", "push_failures")})
                 snapshots[-1].update({"measured_input_fps": stream["frames_received"] / elapsed,
-                                      "measured_output_fps": stream["frames_pushed"] / elapsed,
+                                      "measured_appsrc_push_fps": stream["frames_pushed"] / elapsed,
                                       "last_frame_age_s": age})
             ready = all(item["frames_pushed"] >= 3 and item["last_frame_age_s"] <= 2.0
                         for item in snapshots)

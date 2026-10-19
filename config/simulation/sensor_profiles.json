@@ -1,8 +1,42 @@
 {
-  "description": "Single physical-noise sensor model. Standard deviations use SI units; RGB noise uses normalized intensity. Replace values with bench and flight calibration when hardware exists.",
-  "profiles": {"physical": 1.0},
-  "stddev": {"accelerometer": 0.03, "gyro": 0.002, "gps_position": 0.3, "gps_velocity": 0.05, "magnetometer": 0.0000002, "pressure": 2.0, "lidar": 0.02, "range_down": 0.005, "camera": 0.005},
-  "mean": {"accelerometer": 0.003, "gyro": 0.0001, "gps_position": 0.02, "gps_velocity": 0.0, "magnetometer": 0.00000001, "pressure": 0.5, "lidar": 0.002, "range_down": 0.001, "camera": 0.0},
-  "battery": {"capacity_ah": 10, "initial_charge_ah": 10, "voltage": 25.2, "voltage_slope": -4.2, "resistance_ohm": 0.025, "load_w": 700},
-  "health": {"stale_wall_s": 2.0, "injected_latency_s": 0.2}
+  "description": "Single hardware-informed noise model for the D435i, BRIO, MID-360, ARK Flow, Pixhawk 6X Pro and H-RTK approximations. Standard deviations use SI units; RGB noise uses normalized intensity. Replace values with bench and flight calibration when hardware exists.",
+  "profiles": {
+    "physical": 1.0
+  },
+  "stddev": {
+    "accelerometer": 0.03,
+    "gyro": 0.002,
+    "gps_position": 0.01,
+    "gps_velocity": 0.05,
+    "magnetometer": 2e-07,
+    "pressure": 2.0,
+    "lidar": 0.02,
+    "range_down": 0.005,
+    "camera": 0.005
+  },
+  "mean": {
+    "accelerometer": 0.003,
+    "gyro": 0.0001,
+    "gps_position": 0.0,
+    "gps_velocity": 0.0,
+    "magnetometer": 1e-08,
+    "pressure": 0.5,
+    "lidar": 0.002,
+    "range_down": 0.001,
+    "camera": 0.0
+  },
+  "battery": {
+    "capacity_ah": 10,
+    "initial_charge_ah": 10,
+    "voltage": 25.2,
+    "voltage_slope": -4.2,
+    "resistance_ohm": 0.025,
+    "load_w": 700,
+    "idle_load_w": 45,
+    "load_model_note": "Provisional configurable45W electronics idle; load_w is total hover-reference watts. Additional fixed-pitch rotor power scales cubically with measured speed relative to mass/thrust-derived hover speed. No calibrated endurance claim."
+  },
+  "health": {
+    "stale_wall_s": 2.0,
+    "injected_latency_s": 0.2
+  }
 }

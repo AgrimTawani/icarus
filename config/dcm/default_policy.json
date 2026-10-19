@@ -1,0 +1,8 @@
+{
+  "schema": "icarus.direct-agent.defaults.v1",
+  "takeoff_altitude_agl_m": 3.0,
+  "yaw_rate_deg_s": 30.0,
+  "maximum_ground_speed_mps": 3.0,
+  "object_standoff_m": 5.0,
+  "hold_duration_s": 1.0
+}

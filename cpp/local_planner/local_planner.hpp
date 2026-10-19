@@ -25,7 +25,8 @@ class LocalPlanner {
       const v1::LocalPositionNed& start,
       const v1::LocalPositionNed& goal,
       const std::vector<perception::Point3>& obstacles,
-      double requested_clearance_m = 0.0) const;
+      double requested_clearance_m = 0.0,
+      double departure_clearance_floor_m = 0.0) const;
   [[nodiscard]] bool SegmentClear(
       const v1::LocalPositionNed& start,
       const v1::LocalPositionNed& goal,

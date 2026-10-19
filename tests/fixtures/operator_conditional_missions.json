@@ -1,0 +1,18 @@
+{
+  "schema": "icarus.operator-mission-evaluation.v1",
+  "scenario": "edge_people_building",
+  "cases": [
+    {
+      "id": "prearm_camera_condition",
+      "mission": "Before arming, look for people with the front camera. If you can see anybody, take off to 3 metres, hover for 2 seconds then return and land. Otherwise stay disarmed and tell me what you saw."
+    },
+    {
+      "id": "informal_nested_visual_branch",
+      "mission": "Go up about 3 metres and look north. Have a look out front. If there's a building, check if it looks grey. If it does, fly a 2 by 1 metre box from here heading south, without going near it. If it's a different colour just wait 2 seconds. If there's no building wait 1 second. Then come home, land, and tell me which branch you took and what you actually saw."
+    },
+    {
+      "id": "turn_observe_until_people",
+      "mission": "Get up to 3 metres and slowly look round to the left. Every 30 degrees check the front camera for people. If anyone shows up, stop turning, go up to 5 metres, move 2 metres forward then land. If you make one full turn without seeing anyone, come home and land. Tell me where you saw them."
+    }
+  ]
+}

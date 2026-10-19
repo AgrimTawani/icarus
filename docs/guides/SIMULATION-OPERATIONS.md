@@ -44,6 +44,11 @@ correct:
 ./scripts/start-sim --profile simulation-wind --gui
 ```
 
+Every Gazebo entry point forces `GZ_IP=127.0.0.1`. Physics, sensor discovery,
+the JSON bridge and the default camera destination therefore remain local and
+continue to work when Wi-Fi is disconnected. Only an explicit remote
+`--video-destination` needs an external network.
+
 The equivalent explicit form is:
 
 ```bash
@@ -101,8 +106,10 @@ real-hardware safety test.
 ./scripts/view-camera
 ```
 
-This is a passive ground-station client. It opens a labeled grid of every
-available RGB camera: forward RGB-D on UDP 5600 and downward RGB-D on UDP 5601.
+This is a passive ground-station client. It opens a normal-size labeled grid of
+every available RGB camera: forward Intel RealSense D435i on UDP 5600 and
+downward Logitech BRIO on UDP 5601. Both normalized streams default to 640×480
+at 30 FPS; their native Gazebo inputs remain 848×480 and 1280×720 respectively.
 It prints LIVE/STALE status, decoded
 FPS and last-frame age. It sends no vehicle commands. It may start before or
 after `start-sim`, and closing it never stops the aircraft or encoder. Nothing is
@@ -212,11 +219,11 @@ List SDL-detected controllers with:
 ./scripts/manual-control --list-controllers
 ```
 
-## Forward Camera Feed
+## Camera Feeds
 
-`start-sim` owns the drone-side camera adapter and publishes the forward RGB
-camera as low-latency H.264 over RTP/UDP port 5600. The ground-station viewer is
-an independent process:
+`start-sim` owns the drone-side camera adapter and publishes both D435i and BRIO
+RGB feeds as low-latency H.264 over RTP/UDP ports 5600 and 5601. The
+ground-station viewer is an independent process:
 
 ```bash
 ./scripts/view-camera
@@ -231,6 +238,13 @@ local receive port with `./scripts/view-camera --port PORT` when required.
 To send the simulated onboard stream to another machine, launch with
 `--video-destination GROUND_STATION_IPV4 --video-port PORT` and open the same
 UDP port in the ground-station firewall.
+
+The exact hardware-specific sensors, transforms, publication rates and limits
+are documented in
+[`../simulation/GAZEBO-HARDWARE-FIDELITY.md`](../simulation/GAZEBO-HARDWARE-FIDELITY.md).
+In particular, the downward BRIO is RGB-only. Landing depth comes from a
+separately named simulation-only proxy and must never be described as BRIO
+hardware.
 
 ## Canonical Vehicle Physics and Natural Atmosphere
 
@@ -357,44 +371,56 @@ acceptance conclusions into a dated `SIM-*` report; do not commit bulk recording
 
 ## Edge vision profile (simulation only)
 
+Run the following in separate terminals from the repository root. The simulator
+stays headless; the RTP camera viewer is a separate application.
+
 ```bash
-./scripts/setup-edge-vision-runtime
-./scripts/start-sim --profile edge-vision
+./scripts/start-sim --profile edge-vision --server-only
+```
+
+```bash
+./scripts/start-autonomy
+```
+
+```bash
 ./scripts/view-camera
-./scripts/start-autonomy --profile edge-vision
-./scripts/dcm-fly --runtime llama --role primary --mode autonomous \
-  --profile edge-vision --context-length 4096 --max-decisions 24 \
-  --mission "Arm, take off to 5 metres, fly north to the building, visually inspect it, orbit it, count all visible people, hover for 5 seconds, then return home and land."
 ```
-
-The setup step also provisions a checksum-pinned, local CC-BY human actor asset
-under `~/models/edge/`; restart the simulator after updating the edge runtime
-so the generated world uses those actors. The simulator stays headless while
-the separate RTP viewer remains visible.
-YOLO11n is capped at 640 px and 5 FPS; Qwen2-VL-2B Q4 answers a bounded
-qualitative question, is rate-limited to five seconds and runs load/infer/release
-on CPU in this profile so it does not contend with the flight DCM for 6 GB of
-VRAM.
-The YOLO observer round-robins the forward and downward RGB-D feeds within
-that single total 5-FPS budget. Unique-person counting remains tied to the
-20-second observer window: it takes the largest same-frame person observation
-from one camera, never sums feeds, and does not claim cross-camera identity
-re-identification. The four actor targets are deliberately outside the
-building footprint; restart the simulator whenever the scenario changes.
-Neither vision component has flight authority. Stock YOLO11n cannot discover
-arbitrary buildings or safe rooftops, and landing safety remains deterministic
-depth/LiDAR/geometry.
-
-Do not add “count the buildings you see” to this acceptance prompt: the known
-`north_building` landmark is a committed navigation reference, not a YOLO
-class. A mission that asks for people must produce successful `detect(person)`
-evidence at the reviewed observation waypoint before its landing is scored as
-a completed mission. Compact V3 exposes only the active objective's progress
-action to the DCM, while terminal and safety exits remain available.
-
-After the DCM client seals its episode, produce the evidence report with:
 
 ```bash
-./scripts/report-edge-vision logs/episodes/EPISODE_ID
-./scripts/test-phase10 logs/episodes/EPISODE_ID
+./scripts/dcm-fly --runtime llama --manifest config/dcm/agent-runtime.json \
+  --profile edge-vision --mode autonomous
 ```
+
+The console displays the actual selected model and architecture. The current
+flight manifest selects Qwen3.5 4B Q4 with 16K context and bounded reasoning.
+Do not reuse the historical 4096-token override: the native tool catalog and
+feedback need more context. The agent executes incrementally, with short
+unconditional batches and ArduPilot flight/observation workflows. There is no
+whole-mission semantic compiler or preflight mission review model.
+
+`~/models/edge/MANIFEST.json` selects perception artifacts independently of the
+flight manifest. The installed detector is YOLO11s at 640 px with the existing
+confidence threshold; counts describe accepted detections in one camera frame,
+not guaranteed totals or cumulative people across views. After a detector is
+requested, motion refreshes that camera/class set for the next decision. Those
+actual captures appear in the same chronological evidence history as explicit
+detection calls. This is sampled feedback, not continuous tracking.
+
+Qwen2-VL provides on-demand qualitative inspection on CPU. Buildings, trees and
+roofs are not supported YOLO classes. `localize_target` associates an image
+region with measured Intel depth/LiDAR; no simulator landmark coordinates enter
+the mission model. The BRIO is RGB-only on hardware; its downward depth proxy
+is simulation-only. A camera geometry check does not prove target visibility.
+
+The extra passive observer started by `start-autonomy --profile edge-vision`
+is optional diagnostic infrastructure. The direct agent owns its detector, so
+the command above avoids a second detector process. Provisioning preserves the
+installed detector variant; select another explicitly with `EDGE_YOLO_MODEL`.
+Fresh edge provisioning defaults to YOLO11s. Provisioning artifacts does not
+change the flight model selected by the explicit `--manifest` argument.
+
+Use `/hold`, `/land`, `/rtl` or `/abort` for immediate operator control. `/quit`
+returns an airborne aircraft home before releasing control. Stop the simulator
+with Ctrl+C when testing is over. Episodes record tool calls, sensor evidence,
+operator interruptions and model decisions; a model's completion message is
+not independent verification that every requested condition was respected.

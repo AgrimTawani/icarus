@@ -1,4 +1,6 @@
 #include "safety_supervisor/safety_supervisor.hpp"
+#include "state_engine/battery_validity.hpp"
+#include "guardrails/guardrails.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -65,6 +67,12 @@ void SafetySupervisor::Run() {
                        now - state->observed_at_unix_ms() >
                            policy_.maximum_state_age_ms;
     const bool controller_present = authority_.Current().has_value();
+    bool landing_action = false;
+    if (const auto active = actions_.ActiveConflictingAction()) {
+      if (const auto status = actions_.Find(*active)) {
+        landing_action = status->type() == v1::ACTION_TYPE_LAND;
+      }
+    }
     if (!stale) stale_since = 0;
     if (controller_present) lease_lost_since = 0;
     int response = 0;
@@ -90,7 +98,7 @@ void SafetySupervisor::Run() {
       message = response == 1
                     ? "controller heartbeat lost: safe hold commanded"
                     : "controller heartbeat lost: RTL escalation commanded";
-    } else if (perception_ != nullptr && !perception_->Healthy()) {
+    } else if (perception_ != nullptr && !perception_->Healthy() && !landing_action) {
       response = 1;
       reason = v1::REASON_CODE_SAFETY_INTERVENTION;
       message = "perception stale: safe hold commanded";
@@ -116,18 +124,35 @@ void SafetySupervisor::Run() {
     if (response == 0) {
       stale_since = 0;
       lease_lost_since = 0;
+      bool recovery_action = false;
+      if (const auto active = actions_.ActiveConflictingAction()) {
+        if (const auto status = actions_.Find(*active)) {
+          recovery_action = status->type() == v1::ACTION_TYPE_LAND ||
+                            status->type() == v1::ACTION_TYPE_RETURN_HOME;
+        }
+      }
+      const bool battery_known = state_engine::BatteryAvailable(state->battery(), now);
       const double battery = state->battery().remaining_percent();
-      if (battery <= policy_.land_battery_percent) {
+      const auto home = guardrails::LocalHomePosition(*state);
+      if (!battery_known && !recovery_action) {
+        response = 1;
+        reason = v1::REASON_CODE_STATE_STALE;
+        message = "battery telemetry unavailable: safe hold commanded";
+      } else if (battery_known && battery <= policy_.land_battery_percent) {
         response = 3;
         reason = v1::REASON_CODE_BATTERY_BELOW_THRESHOLD;
         message = "critical battery: landing commanded";
-      } else if (battery <= policy_.rtl_battery_percent) {
+      } else if (battery_known && battery <= policy_.rtl_battery_percent) {
         response = 2;
         reason = v1::REASON_CODE_BATTERY_BELOW_THRESHOLD;
         message = "low battery: RTL commanded";
-      } else if (state->has_local_position_ned() &&
-                 std::hypot(state->local_position_ned().north_m(),
-                            state->local_position_ned().east_m()) >
+      } else if (!home && !recovery_action) {
+        response = 1;
+        reason = v1::REASON_CODE_POSITION_UNAVAILABLE;
+        message = "measured home transform unavailable: safe hold commanded";
+      } else if (home && !recovery_action &&
+                 std::hypot(state->local_position_ned().north_m() - home->north_m(),
+                            state->local_position_ned().east_m() - home->east_m()) >
                      policy_.maximum_distance_from_home_m) {
         response = 2;
         reason = v1::REASON_CODE_GEOFENCE_VIOLATION;

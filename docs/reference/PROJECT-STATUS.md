@@ -1,5 +1,25 @@
 # Project Status
 
+## Current direct-agent implementation (2026-10-05)
+
+The active flight entry point uses `config/dcm/agent-runtime.json`: Qwen3.5 4B
+Q4, 16K context, direct incremental tool decisions. Perception uses a separately
+pinned YOLO11s detector and on-demand Qwen2-VL. Native ArduPilot routes, measured
+object motion, resumable observation scans and camera feasibility contracts are
+available. Conditional interpretation remains subject to model error; successful
+flight telemetry alone is not mission or camera acceptance.
+
+Use the [current operator guide](../guides/SIMULATION-OPERATIONS.md#edge-vision-profile-simulation-only).
+The dated sections below describe earlier implementations and are historical.
+
+## 2026-10-02 adaptive Phase 1 update
+
+[Adaptive missions](../architecture/PHASE1-ADAPTIVE-MISSIONS.md) are implemented
+and offline-tested, not yet flight-accepted. This includes bounded conditional
+execution, concurrent camera evidence, runtime-relative moves, measured Gazebo
+surface actions, sensor context and retained partial reports. Edge vision also
+allows an opt-in 8192-token context; its historical 4096 default remains.
+
 ## Edge autonomous vision (experimental, simulation-only)
 
 The RTX 4050/6 GB profile is available as `edge-vision`. It reuses the pinned
@@ -9,8 +29,9 @@ CPU-only load/infer/release on this host). YOLO and VLM are structured evidence 
 neither can command flight, select a landing site, or bypass the typed Drone
 API, guardrails, planner, safety supervisor, or Phase 10-12 evaluation gates.
 
-`edge_people_building` uses a committed `north_building` landmark and four
-checksum-pinned Gazebo human-actor targets. Stock YOLO11n does not reliably identify
+`edge_people_building` contains an unlabeled building and four checksum-pinned
+Gazebo human-actor targets. Its object locations remain private simulator
+truth and never enter model prompts. Stock YOLO11n does not reliably identify
 buildings, roofs, or safe landing areas; landing safety remains deterministic
 depth/LiDAR/geometry. This profile makes no real-world-readiness claim.
 
@@ -23,29 +44,73 @@ building inspection, reviewed orbit, four-person forward-camera detection,
 hold, RTL and strict replay completed in episode
 `20260927T041123_0a62e3f27053`.
 
-Last updated: 2026-09-27
+Last updated: 2026-09-30
 
 ## V2 Phase 1 status
 
 The AerialClaw-inspired Phase-1 architecture is implemented in the default
-`dcm-contract-v3-compact` CLI context: one compiled mission contract, semantic
-live BODY, three compact SOUL principles, five enforced/auto-resolved reviewed
+`dcm-contract-v3-compact` CLI context: one LLM-planned and deterministically
+validated mission contract, semantic
+live BODY, three compact SOUL principles, five explicitly selectable reviewed
 macros, a closed reason-code vocabulary, automatically sealed feedback/review
 artifacts, suppressing circuit breaker, material state recheck, independent
 control-lease heartbeat and a frozen promotion scorecard. Audit hashes, paths,
 empty world-fact prose, macro prose and duplicate vocabulary/freshness fields
-no longer reach the model. Hardened `dcm-prompt-v8-active-vocabulary` exposes
-only the active objective's progress action plus bounded safety exits. Native
-heading confirmation, nearest-entry orbiting, a repeated-failure breaker and
+no longer reach the model. The semantic-planner pass makes Qwen responsible
+for NLP on every V3 prompt and returns ready, clarification or unsupported;
+exact sources, value provenance, typed arguments, capabilities and safety are
+independently validated without a competing interpretation.
+Invalid planning fails closed rather than falling back to regex execution.
+The current `dcm-prompt-v11-plan-once-visual-schedule` path removes the second
+per-action LLM loop. It compiles an exact preflight YOLO/VLM schedule and a
+minimal executor sequences only the validated objectives, while fresh-state,
+typed-action, C++ guardrail and ArduPilot checks retain final authority. This
+also removes growing visual history and the legacy 8,000-byte model-context
+ceiling from normal V3 execution. Native relative yaw with accumulated-angle
+confirmation, heading confirmation, nearest-entry orbiting and
 debounced launcher health close the observed live-loop failure modes. The
 prior feedback prompt's paired 135-point
 offline Gazebo evaluation improved recovery but regressed timeouts and latency;
 the machine gate returned `retain-v1`. The compact revision requires a fresh
 full paired promotion evaluation and remains unapproved for unattended
 promotion despite being the model-context default. It now has passing live
-Gazebo evidence across alternative wording, visual inspection, reviewed orbit,
-person count, building hover, gusting wind and strict replay. V2 remains
-available through `--context v2` for historical comparisons.
+Gazebo evidence across unseen paraphrases, visual inspection, reviewed orbit,
+person count, building hover, gusting wind and strict replay. The retired v9
+acceptance episodes are `20260928T213711_376851ae5458` (vague reviewed-building
+VLM/hover/RTL), `20260928T213942_dca58510b55b` (36-view yaw/YOLO scan with a
+four-person maximum), `20260928T214459_1553b7840d38` (parameter-derived slow
+climb/yaw) and `20260928T214614_27a6ca5e86ef` (ASR-like “tape off” repair).
+All four pass complete replay. V2 remains available through `--context v2` for
+historical comparisons.
+
+Fresh plan-once live acceptance is recorded in
+`20260930T012601_9e55edb9b9a1` (76/76 compiled steps: takeoff, 36-view yaw/YOLO
+scan, hold and RTL) and `20260930T012901_a30dbb3fb71d` (three-view yaw/VLM scan
+and RTL). Both passed complete deterministic episode replay and contain zero
+per-action `dcm_decision` events. `20260930T013321_41d06228c593` confirms that
+person following is rejected as unsupported and ungrounded building navigation
+asks for local coordinates with zero action requests. The 36-view run reported
+a YOLO maximum of five against scenario truth four; this is recorded as one
+false positive, not presented as ground-truth accuracy. The edge report now
+uses the maximum declared scan viewpoint rather than incorrectly reporting the
+last (often empty) viewpoint.
+
+The Gazebo Icarus7 vehicle now uses the custom-drone hardware layout rather
+than the former generic sensor set: forward D435i RGB-D/IMU, downward BRIO RGB,
+MID-360 envelope/IMU, ARK Flow ToF/IMU plus an explicitly non-EKF derived flow
+stream, H-RTK ZED-F9P/RM3100, and Pixhawk 6X Pro triple IMU, dual barometer and
+onboard-magnetometer topology. The generated component model is 4.4745 kg.
+Exact vendor matches and Gazebo approximations are separated in
+[`../simulation/GAZEBO-HARDWARE-FIDELITY.md`](../simulation/GAZEBO-HARDWARE-FIDELITY.md).
+Every Gazebo launcher forces `GZ_IP=127.0.0.1`; local simulation is independent
+of Wi-Fi. The two-camera H.264 viewer now opens at a normal bounded size and
+streams at 30 FPS by default.
+
+Scenario landmarks are never injected into planning or decision prompts. Thus
+`the building in front` cannot resolve to hidden scenario geometry. Visual questions inspect
+the current camera pose; navigation requires explicit operator-grounded local
+coordinates and otherwise asks for clarification. See the
+[`DCM objective pipeline`](../architecture/DCM-OBJECTIVE-PIPELINE.md).
 
 The separate AirSim track runs pinned Blocks v1.8.0 headlessly with
 ArduCopter SITL, RGB/depth/LiDAR, the Icarus Drone API and a distinct C++ LiDAR
@@ -61,7 +126,7 @@ frozen-scene/seed equivalence is not established. See
 
 The supplied Icarus7 UE4.27 visual project now has a native AirSim vehicle
 module, custom pawn ABI, actuator-driven rotors, cameras, compound collision,
-sensor transforms, custom settings, a pinned 4.343 kg AirLib physics overlay,
+sensor transforms, custom settings, a pinned 4.4745 kg AirLib physics overlay,
 installer, validator, packager and guarded launcher. The patched AirLib compiles
 and its runtime parameters pass an executable test. The host has no UE4.27
 toolchain, and the public AirVLN download is packaged rather than source, so no
@@ -78,7 +143,7 @@ definition of done are recorded in
 
 Icarus has a verified custom Gazebo/ArduPilot simulation foundation. Its
 canonical vehicle derives mass, centre of gravity and inertia from a versioned
-20-component manifest. Its single physical-noise sensor model and seeded
+21-component manifest. Its hardware-specific physical-noise sensor model and seeded
 three-axis turbulent atmosphere run in populated worlds, including shear,
 aerodynamic forces/moments and obstacle wakes. It has a simulator-only DCM
 control path, but it is not an LLM-controlled drone approved for unattended
@@ -107,9 +172,9 @@ remains open.
 | Separated simulator/control launch | Complete; named profiles and global readiness | Phase 6 |
 | Keyboard manual control | Implemented; simulation-only | `scripts/manual-control` |
 | Xbox manual control | Background polling hardware-verified | SDL Xbox 360 mapping |
-| Camera grid | Forward and downward RGB-D H.264/RTP streams in a passive ground viewer | `scripts/view-camera` |
+| Camera grid | Forward D435i and downward BRIO H.264/RTP streams in a passive 30 FPS ground viewer; landing depth is a named simulation proxy | `scripts/view-camera` |
 | C++ autonomy services | Phase 8 complete | Drone API, authority, guardrails, executor, state engine, safety supervisor and MAVLink gateway |
-| Drone API protobuf | V1 flight contract defined and generated | 23 RPCs; C++/Python message and gRPC bindings |
+| Drone API protobuf | V1 flight contract defined and generated | 24 RPCs, including relative yaw; C++/Python message and gRPC bindings |
 | Perception/obstacle avoidance | Phase 9 complete | live Gazebo LiDAR, normalized map, gRPC summary, A* detours and BRAKE fail-safe |
 | Low-battery preflight gate | Simulator API path verified | Scenario SOC 35% rejects Arm at the typed C++ guardrail; physical battery integration remains deferred |
 | DCM timeout containment | Simulator API path verified | One live deadline was retained, made zero action calls, and replayed successfully |
@@ -280,8 +345,10 @@ Latency: cold starts of 4257, 9370 and 13259 ms across sessions, against a
 cannot be accommodated by choosing a deadline; a deployed loop must warm itself
 before the mission begins.
 
-The final Phase-1 hardening gate passed 294 Python tests plus 161 subtests, both
-C++ suites and complete deterministic replay of the 3,367-record visual mission
-against the current codebase. Phase 10's full physical-data exit gate and the
+The current v11 plan-once semantic-planner gate passes 345 Python tests plus
+168 subtests and both C++ suites. The four prompt-v9 episodes remain historical
+replay evidence; the fresh plan-once Gazebo records above validate the current
+runtime wiring but do not replace the full frozen promotion campaign. Phase
+10's full physical-data exit gate and the
 Phase 11/12 model-promotion gates remain open. See
 [`../NEXT-STEPS.md`](../NEXT-STEPS.md) for the current handoff.

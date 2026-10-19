@@ -33,12 +33,14 @@ for local simulation; it does not accept a real aircraft endpoint.
 ## Startup and shutdown contract
 
 1. Check existing Gazebo, build tools and ArduPilot/plugin executables. Refuse
-   occupied MAVLink TCP 5760 / JSON UDP 9002 ports or a duplicate launcher.
+   occupied MAVLink TCP 5760 / JSON UDP 9002 / sensor UDP 14562 ports or a duplicate launcher.
 2. Rebuild the deterministic flight SDF and local motor adapter. No packages
    are installed and no unrelated process is terminated.
 3. Create an isolated Gazebo partition and fresh per-run SITL EEPROM directory.
-4. Start Gazebo with rendering, SITL and the sensor recorder. Require repeated
-   messages on all nine physical sensor channels plus the atmosphere stream
+4. Start Gazebo with rendering, SITL, the derived optical-flow bridge,
+   dedicated MAVLink sensor bridge and the
+   sensor recorder. Require repeated messages on every configured hardware
+   channel plus the atmosphere stream
    before running the controller.
 5. Read back every configured ArduPilot parameter and await GPS/navigation
    readiness before arming. Parameter responses have bounded retries.
@@ -66,19 +68,28 @@ the full inertia tensors using each component's geometry, mass and mounting
 transform, including separate propeller link inertias. It writes the inputs,
 provenance and source hash to `mass_properties.json`; no aggregate mass, CG or
 inertia tensor is manually copied into the generated SDF. Total mass is currently
-4.343 kg. Inputs marked as design targets still require as-built measurement.
+4.4745 kg. Inputs marked as design targets still require as-built measurement.
 
 Motor rise/decay, thrust mapping, torque and output limits reuse the tested
 provisional model. Landing contacts use simple skids; detailed mesh contact and
 propeller strikes are not simulated.
 
-ArduPilot's JSON bridge consumes a dedicated 1,000 Hz **FRD** IMU with the same
-single physical-noise configuration used by the public sensor model. The
-separately recorded 200 Hz public IMU uses **FLU**. ArduPilot's GPS,
-compass, barometer and battery remain SITL-generated; the public Gazebo streams
-are independently tested but are **not yet fused into navigation or
-obstacle avoidance**. Gazebo world poses are ENU; MAVLink local positions are NED.
+ArduPilot's JSON bridge consumes a dedicated 1,000 Hz **FRD** IMU. Public
+hardware-facing streams independently represent the Pixhawk 6X Pro's three
+IMUs, dual barometers and BMM150, the H-RTK GNSS/RM3100, D435i, BRIO,
+MID-360 and ARK Flow topology with physical-noise profiles. ArduPilot's GPS,
+compass, barometer and battery remain SITL-generated; these public redundant
+streams are recorded and fault-tested but are **not yet fused into SITL
+navigation**. MID-360 proximity, downward range and image-derived optical flow
+now additionally feed ArduPilot through a Gazebo-only MAVLink2 bridge.
+GPS/barometer remain primary; flow is supplementary velocity aiding, range
+supports terrain/landing, and proximity stopping is control-mode dependent.
+See the hardware-fidelity document for the exact boundaries and live test.
+Gazebo world poses are ENU; MAVLink local positions are NED.
 Automated movement/yaw tests compare both representations.
+
+See [Gazebo hardware fidelity](GAZEBO-HARDWARE-FIDELITY.md) for exact topics,
+rates, mounts and approximation limits.
 
 ## Per-run artifacts
 

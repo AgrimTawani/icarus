@@ -1,4 +1,5 @@
 #include "state_engine/state_engine.hpp"
+#include "state_engine/battery_validity.hpp"
 
 #include <algorithm>
 
@@ -17,7 +18,11 @@ void StateEngine::Publish(v1::DroneState state) {
 
 std::optional<v1::DroneState> StateEngine::Snapshot() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  return state_;
+  auto snapshot = state_;
+  if (snapshot && !BatteryAvailable(snapshot->battery(), clock_.NowUnixMs())) {
+    snapshot->mutable_battery()->set_level(v1::HEALTH_LEVEL_UNAVAILABLE);
+  }
+  return snapshot;
 }
 
 bool StateEngine::IsFresh(std::uint32_t maximum_age_ms) const {
@@ -50,9 +55,11 @@ v1::HealthReport StateEngine::Health(std::uint32_t maximum_age_ms) const {
   const bool estimator = state_->has_estimator() &&
                          state_->estimator().level() == v1::HEALTH_LEVEL_HEALTHY;
   const bool battery = state_->has_battery() &&
-                       state_->battery().level() != v1::HEALTH_LEVEL_FAILED;
-  report.set_ready_to_arm(fresh && link && estimator && battery && state_->landed());
-  report.set_ready_to_navigate(fresh && link && estimator &&
+                       BatteryAvailable(state_->battery(), clock_.NowUnixMs());
+  report.set_ready_to_arm(fresh && link && estimator && battery &&
+                          state_->battery().level() == v1::HEALTH_LEVEL_HEALTHY &&
+                          state_->landed());
+  report.set_ready_to_navigate(fresh && link && estimator && battery &&
                                state_->estimator().horizontal_position_valid());
   report.set_overall(report.ready_to_arm() || report.ready_to_navigate()
                          ? v1::HEALTH_LEVEL_HEALTHY

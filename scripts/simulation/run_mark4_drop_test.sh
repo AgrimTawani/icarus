@@ -11,6 +11,7 @@ mkdir -p "$log_dir"
 
 export GZ_SIM_RESOURCE_PATH="$project_root/simulation/models${GZ_SIM_RESOURCE_PATH:+:$GZ_SIM_RESOURCE_PATH}"
 export GZ_PARTITION="icarus_drop_${run_id}_$$"
+export GZ_IP="127.0.0.1"
 
 sim_pid=""
 cleanup() {

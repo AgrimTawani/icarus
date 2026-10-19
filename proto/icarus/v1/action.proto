@@ -30,6 +30,7 @@ enum ActionType {
   ACTION_TYPE_LAND = 8;
   ACTION_TYPE_CANCEL = 9;
   ACTION_TYPE_ORBIT = 10;
+  ACTION_TYPE_YAW = 11;
 }
 
 enum ActionState {
@@ -80,6 +81,9 @@ enum ReasonCode {
   REASON_CODE_SAFETY_INTERVENTION = 29;
   REASON_CODE_MISSION_AUTHORIZATION_REQUIRED = 30;
   REASON_CODE_INTERNAL_ERROR = 31;
+  // Live LiDAR clearance fell below the enforced floor during a motion action
+  // (the hard policy floor, or a stricter per-action minimum_clearance_m).
+  REASON_CODE_CLEARANCE_VIOLATION = 32;
 }
 
 enum HeadingMode {
@@ -90,10 +94,22 @@ enum HeadingMode {
   HEADING_MODE_FACE_POINT = 4;
 }
 
+// FACE_POINT yaws to look horizontally from the vehicle's commanded position
+// toward face_point. A goto applies it on arrival; an orbit applies it at every
+// waypoint and, when face_point is unset, faces the orbit centre.
 message HeadingPolicy {
   HeadingMode mode = 1;
   optional double heading_deg = 2;
   optional Position face_point = 3;
+}
+
+// Where a navigation target's coordinates came from. Targets computed in
+// flight from perception are held to the stricter runtime geofence of the
+// safety policy; every target remains inside the ordinary geofence.
+enum TargetSource {
+  TARGET_SOURCE_UNSPECIFIED = 0;
+  TARGET_SOURCE_DECLARED = 1;
+  TARGET_SOURCE_RUNTIME_ESTIMATE = 2;
 }
 
 message ActionLimits {
@@ -126,6 +142,7 @@ message GotoRequest {
   HeadingPolicy heading = 4;
   ActionLimits limits = 5;
   bool fly_through = 6;
+  TargetSource target_source = 7;
 }
 
 message RoutePoint {
@@ -149,6 +166,9 @@ message ExecuteRouteRequest {
   string route_id = 2;
   repeated RoutePoint points = 3;
   RouteCompletionBehavior completion_behavior = 4;
+  // Upload this bounded deterministic segment to the flight controller and
+  // execute in AUTO. False preserves the Guided route backend for old clients.
+  bool delegate_to_autopilot = 5;
 }
 
 message HoldRequest {
@@ -187,6 +207,26 @@ message OrbitRequest {
   bool clockwise = 7;
   double revolutions = 8;
   HeadingPolicy heading = 9;
+  // minimum_clearance_m may only raise the policy's hard clearance floor.
+  ActionLimits limits = 10;
+  // Evenly spaced stops along the arc; 0 flies it continuously. At each stop
+  // the vehicle settles on the point and heading, then holds
+  // viewpoint_dwell_ms. A closed (one-revolution) orbit spaces them 360/N
+  // apart from the entry point; a partial arc includes both of its ends.
+  uint32 viewpoints = 11;
+  uint32 viewpoint_dwell_ms = 12;
+  TargetSource target_source = 13;
+}
+
+// Rotate in place by a relative angle while holding the current position.
+// Positive angles are clockwise/right in the vehicle's NED heading frame;
+// negative angles are counter-clockwise/left.  Relative motion is used so a
+// complete 360-degree scan is observable instead of collapsing to the same
+// absolute heading at which it started.
+message YawRequest {
+  CommandContext context = 1;
+  double relative_angle_deg = 2;
+  double rate_deg_s = 3;
 }
 
 message ActionCommand {
@@ -200,6 +240,7 @@ message ActionCommand {
     ReturnHomeRequest return_home = 7;
     LandRequest land = 8;
     OrbitRequest orbit = 9;
+    YawRequest yaw = 10;
   }
 }
 
@@ -223,6 +264,9 @@ message ActionStatus {
   double progress = 9;
   DroneState terminal_state = 10;
   string request_hash = 11;
+  // 1-based orbit viewpoint the vehicle is settled on and holding; 0 when it
+  // is not holding one.
+  uint32 active_viewpoint = 12;
 }
 
 message ValidationResult {

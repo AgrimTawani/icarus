@@ -11,7 +11,8 @@
       "none",
       "orbit",
       "return_home",
-      "takeoff"
+      "takeoff",
+      "yaw"
     ],
     "authority": "DCM proposals remain subordinate to guardrails, safety supervisor, and ArduPilot failsafes.",
     "direct_mavlink": false,
@@ -21,8 +22,8 @@
     },
     "generated": true,
     "raw_sensor_access": false,
-    "vocabulary_version": "dcm-actions-v4-vision-inspection"
+    "vocabulary_version": "dcm-actions-v5-relative-yaw"
   },
   "schema": "icarus.dcm.body.v1",
-  "source_sha256": "c3afc0291ae8207a6cc38c2653858b1aa9139f15a3ea17763697dfffbb7a56f3"
+  "source_sha256": "7d682228c4b4e8b3f1b598fe1f3d24b880a72acacf323cdac877031a491417db"
 }

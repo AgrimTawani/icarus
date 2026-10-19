@@ -47,7 +47,7 @@ bool GazeboLidarAdapter::Healthy(std::uint32_t maximum_age_ms) const {
 void GazeboLidarAdapter::OnScan(const gz::msgs::LaserScan& message) {
   if (!running_ || drop_injected_) return;
   RangeScan scan;
-  scan.sensor_id = "gazebo-lidar";
+  scan.sensor_id = "livox-mid360-gazebo-approximation";
   scan.frame = SensorFrame::kBodyFlu;
   scan.captured_at_unix_ms = NowMs();
   scan.received_at_unix_ms = scan.captured_at_unix_ms;
@@ -57,6 +57,8 @@ void GazeboLidarAdapter::OnScan(const gz::msgs::LaserScan& message) {
   const int horizontal = std::max(1, static_cast<int>(message.count()));
   const int vertical =
       std::max(1, static_cast<int>(message.vertical_count()));
+  scan.maximum_elevation_rad = message.vertical_angle_min() +
+                               (vertical - 1) * message.vertical_angle_step();
   scan.points.reserve(message.ranges_size());
   for (int v = 0; v < vertical; ++v) {
     const double elevation = message.vertical_angle_min() +

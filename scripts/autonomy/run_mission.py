@@ -3,14 +3,17 @@
 
 import argparse
 import json
+import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import uuid
+from functools import wraps
 from pathlib import Path
 
 import grpc
@@ -38,6 +41,36 @@ TERMINAL = {
     action_pb2.ACTION_STATE_PREEMPTED,
     action_pb2.ACTION_STATE_ABORTED_BY_SAFETY,
 }
+
+_INFERENCE_LOCK_INIT = threading.Lock()
+
+
+def _visual_view_context(pose, camera='forward_d435i'):
+    yaw = pose.get('attitude', {}).get('yaw_rad')
+    if type(yaw) not in (int, float) or not math.isfinite(yaw):
+        return None
+    return {'camera': camera, 'aircraft_heading_deg': math.degrees(yaw) % 360}
+
+
+def _exclusive_inference(method):
+    """Keep a cancelled mission's in-flight visual call from overlapping the next.
+
+    The lock belongs to the client/session, not one mission graph. Reentrant
+    calls (observe -> inspect) share the same worker and are allowed.
+    """
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with _INFERENCE_LOCK_INIT:
+            if not hasattr(self, "_inference_lock"):
+                self._inference_lock = threading.RLock()
+            lock = self._inference_lock
+        if not lock.acquire(blocking=False):
+            raise RuntimeError("previous visual inference is still completing; no overlapping inference started")
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            lock.release()
+    return guarded
 
 
 def _asks_count_of(text, noun):
@@ -104,8 +137,13 @@ class MissionClient:
         self.episode_outcome = "completed"
         self.episode_score = None
         self.edge_tracker = None
+        self.edge_trackers = {}
+        self.edge_detector_runtime = None
         self.edge_detection_limiter = None
         self.edge_vlm_limiter = None
+        self.target_localizer = None
+        self.target_registry = None
+        self.depth_source = None
         self.simulation_session = None
         self.vision_profile = vision_profile
         self.capabilities = None
@@ -126,11 +164,14 @@ class MissionClient:
             ),
             timeout=5,
         )
-        required = {"arm", "takeoff", "hold", "land", "state_stream"}
+        required = {"arm", "takeoff", "hold", "land", "state_stream", "home_relative_local_targets"}
         available = {item.name for item in capabilities.capabilities if item.supported}
         missing = required - available
         if missing:
-            raise RuntimeError("Drone API lacks required capabilities: " + str(missing))
+            guidance = (". Update and restart the Drone API backend before using this client; "
+                        "the old backend cannot preserve above-home target altitude."
+                        if "home_relative_local_targets" in missing else "")
+            raise RuntimeError("Drone API lacks required capabilities: " + str(sorted(missing)) + guidance)
         self.capabilities = capabilities
         session = None
         candidates = (
@@ -158,159 +199,6 @@ class MissionClient:
         self.action_api = ActionRecorder(self.action_api, self.episode, self)
         self.episode.start_sampling(self)
 
-    def mission_reference(self):
-        """Return committed edge landmarks, never hidden ground-truth counts."""
-        if not self.simulation_session or self.vision_profile != "edge-vision":
-            return {}
-        truth = {}
-        if self.simulation_session.get("simulator") == "gazebo":
-            scenario_path = ROOT / "simulation/scenarios" / (
-                self.simulation_session["scenario"] + ".json")
-            truth = json.loads(scenario_path.read_text()).get("ground_truth", {})
-        reference = self.simulation_session.get("mission_reference", {})
-        result = {"known_landmarks": reference.get(
-                    "known_landmarks", truth.get("known_landmarks", [])),
-                "count_window_s": reference.get(
-                    "count_window_s", truth.get("count_window_s", 1)),
-                "visual_requirements": {
-                    "person_count_requires_detect": True,
-                    "building_inspection_requires_inspect_scene": True,
-                    "detector_classes": ["person"],
-                    "known_landmarks_are_not_detector_classes": True,
-                }}
-        primary_target_id = reference.get(
-            "primary_target_id", truth.get("primary_target_id"))
-        if primary_target_id:
-            result["primary_target_id"] = primary_target_id
-        return result
-
-    def mission_obligations(self, mission, history, observation):
-        """Describe measurable completion obligations without choosing actions.
-
-        Unlike the former demo state machine, this method never emits a
-        required next action.  The DCM independently decomposes the mission;
-        deterministic code only states what evidence completion must contain.
-        """
-        successful_items = [item for item in history
-                            if item.get("outcome") == "SUCCEEDED"]
-        successful = [item["action"] for item in successful_items]
-        reference = self.mission_reference()
-        primary = next((item for item in reference.get("known_landmarks", [])
-                        if item.get("id") == reference.get("primary_target_id")), None)
-        requirements = []
-        if re.search(r"\b(?:arm|take\s*off|takeoff|hover|fly)\b", mission.lower()):
-            altitude = re.search(
-                r"\btake\s*off(?:\s+to)?\s+(\d+(?:\.\d+)?)\s*"
-                r"(?:m|metre|metres|meter|meters)\b", mission.lower())
-            requirements.append({"id": "flight", "status": "satisfied"
-                                 if "takeoff" in successful else "pending",
-                                 "target_altitude_agl_m":
-                                     float(altitude.group(1)) if altitude else None})
-        if _asks_building_inspection(mission):
-            waypoint = (primary or {}).get("inspection_waypoint")
-            goto_index = next((index for index, item in enumerate(successful_items)
-                               if self._reached_waypoint(item, waypoint)), None)
-            inspected = any(
-                item.get("action") == "inspect_scene" and
-                (not waypoint or (goto_index is not None and index > goto_index))
-                for index, item in enumerate(successful_items))
-            requirements.append({"id": "building_visual_inspection",
-                                 "status": "satisfied" if inspected else "pending",
-                                 "target_id": reference.get("primary_target_id"),
-                                 "reviewed_waypoint": waypoint,
-                                 "staged_at_reviewed_waypoint":
-                                     goto_index is not None if waypoint else None})
-        if _asks_hover_over_building(mission):
-            waypoint = (primary or {}).get("hover_waypoint")
-            def reached_reviewed_waypoint(item):
-                arguments = item.get("arguments") or {}
-                return (item.get("action") == "goto" and waypoint and
-                        all(type(arguments.get(key)) in (int, float) and
-                            abs(float(arguments[key]) - float(waypoint[key])) <= 1.0
-                            for key in ("north_m", "east_m", "altitude_agl_m")))
-
-            goto_index = next((index for index, item in enumerate(successful_items)
-                               if reached_reviewed_waypoint(item)), None)
-            hold_after = (goto_index is not None and
-                          any(item["action"] == "hold"
-                              for item in successful_items[goto_index + 1:]))
-            seconds = re.search(r"\bhover\b[^.]{0,35}\bfor\s+(\d+(?:\.\d+)?)\s*seconds?\b",
-                                mission.lower())
-            requirements.append({"id": "building_hover",
-                                 "status": "satisfied" if hold_after else "pending",
-                                 "reviewed_waypoint": waypoint,
-                                 "staged_at_reviewed_waypoint":
-                                     goto_index is not None if waypoint else None,
-                                 "duration_ms": int(float(seconds.group(1)) * 1000)
-                                 if seconds else 3000})
-            evidence_start = (next((index for index, action in enumerate(successful)
-                                    if action == "hold" and goto_index is not None
-                                    and index > goto_index), -1) + 1)
-        else:
-            evidence_start = 0
-        if re.search(r"\borbit\b", mission.lower()):
-            orbit = (primary or {}).get("orbit")
-            orbit_index = next((index for index, item in enumerate(successful_items)
-                                if item.get("action") == "orbit"), None)
-            requirements.append({"id": "inspection_orbit",
-                                 "status": "satisfied" if orbit_index is not None
-                                 else "pending", "reviewed_orbit": orbit})
-            if orbit_index is not None:
-                evidence_start = max(evidence_start, orbit_index + 1)
-        asks_people = (_asks_count_of(mission, "people") or
-                       _asks_count_of(mission, "person") or
-                       _asks_person_detection(mission))
-        if asks_people:
-            waypoint = (primary or {}).get("person_observation_waypoint")
-            staging_index = next(
-                (index for index, item in enumerate(successful_items)
-                 if index >= evidence_start and self._reached_waypoint(item, waypoint)),
-                None)
-            count_start = (staging_index + 1 if staging_index is not None
-                           else evidence_start if not waypoint else len(successful_items))
-            requirements.append({"id": "person_count",
-                                 "status": "satisfied"
-                                 if "detect" in successful[count_start:] else "pending",
-                                 "detector_classes": ["person"],
-                                 "reviewed_waypoint": waypoint,
-                                 "staged_at_reviewed_waypoint":
-                                     staging_index is not None if waypoint else None})
-        hold_duration_ms = _requested_hold_duration_ms(mission)
-        if hold_duration_ms is not None:
-            hold_start = next(
-                (index + 1 for index, item in enumerate(successful_items)
-                 if item.get("action") == "detect"), 0) if asks_people else 0
-            held = any(item.get("action") == "hold" and
-                       int((item.get("arguments") or {}).get("duration_ms", 0)) >=
-                       hold_duration_ms
-                       for item in successful_items[hold_start:])
-            requirements.append({"id": "hold_position",
-                                 "status": "satisfied" if held else "pending",
-                                 "duration_ms": hold_duration_ms})
-        if re.search(r"\breturn\s+(?:to\s+)?home\b", mission.lower()):
-            requirements.append({"id": "return_home",
-                                 "status": "satisfied" if "return_home" in successful
-                                 else "pending"})
-        if not requirements:
-            return {}
-        return {"schema": "icarus.dcm.mission-obligations.v1",
-                "requirements": requirements,
-                "pending": [item["id"] for item in requirements
-                            if item["status"] == "pending"],
-                "authority": "completion_evidence_only"}
-
-    @staticmethod
-    def _reached_waypoint(item, waypoint, tolerance_m=1.0):
-        if not waypoint or item.get("action") != "goto":
-            return False
-        arguments = item.get("arguments") or {}
-        return all(type(arguments.get(key)) in (int, float) and
-                   abs(float(arguments[key]) - float(waypoint[key])) <= tolerance_m
-                   for key in ("north_m", "east_m", "altitude_agl_m"))
-
-    # Compatibility for older callers; semantics are now obligation-only.
-    mission_guidance = mission_obligations
-
     def capability_profile(self):
         """Return bounded facts introspected from the connected deployment."""
         session = self.simulation_session or {}
@@ -328,7 +216,6 @@ class MissionClient:
             "simulator": session.get("simulator", "physical"),
             "simulation_profile": session.get("profile"),
             "controller": session.get("controller", "ArduPilot"),
-            "environment": session.get("environment"),
         }
         if session.get("simulator") == "airsim":
             settings_path = session.get("settings")
@@ -361,9 +248,67 @@ class MissionClient:
                 "mass_kg": mass.get("total_mass_kg"),
                 "gazebo_airframe_equivalent": True,
             }
-            profile["sensors"] = ["forward_rgbd", "downward_rgbd", "lidar",
-                                  "rangefinder", "imu", "gps", "magnetometer",
-                                  "barometer"]
+            profile["sensors"] = [
+                "intel_realsense_d435i_rgbd_and_imu",
+                "logitech_brio_4k_downward_rgb_only",
+                "livox_mid360_lidar_and_imu_uniform_scan_approximation",
+                "ark_flow_range_imu_and_derived_optical_flow",
+                "pixhawk_6x_pro_triple_imu_dual_barometer",
+                "holybro_h_rtk_f9p_gnss_and_compass",
+                "battery_power_model",
+            ]
+            profile["sensor_limitations"] = [
+                "landing depth is a simulation-only proxy, not a BRIO capability",
+                "MID-360 uses a uniform Gazebo lattice, not the Livox non-repetitive pattern",
+                "derived optical flow is recorded but not fused into the ArduPilot EKF",
+                "H-RTK centimeter noise assumes an RTK fix; correction transport is not simulated",
+            ]
+            parameters = {}
+            parameter_path = ROOT / "simulation/parameters/mark4_v2_base.parm"
+            if parameter_path.is_file():
+                for raw_line in parameter_path.read_text().splitlines():
+                    line = raw_line.split("#", 1)[0].strip()
+                    if not line:
+                        continue
+                    name, value = line.split(None, 1)
+                    parameters[name] = value
+            profile["autopilot_parameter_overrides"] = parameters
+
+        parameters = profile.get("autopilot_parameter_overrides") or {}
+
+        def parameter(name, default):
+            try:
+                return float(parameters.get(name, default))
+            except (TypeError, ValueError):
+                return float(default)
+
+        # These are the only parameter-derived numbers useful to the decision
+        # model. The complete parameter snapshot remains in BODY for audit,
+        # while the model sees this compact, unit-labelled interpretation.
+        yaw_ceiling = parameter("ATC_RATE_WPY_MAX", 60.0) or 60.0
+        profile["motion_constraints"] = {
+            "yaw_rate_deg_s": {
+                "minimum_command": 5.0,
+                "slow": 5.0,
+                "default": 30.0,
+                "maximum": min(60.0, yaw_ceiling),
+                "parameter": "ATC_RATE_WPY_MAX",
+            },
+            "climb_rate_mps": {
+                "minimum_command": 0.3,
+                "slow": 0.5,
+                "default": min(2.0, parameter("WP_SPD_UP", 2.0)),
+                "maximum": min(2.0, parameter("WP_SPD_UP", 2.0)),
+                "parameter": "WP_SPD_UP",
+            },
+            "ground_speed_mps": {
+                "minimum_command": 0.5,
+                "slow": 0.5,
+                "default": min(3.0, parameter("WP_SPD", 3.0)),
+                "maximum": min(3.0, parameter("WP_SPD", 3.0)),
+                "parameter": "WP_SPD",
+            },
+        }
         return profile
 
     def assess_mission_completion(self, mission, executed):
@@ -398,49 +343,15 @@ class MissionClient:
                         f"person count is {observed!r}; expected {expected} in this deterministic scenario")
             else:
                 observed = person_results[-1].get("unique_person_count")
-                truth = (self.simulation_session.get("mission_reference", {})
-                         .get("person_count_ground_truth") or {})
-                expected = truth.get("expected_visible_count")
                 report["observed_person_count"] = observed
-                if (type(expected) is int and expected >= 0
-                        and truth.get("review_status") == "reviewed"
-                        and isinstance(truth.get("camera_id"), str)
-                        and truth.get("camera_id")):
-                    report["expected_person_count"] = expected
-                    report["ground_truth_camera_id"] = truth["camera_id"]
-                    if observed == expected:
-                        report["satisfied"].append("verified_person_count")
-                    else:
-                        report["reasons"].append(
-                            f"person count is {observed!r}; reviewed AirSim truth is {expected}")
-                else:
-                    report["verification"] = "inconclusive_no_airsim_ground_truth"
-                    report["reasons"].append(
-                        "AirSim person count cannot be verified without reviewed scene ground truth")
-            reference = self.mission_reference()
-            primary = next((item for item in reference.get("known_landmarks", [])
-                            if item.get("id") == reference.get("primary_target_id")), None)
-            observation_waypoint = (primary or {}).get("person_observation_waypoint")
+                report["verification"] = "inconclusive_no_airsim_ground_truth"
+                report["reasons"].append(
+                    "AirSim person count requires independent post-mission scoring truth")
             detect_index = max((index for index, item in enumerate(executed)
                                 if item["action"] == "detect" and
                                 item["outcome"] == "SUCCEEDED" and
                                 "person" in item.get("arguments", {}).get("classes", [])),
                                default=None)
-            if observation_waypoint:
-                report["required"].append("person_observation_waypoint")
-                orbit_before = max((index for index, item in enumerate(executed)
-                                    if item["action"] == "orbit" and
-                                    item["outcome"] == "SUCCEEDED"), default=-1)
-                stage_index = next((index for index, item in enumerate(executed)
-                                    if item.get("outcome") == "SUCCEEDED" and
-                                    index > orbit_before and
-                                    self._reached_waypoint(item, observation_waypoint)), None)
-                if stage_index is not None and detect_index is not None and \
-                        detect_index > stage_index:
-                    report["satisfied"].append("person_observation_waypoint")
-                else:
-                    report["reasons"].append(
-                        "person count was not collected after the reviewed camera waypoint")
             if "orbit" in text:
                 report["required"].append("inspection_orbit")
                 orbit_index = next((index for index, item in enumerate(executed)
@@ -452,62 +363,22 @@ class MissionClient:
         if asks_buildings:
             report["required"].append("visual_building_count")
             report["reasons"].append(
-                "stock YOLO11n has no building class; use a committed building landmark instead")
+                "stock YOLO11n has no building class; use current-camera VLM inspection")
         if asks_building_inspection:
             report["required"].append("building_visual_inspection")
-            reference = self.mission_reference()
-            primary = next((item for item in reference.get("known_landmarks", [])
-                            if item.get("id") == reference.get("primary_target_id")), None)
-            waypoint = (primary or {}).get("inspection_waypoint")
-            goto_index = next((index for index, item in enumerate(executed)
-                               if item.get("outcome") == "SUCCEEDED" and
-                               self._reached_waypoint(item, waypoint)), None)
             inspect_index = next((index for index, item in enumerate(executed)
                                   if item["action"] == "inspect_scene" and
-                                  item["outcome"] == "SUCCEEDED" and
-                                  (not waypoint or (goto_index is not None and
-                                                    index > goto_index))), None)
+                                  item["outcome"] == "SUCCEEDED"), None)
             if inspect_index is not None:
                 report["satisfied"].append("building_visual_inspection")
             else:
                 report["reasons"].append(
-                    "requested building inspection lacks inspect_scene evidence at its reviewed waypoint")
+                    "requested building inspection lacks current-camera inspect_scene evidence")
         if asks_hover_over_building:
             report["required"].append("building_hover")
-            reference = self.mission_reference()
-            primary_id = reference.get("primary_target_id")
-            primary = next((item for item in reference.get("known_landmarks", [])
-                            if item.get("id") == primary_id), None)
-            waypoint = (primary or {}).get("hover_waypoint")
-            if not waypoint:
-                report["reasons"].append(
-                    "requested building hover has no reviewed hover waypoint")
-            else:
-                goto_index = next((index for index, item in enumerate(executed)
-                                   if item["action"] == "goto"
-                                   and item["outcome"] == "SUCCEEDED"
-                                   and all(abs(float(item["arguments"].get(key, 1e9))
-                                               - float(waypoint[key])) <= 1.0
-                                           for key in ("north_m", "east_m",
-                                                       "altitude_agl_m"))), None)
-                hold_index = next((index for index, item in enumerate(executed)
-                                   if item["action"] == "hold"
-                                   and item["outcome"] == "SUCCEEDED"
-                                   and goto_index is not None and index > goto_index), None)
-                if goto_index is None or hold_index is None:
-                    report["reasons"].append(
-                        "requested building hover did not reach the reviewed waypoint and hold")
-                else:
-                    report["satisfied"].append("building_hover")
-                    if asks_people:
-                        detect_after = any(
-                            index > hold_index and item["action"] == "detect"
-                            and item["outcome"] == "SUCCEEDED"
-                            and "person" in item.get("arguments", {}).get("classes", [])
-                            for index, item in enumerate(executed))
-                        if not detect_after:
-                            report["reasons"].append(
-                                "requested person count was not observed after the building hover")
+            report["reasons"].append(
+                "visual-target hover requires operator-grounded 3-D coordinates; "
+                "no environment waypoint is injected")
         if hold_duration_ms is not None:
             report["required"].append("hold_position")
             detect_index = max((index for index, item in enumerate(executed)
@@ -536,18 +407,22 @@ class MissionClient:
     def _capture_rgb(self, output, *, camera="0"):
         """Capture one ephemeral frame from the active simulator."""
         if self.simulation_session.get("simulator") == "airsim":
+            camera = {"forward_d435i": "0", "downward_brio": "3"}.get(camera, camera)
             command = [str(ROOT / "scripts/capture-airsim-frame"),
                        "--output", str(output), "--camera", camera]
             source = "airsim_ephemeral_capture"
         else:
             topics = {
-                "0": ("forward_rgbd", "/icarus/sensors/rgbd/image"),
-                "forward_rgbd": ("forward_rgbd", "/icarus/sensors/rgbd/image"),
-                "3": ("downward_rgbd", "/icarus/sensors/rgbd_down/image"),
-                "downward_rgbd": ("downward_rgbd", "/icarus/sensors/rgbd_down/image"),
+                "0": ("forward_d435i", "/icarus/sensors/d435i/image"),
+                "forward_d435i": ("forward_d435i", "/icarus/sensors/d435i/image"),
+                "forward_rgbd": ("forward_d435i", "/icarus/sensors/d435i/image"),
+                "3": ("downward_brio", "/icarus/sensors/brio_down"),
+                "downward_brio": ("downward_brio", "/icarus/sensors/brio_down"),
+                "downward_rgbd": ("downward_brio", "/icarus/sensors/brio_down"),
             }
             if camera not in topics:
-                raise ValueError("Gazebo camera must be 0/forward_rgbd or 3/downward_rgbd")
+                raise ValueError(
+                    "Gazebo camera must be 0/forward_d435i or 3/downward_brio")
             camera_id, topic = topics[camera]
             command = [str(ROOT / "scripts/capture-camera-frame"),
                        "--output", str(output),
@@ -570,6 +445,8 @@ class MissionClient:
         if not response.granted:
             raise RuntimeError("Control denied: " + response.message)
         self.lease_id = response.authority.lease_id
+        self.lease_expires_at_unix_ms = response.authority.expires_at_unix_ms
+        self.renewal_error = None
         self.renewal_thread = threading.Thread(target=self._renew, daemon=True)
         self.renewal_thread.start()
 
@@ -577,7 +454,8 @@ class MissionClient:
         # AuthorityManager caps leases at 10 s. Renew well inside that window;
         # waiting exactly 10 s races expiry and would make a healthy client
         # indistinguishable from a dead DCM to the safety supervisor.
-        while not self.stop_renewal.wait(3):
+        delay_s = 3.0
+        while not self.stop_renewal.wait(delay_s):
             try:
                 response = self.authority_api.RenewControl(
                     drone_api_pb2.RenewControlRequest(
@@ -588,9 +466,23 @@ class MissionClient:
                     timeout=5,
                 )
                 if not response.granted:
+                    self.renewal_error = response.message
                     self.stop_renewal.set()
-            except grpc.RpcError:
-                self.stop_renewal.set()
+                else:
+                    self.lease_expires_at_unix_ms = response.authority.expires_at_unix_ms
+                    self.renewal_error = None
+                    delay_s = 3.0
+            except grpc.RpcError as error:
+                self.renewal_error = str(error)
+                # A transient RPC failure does not mean a still-valid lease
+                # was revoked. Retry only within the server-confirmed window;
+                # never reacquire control over a manual operator.
+                remaining_ms = self.lease_expires_at_unix_ms - int(time.time() * 1000)
+                if remaining_ms <= 250 or error.code() not in (
+                        grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.DEADLINE_EXCEEDED):
+                    self.stop_renewal.set()
+                else:
+                    delay_s = min(0.25, remaining_ms / 2000.0)
 
     def state(self):
         return self.state_api.GetState(
@@ -616,36 +508,98 @@ class MissionClient:
             trace_id=self.trace_id,
         )
 
-    def detect(self, classes):
+    def _edge_manifest(self):
+        return Path(os.environ.get("EDGE_VISION_MANIFEST") or (Path.home() / "models/edge/MANIFEST.json"))
+
+    def _edge_detector(self):
+        from python.perception.edge_vision import EdgeDetectorRuntime
+        if getattr(self, "edge_detector_runtime", None) is None:
+            self.edge_detector_runtime = EdgeDetectorRuntime(self._edge_manifest())
+        return self.edge_detector_runtime
+
+    @_exclusive_inference
+    def prepare_camera_detector(self):
+        """Warm the advertised camera tool before accepting a flight mission.
+
+        Importing the ML stack and initializing kernels in flight competes
+        with the sensor/control services. This performs no camera observation
+        and does not interpret the operator's mission.
+        """
+        if self.vision_profile != "edge-vision":
+            return
+        started = time.monotonic()
+        result = self._edge_detector().prepare()
+        if self.episode is not None:
+            self.episode.record("mission_resource_preparation", {
+                "tool": "yolo", "seconds": time.monotonic() - started, **result})
+        return result
+
+    @_exclusive_inference
+    def prepare_mission_resources(self, plan, echo=print):
+        """Prepare declared detector operations, never infer mission meaning."""
+        def needs_detector(value):
+            if isinstance(value, dict):
+                return (value.get("tool") == "yolo" or value.get("action") == "detect"
+                        or value.get("kind") == "detect"
+                        or any(needs_detector(child) for child in value.values()))
+            return isinstance(value, list) and any(needs_detector(child) for child in value)
+        operations = plan.get("adaptive_nodes") or plan.get("objectives") or []
+        if self.vision_profile != "edge-vision" or not needs_detector(operations):
+            return
+        echo("Preparing the camera detector before mission execution…")
+        started = time.monotonic()
+        result = self._edge_detector().prepare()
+        if self.episode is not None:
+            self.episode.record("mission_resource_preparation", {
+                "tool": "yolo", "seconds": time.monotonic()-started, **result})
+        echo("Camera detector ready.")
+
+    @_exclusive_inference
+    def detect(self, classes, *, window_s=None, camera=None):
         """Run a simulator camera inspection; never sends a flight command."""
         if self.episode is None or not self.episode.session:
             raise RuntimeError("semantic detection requires an active simulator episode")
+        from python.perception.classes import YOLO_CLASSES
         from python.perception.vision import detect_image, normalize_classes
 
         classes = normalize_classes(classes)
+        if self.vision_profile == "edge-vision":
+            unsupported = sorted(set(classes) - YOLO_CLASSES)
+            if unsupported:
+                raise ValueError(
+                    "Configured YOLO detector does not support classes: "
+                    + ", ".join(unsupported)
+                    + "; route these requests to inspect_scene/VLM")
         if (self.vision_profile == "edge-vision" and
                 self.simulation_session.get("simulator") == "gazebo" and
-                "person" in classes):
-            return self._edge_count_window(classes)
+                "person" in classes and camera is None):
+            return self._edge_count_window(classes, duration_s=window_s)
         # Pixels are inspection input, not episode data. Capture into an
         # ephemeral directory, retain only the image hash and structured
         # detector output, then remove the frame before returning.
         with tempfile.TemporaryDirectory(prefix="icarus-vision-") as temporary:
             suffix = ".png" if self.simulation_session.get("simulator") == "airsim" else ".ppm"
             output = Path(temporary) / ("frame" + suffix)
-            source = self._capture_rgb(output)
+            pose_before = MessageToDict(self.state(), preserving_proto_field_name=True) if camera else None
+            source = self._capture_rgb(output, camera=camera or "0")
+            captured_ms = int(time.time() * 1000)
+            pose_after = MessageToDict(self.state(), preserving_proto_field_name=True) if camera else None
+            metadata_path = output.with_suffix(output.suffix + ".json")
+            if metadata_path.is_file():
+                captured_ms = json.loads(metadata_path.read_text()).get("captured_at_unix_ms", captured_ms)
             if self.vision_profile == "edge-vision":
                 from python.perception.edge_vision import (
                     RateLimiter,
                     UniqueTrackCounter,
                     detect_edge_image,
                 )
-                if self.edge_tracker is None:
-                    self.edge_tracker = UniqueTrackCounter()
+                if self.edge_detection_limiter is None:
                     self.edge_detection_limiter = RateLimiter(interval_s=0.2)
                 self.edge_detection_limiter.admit()
-                result = detect_edge_image(output, Path.home() / "models/edge/MANIFEST.json",
-                                           self.edge_tracker, max_fps=5)
+                trackers = self.edge_trackers
+                tracker = trackers.setdefault(camera or "forward_d435i", UniqueTrackCounter())
+                result = detect_edge_image(output, self._edge_manifest(),
+                                           tracker, max_fps=5, runtime=self._edge_detector())
             else:
                 result = detect_image(output, classes, Path.home() / "models/vision/MANIFEST.json")
         if "image" in result:
@@ -654,21 +608,39 @@ class MissionClient:
         result["source"] = source
         # Keep the model's next observation bounded: it needs count evidence,
         # not a potentially large box list or image payload.
-        summary = ({"unique_person_count": result["unique_person_count"],
-                    "classes": result["classes"], "observed_at_unix_ms": result["observed_at_unix_ms"],
-                    "flight_authority": False}
-                   if result.get("schema") == "icarus.edge.yolo.v1" else
-                   {"counts": result["counts"], "requested_classes": result["requested_classes"],
-                    "observed_at_unix_ms": result["observed_at_unix_ms"]})
+        counts = {}
+        for detection in result.get("detections", []):
+            label = detection.get("class")
+            if label in classes:
+                counts[label] = counts.get(label, 0) + 1
+        # Historical tracker totals remain in semantic_detection logs, never in
+        # this single-view result: they cannot establish a current condition.
+        summary = ({"count_scope": "current_camera_frame",
+                "counts": {name: counts.get(name, 0) for name in classes},
+                "classes": result["classes"], "requested_classes": classes,
+                "observed_at_unix_ms": result["observed_at_unix_ms"],
+                "flight_authority": False}
+               if result.get("schema") == "icarus.edge.yolo.v1" else
+               {"counts": result["counts"], "requested_classes": result["requested_classes"],
+                "observed_at_unix_ms": result["observed_at_unix_ms"]})
         self.episode.record("semantic_detection", result)
+        if "confidence_threshold" in result:
+            summary["confidence_threshold"] = result["confidence_threshold"]
+        summary["captured_at_unix_ms"] = captured_ms
+        summary["camera"] = camera or "forward_d435i"
+        if camera:
+            from python.perception.capture_pose import bracket_pose
+            summary["capture_pose"], summary["capture_pose_quality"] = bracket_pose(pose_before, pose_after)
         return summary
 
-    def _edge_count_window(self, classes):
+    def _edge_count_window(self, classes, duration_s=None):
         """Read the capped observer for the scenario's declared count window."""
         from python.perception.edge_vision import summarize_observer_window
 
         scenario_path = ROOT / "simulation/scenarios" / (self.simulation_session["scenario"] + ".json")
-        duration_s = float(json.loads(scenario_path.read_text())["ground_truth"]["count_window_s"])
+        if duration_s is None:
+            duration_s = float(json.loads(scenario_path.read_text())["ground_truth"]["count_window_s"])
+        duration_s = float(duration_s)
         observer_path = Path(self.simulation_session["run_directory"]) / "edge_vision.jsonl"
         started_ms = int(time.time() * 1000)
         deadline = time.monotonic() + duration_s
@@ -689,11 +661,14 @@ class MissionClient:
         result.update({"observed_at_unix_ms": finished_ms, "count_window_s": duration_s,
                        "window_started_unix_ms": started_ms, "window_finished_unix_ms": finished_ms})
         self.episode.record("semantic_detection", result)
-        return {"unique_person_count": result["unique_person_count"], "classes": list(classes),
+        return {"unique_person_count": result["unique_person_count"],
+                "counts": result.get("counts", {"person": result["unique_person_count"]}),
+                "classes": list(classes), "requested_classes": list(classes),
                 "observed_at_unix_ms": finished_ms, "count_window_s": duration_s,
                 "count_method": result["count_method"], "camera_evidence": result["camera_evidence"],
                 "flight_authority": False}
 
+    @_exclusive_inference
     def assess_landing_zone(self):
         """Run the non-flight depth boundary on the active simulator source.
 
@@ -703,6 +678,8 @@ class MissionClient:
         """
         if self.episode is None or not self.episode.session:
             raise RuntimeError("landing assessment requires an active simulator episode")
+        if self.simulation_session.get("simulator") != "gazebo":
+            raise RuntimeError("calibrated landing depth proxy is Gazebo-only")
         import numpy as np
 
         from python.perception.landing_zone import (
@@ -714,11 +691,14 @@ class MissionClient:
 
         with tempfile.TemporaryDirectory(prefix="icarus-depth-") as temporary:
             output = Path(temporary) / "depth.npy"
+            pose_before = MessageToDict(self.state(), preserving_proto_field_name=True)
             subprocess.run(
                 [str(ROOT / "scripts/capture-depth-frame"), "--output", str(output),
                  "--topic", source["topic"]],
                 cwd=ROOT, check=True, timeout=15)
             depth = np.load(output, allow_pickle=False)
+            captured_ms = int(time.time() * 1000)
+            pose_after = MessageToDict(self.state(), preserving_proto_field_name=True)
             result = assess_landing_zone(
                 depth, optical_axis_body_frd=source["optical_axis_body_frd"],
                 horizontal_fov_deg=source["horizontal_fov_deg"],
@@ -728,14 +708,49 @@ class MissionClient:
                                "width": int(depth.shape[1]),
                                "height": int(depth.shape[0])}
         self.episode.record("semantic_landing_assessment", result)
-        return {key: result[key] for key in ("assessable", "suitable", "reason",
-                                              "quality", "observed_at_unix_ms")}
+        result["captured_at_unix_ms"] = captured_ms
+        result["simulation_only"] = True
+        from python.perception.capture_pose import bracket_pose
+        result["capture_pose"], result["capture_pose_quality"] = bracket_pose(pose_before, pose_after)
+        return result
 
-    def inspect_scene(self, question):
+    def capture_view(self, camera="forward_d435i"):
+        """Capture one forward frame now for a later ``inspect_scene(view=...)``.
+
+        Used at orbit viewpoints: the frame is taken while the vehicle holds
+        the viewpoint and the (slow) VLM question about it runs afterwards.
+        The pixels stay in a private temporary directory until that call
+        consumes them; only the image hash and the answer reach the episode.
+        """
+        if self.episode is None or not self.episode.session:
+            raise RuntimeError("view capture requires an active simulator episode")
+        directory = tempfile.mkdtemp(prefix="icarus-view-")
+        suffix = ".png" if self.simulation_session.get("simulator") == "airsim" else ".ppm"
+        output = Path(directory) / ("frame" + suffix)
+        try:
+            capture_started_ms = int(time.time() * 1000)
+            pose = MessageToDict(self.state(), preserving_proto_field_name=True)
+            source = self._capture_rgb(output, camera=camera)
+            after = MessageToDict(self.state(), preserving_proto_field_name=True)
+        except BaseException:
+            shutil.rmtree(directory, ignore_errors=True)
+            raise
+        from python.perception.capture_pose import bracket_pose
+        capture_pose, pose_quality = bracket_pose(pose, after)
+        metadata_path = output.with_suffix(output.suffix + ".json")
+        metadata = json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+        return {"path": str(output), "directory": directory, "source": source,
+                "camera": camera, "capture_started_at_unix_ms": capture_started_ms,
+                "capture_pose": capture_pose, "capture_pose_quality": pose_quality,
+                "captured_at_unix_ms": metadata.get("captured_at_unix_ms", int(time.time() * 1000))}
+
+    @_exclusive_inference
+    def inspect_scene(self, question, *, view=None, structured=False, result_type=None):
         """Run the pinned VLM on one ephemeral simulator camera frame.
 
         This method intentionally owns neither a command context nor an action
-        RPC. It is a visual evidence boundary only.
+        RPC. It is a visual evidence boundary only.  ``view`` (from
+        ``capture_view``) answers about that earlier frame, then deletes it.
         """
         if self.episode is None or not self.episode.session:
             raise RuntimeError("visual inspection requires an active simulator episode")
@@ -745,7 +760,12 @@ class MissionClient:
         with tempfile.TemporaryDirectory(prefix="icarus-vlm-") as temporary:
             suffix = ".png" if self.simulation_session.get("simulator") == "airsim" else ".ppm"
             output = Path(temporary) / ("frame" + suffix)
-            source = self._capture_rgb(output)
+            if view is not None:
+                shutil.move(view["path"], output)
+                shutil.rmtree(view["directory"], ignore_errors=True)
+                source = view["source"]
+            else:
+                source = self._capture_rgb(output)
             if self.vision_profile == "edge-vision":
                 from python.perception.edge_vision import RateLimiter
                 if self.edge_vlm_limiter is None:
@@ -756,49 +776,392 @@ class MissionClient:
                 # bounded question, avoiding VRAM contention and the inaccurate
                 # 256M-model answers observed during live acceptance.
                 result = inspect_image(
-                    output, question, Path.home() / "models/edge/MANIFEST.json",
-                    timeout_s=45.0, gpu_layers=0)
+                    output, question, self._edge_manifest(),
+                    timeout_s=45.0, gpu_layers=0,
+                    view_context=_visual_view_context(view.get('capture_pose', {}), view.get('camera', 'forward_d435i')) if view else None,
+                    **({"structured": True, "result_type": result_type} if structured or result_type else {}))
             else:
-                result = inspect_image(output, question, Path.home() / "models/vision/MANIFEST.json")
+                result = inspect_image(output, question, Path.home() / "models/vision/MANIFEST.json",
+                                       **({"structured": True, "result_type": result_type} if structured or result_type else {}))
         result["image"]["source"] = source
+        if view is not None:
+            result["image"]["captured_at_unix_ms"] = view["captured_at_unix_ms"]
         self.episode.record("semantic_visual_inspection", result)
-        return {key: result[key] for key in ("question", "answer", "latency_ms",
+        summary = {key: result[key] for key in ("question", "answer", "latency_ms",
                                               "observed_at_unix_ms", "flight_authority")}
+        summary.update({key: result[key] for key in (
+            "result_type", "found", "count", "value", "validity", "error_code",
+            "uncertainty", "count_scope") if key in result})
+        summary["image"] = result["image"]
+        if view is not None:
+            summary.update({key: view[key] for key in (
+                "captured_at_unix_ms", "camera", "capture_pose",
+                "capture_started_at_unix_ms", "capture_pose_quality") if key in view})
+        return summary
 
-    def wait_action(self, receipt, timeout: int):
+    @_exclusive_inference
+    def observe_mission(self, observation):
+        """Camera-specific evidence for mission conditions; no flight authority.
+
+        A VLM returns a typed boolean/count or null in JSON. Malformed output
+        stays unknown; prose is never converted into a flight condition.
+        """
+        tool, camera = observation["tool"], observation["camera"]
+        capture_motion = observation.get("capture_motion")
+        if capture_motion not in {None, "stationary"}:
+            raise ValueError("observation capture_motion must be stationary when specified")
+        if capture_motion == "stationary":
+            # A stationary observation is a capture constraint, not a Hold
+            # action. Confirm that any earlier flight command reached a
+            # terminal state, then capture through the normal serialized
+            # evidence boundary without issuing a new control command.
+            self.ensure_action_settled()
+        result_type = observation.get("result_type", "boolean")
+        if result_type not in {"boolean", "count"}:
+            raise ValueError("observation result_type must be boolean or count")
+        if result_type == "count" and observation.get("count_scope", "visible_frame") != "visible_frame":
+            raise ValueError("count observations support only a single visible frame")
+        if tool == "landing" and result_type != "boolean":
+            raise ValueError("landing assessment does not produce a count")
+        if tool == "landing":
+            if camera != "downward_brio":
+                raise ValueError("landing assessment requires the downward view")
+            pose = MessageToDict(self.state(), preserving_proto_field_name=True)
+            result = self.assess_landing_zone()
+            result.setdefault("capture_pose", {key: pose.get(key) for key in (
+                "local_position_ned", "attitude", "relative_altitude_m",
+                "observed_at_unix_ms")})
+        elif tool == "yolo":
+            from python.perception.classes import YOLO_CLASSES
+            label = observation["query"]
+            if label not in YOLO_CLASSES:
+                raise ValueError("YOLO observation query must be a supported class; use VLM otherwise")
+            pose = MessageToDict(self.state(), preserving_proto_field_name=True)
+            result = self.detect([label], camera=camera)
+            result.setdefault("capture_pose", {key: pose.get(key) for key in (
+                "local_position_ned", "attitude", "relative_altitude_m",
+                "observed_at_unix_ms")})
+            count = result.get("counts", {}).get(label)
+            valid = type(count) is int and count >= 0
+            result.update({"count": count if valid else None,
+                           "found": count > 0 if valid else None,
+                           "value": (count if observation.get("result_type") == "count"
+                                     else count > 0) if valid else None,
+                           "result_type": observation.get("result_type", "boolean"),
+                           "validity": "valid" if valid else "unknown",
+                           "count_scope": "visible_frame"})
+            if not valid:
+                result["error_code"] = "missing_count"
+        elif tool == "vlm":
+            from python.perception.vlm import VlmInferenceError, decode_measurement
+            result_type = observation.get("result_type", "boolean")
+            view = self.capture_view(camera)
+            try:
+                result = self.inspect_scene(observation["query"], view=view,
+                                            structured=True, result_type=result_type)
+                # Decode at this boundary as well for alternate inspection backends.
+                if "validity" not in result:
+                    result.update(decode_measurement(result.get("answer"), result_type))
+                elif result.get("validity") == "valid":
+                    decoded = decode_measurement(result.get("answer"), result_type)
+                    result["answer"] = decoded.get("answer", result.get("answer", ""))
+            except (VlmInferenceError, FileNotFoundError, TimeoutError) as exc:
+                result = {"validity": "error", "result_type": result_type,
+                          "found" if result_type == "boolean" else "count": None,
+                          "value": None, "error_code": getattr(exc, "code", "unavailable"),
+                          "uncertainty": str(exc),
+                          "observed_at_unix_ms": int(time.time() * 1000)}
+                result.update({key: view[key] for key in (
+                    "captured_at_unix_ms", "camera", "capture_pose",
+                    "capture_started_at_unix_ms", "capture_pose_quality") if key in view})
+            finally:
+                shutil.rmtree(view["directory"], ignore_errors=True)
+        else:
+            raise ValueError("unknown observation tool")
+        result.update({"tool": tool, "camera": camera, "query": observation["query"],
+                       "flight_authority": False, "ground_truth_verified": False})
+        if capture_motion == "stationary":
+            result["capture_motion"] = "stationary"
+            result["capture_constraint"] = {
+                "enforcement": "serialized_capture_after_terminal_flight_action",
+                "issued_flight_command": False,
+                **({"pose_bracket": result["capture_pose_quality"]}
+                   if "capture_pose_quality" in result else {}),
+            }
+        self.episode.record("mission_observation", result)
+        return result
+
+    def _depth_source(self):
+        if getattr(self, "depth_source", None) is None:
+            if not self.simulation_session or self.simulation_session.get("simulator") != "gazebo":
+                return None
+            from python.perception.depth_feedback import GazeboDepthSource
+            self.depth_source = GazeboDepthSource(self.simulation_session,
+                calibration_path=ROOT / "config/perception/target_localization.json")
+        return self.depth_source
+
+    def depth_feedback(self):
+        source = self._depth_source()
+        if source is None:
+            return {"available": False, "reason": "No calibrated depth transport connected"}
+        return source.summary()
+
+    def _targets(self):
+        if getattr(self, "target_registry", None) is None:
+            from python.perception.target_registry import TargetRegistry
+            self.target_registry = TargetRegistry()
+        return self.target_registry
+
+    def refresh_target(self, target_id):
+        result = self._targets().refresh(target_id, self._perception_with_obstacles(),
+            MessageToDict(self.state(), preserving_proto_field_name=True))
+        if self.episode is not None:
+            self.episode.record("target_tracking", result)
+        return result
+
+    def target_feedback(self):
+        return self._targets().summaries()
+
+    def perception_with_obstacles(self):
+        """PerceptionSummary with the live LiDAR clusters, as a dict."""
+        return self._perception_with_obstacles()
+
+    def _perception_with_obstacles(self):
+        perception_api = drone_api_pb2_grpc.PerceptionServiceStub(self.channel)
+        return MessageToDict(perception_api.GetPerception(
+            drone_api_pb2.GetPerceptionRequest(
+                session_id=self.session_id, vehicle_id="icarus-01",
+                include_nearby_obstacles=True), timeout=5),
+            preserving_proto_field_name=True)
+
+    @_exclusive_inference
+    def localize_target(self, description, *, new_target=False):
+        """Measure where an operator-described visible object is.
+
+        The pinned VLM only decides which image region matches the description
+        (a grounding box, or no match).  Bearing comes from camera geometry;
+        range, centre and footprint come from Drone API LiDAR clusters and the
+        vehicle state.  Like inspect_scene this owns no command context or
+        action RPC, so it cannot move the vehicle.  Repeated calls for the same
+        description fuse views (e.g. after separately authorized yaw actions)
+        into agreement and spread metrics; ``new_target`` discards old views.
+        """
+        if self.episode is None or not self.episode.session:
+            raise RuntimeError("target localization requires an active simulator episode")
+        if self.simulation_session.get("simulator") != "gazebo":
+            raise RuntimeError("target localization camera calibration is defined "
+                               "only for the Gazebo D435i")
+        from python.perception.target_localization import (
+            TargetLocalizer,
+            load_localization_config,
+            normalize_description,
+            visual_grounding_description,
+        )
+        from python.perception.vlm import ground_description
+
+        description = normalize_description(description)
+        grounding_target = visual_grounding_description(description)
+        if getattr(self, "target_localizer", None) is None:
+            self.target_localizer = TargetLocalizer(load_localization_config(
+                ROOT / "config/perception/target_localization.json"))
+        if new_target:
+            self.target_localizer.reset(description)
+        camera = self.target_localizer.config["camera"]
+        manifest = (self._edge_manifest()
+                    if self.vision_profile == "edge-vision"
+                    else Path.home() / "models/vision/MANIFEST.json")
+        with tempfile.TemporaryDirectory(prefix="icarus-target-") as temporary:
+            output = Path(temporary) / "frame.ppm"
+            # The pose and LiDAR snapshot bracket the frame so geometry refers
+            # to the moment the pixels were taken, not the end of VLM inference.
+            state = MessageToDict(self.state(), preserving_proto_field_name=True)
+            source = self._capture_rgb(output, camera=camera["gazebo_camera"])
+            captured_ms = int(time.time() * 1000)
+            try:
+                depth_source = self._depth_source()
+                depth_frame = depth_source.snapshot() if depth_source else None
+            except (ImportError, ValueError, KeyError, RuntimeError):
+                depth_frame = None  # LiDAR localization remains available; context reports missing depth.
+            perception = self._perception_with_obstacles()
+            from python.perception.edge_vision import RateLimiter
+            if getattr(self, "edge_vlm_limiter", None) is None:
+                self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
+            self.edge_vlm_limiter.admit()
+            # CPU-only for the same reason as inspect_scene: keep the flight
+            # LLM's VRAM uncontended on the 6 GB device.
+            grounding = ground_description(
+                output, grounding_target["visual_query"], manifest,
+                timeout_s=90.0, gpu_layers=0, view_context=_visual_view_context(state))
+        estimate = self.target_localizer.observe(
+            description,
+            vlm_text=grounding["grounding_text"] if grounding["present"] else None,
+            state=state, perception=perception,
+            image_captured_at_unix_ms=captured_ms,
+            refreshed_perception=self._perception_with_obstacles(),
+            provenance=[
+                {"sensor": camera["sensor_id"], "source": source,
+                 "image_sha256": grounding["image"]["sha256"]},
+                {"sensor": self.target_localizer.config["lidar"]["sensor_id"],
+                 "source": "drone_api_perception_nearby_obstacles"},
+                {"model": "vlm", "runtime": grounding["runtime"]},
+            ])
+        estimate["vlm"] = {key: grounding[key] for key in (
+            "present", "presence_answer", "grounding_text", "latency_ms",
+            "model_load_ms")}
+        estimate["vlm"]["visual_query"] = grounding_target["visual_query"]
+        estimate["vlm"]["view_selector"] = grounding_target["view"]
+        estimate["vlm"]["view_context"] = grounding.get('view_context')
+        estimate["latency_ms"] = int(time.time() * 1000) - captured_ms
+        if depth_frame is not None and estimate.get("box_1000"):
+            estimate["depth_at_capture"] = depth_frame.region(estimate["box_1000"], now_unix_ms=captured_ms)
+            estimate["depth_at_capture"]["association"] = "VLM-selected RGB region; calibration alignment required; mixed foreground/background possible"
+        estimate = self._targets().register(estimate, new_target=new_target)
+        self.episode.record("semantic_target_localization", estimate)
+        return estimate
+
+    def ensure_action_settled(self):
+        """Reconcile a broken status stream before any subsequent command.
+
+        A stream deadline is not an action cancellation. Query first so a
+        completed action is never interrupted; otherwise establish safe hold
+        with CancelAction and confirm the original identity is terminal.
+        """
+        receipt = getattr(self, "_unsettled_action", None)
+        if receipt is None:
+            return None
+        request = drone_api_pb2.GetActionStatusRequest(
+            session_id=self.session_id, action_id=receipt.action_id)
+        diagnostic = {"action_id": receipt.action_id, "settled": False}
+        try:
+            status = self.action_api.GetActionStatus(request, timeout=3)
+            if status.action_id != receipt.action_id:
+                raise RuntimeError("status identity mismatch during action reconciliation")
+            if status.state not in TERMINAL:
+                reply = self.action_api.CancelAction(action_pb2.CancelActionRequest(
+                    context=self.context(f"stream-cancel-{uuid.uuid4().hex[:8]}"),
+                    action_id=receipt.action_id), timeout=12)
+                diagnostic["cancel_disposition"] = action_pb2.ActionState.Name(reply.disposition)
+                # Cancellation receipts are not a replacement for the original
+                # action's terminal status; a racing completion is valid too.
+                deadline = time.monotonic() + 5
+                while True:
+                    status = self.action_api.GetActionStatus(request, timeout=3)
+                    if status.action_id != receipt.action_id:
+                        raise RuntimeError("status identity mismatch after cancellation")
+                    if status.state in TERMINAL:
+                        break
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError("original action remains active after cancellation")
+                    time.sleep(.1)
+            diagnostic["terminal_state"] = action_pb2.ActionState.Name(status.state)
+            diagnostic["settled"] = True
+            self._unsettled_action = None
+            return status
+        except Exception as failure:
+            diagnostic["error"] = str(failure)
+            raise RuntimeError(
+                f"Action {receipt.action_id} is not confirmed settled; "
+                f"no replacement flight command will be sent: {failure}") from failure
+        finally:
+            episode = getattr(self, "episode", None)
+            if episode is not None:
+                episode.record("action_stream_reconciliation", diagnostic)
+
+    def wait_action(self, receipt, timeout: int, on_status=None,
+                    observer_errors_fatal=False, return_failure=False):
+        """Wait through execution plus transport/mode-transition allowance.
+
+        Broken streams are reconciled against the server and the original
+        command is settled before the caller can attempt recovery.
+        """
         if receipt.disposition == action_pb2.ACTION_STATE_REJECTED:
             raise RuntimeError(f"Action rejected: {receipt.message}")
-        deadline = time.monotonic() + timeout
+        # Requested execution budgets can equal the executor's physical timer
+        # (RTL:120s). Allow mode transition (10s) and delivery overhead without
+        # expiring the stream at the same instant as the physical timeout.
+        stream_timeout = timeout + 15
+        deadline = time.monotonic() + stream_timeout
         latest = None
-        for status in self.action_api.WatchActionStatus(
-            drone_api_pb2.WatchActionStatusRequest(
-                session_id=self.session_id, action_id=receipt.action_id
-            ),
-            timeout=timeout,
-        ):
-            latest = status
-            print(
-                f"{action_pb2.ActionType.Name(status.type)}: "
-                f"{action_pb2.ActionState.Name(status.state)} — {status.message}",
-                flush=True,
-            )
-            if status.state in TERMINAL:
-                break
-            if time.monotonic() > deadline:
-                raise TimeoutError("Action status deadline exceeded")
+        last_printed = None
+        failure = None
+        self._unsettled_action = receipt
+        try:
+            for status in self.action_api.WatchActionStatus(
+                drone_api_pb2.WatchActionStatusRequest(
+                    session_id=self.session_id, action_id=receipt.action_id,
+                    periodic_updates=observer_errors_fatal), timeout=stream_timeout,
+            ):
+                latest = status
+                if on_status is not None:
+                    try:
+                        on_status(status)
+                    except Exception as observer_failure:
+                        if observer_errors_fatal:
+                            raise
+                        print(f"status observer failed: {observer_failure}", flush=True)
+                printed = (status.type, status.state, status.message)
+                if printed != last_printed:
+                    print(f"{action_pb2.ActionType.Name(status.type)}: "
+                          f"{action_pb2.ActionState.Name(status.state)} — {status.message}", flush=True)
+                    last_printed = printed
+                if status.state in TERMINAL:
+                    self._unsettled_action = None
+                    break
+                if time.monotonic() > deadline:
+                    raise TimeoutError("Action status deadline exceeded")
+        except Exception as error:  # noqa: BLE001 - settle flight before propagating any stream/observer failure
+            failure = error
+        if self._unsettled_action is not None:
+            latest = self.ensure_action_settled()
+            if on_status is not None:
+                try:
+                    on_status(latest)
+                except Exception as observer_failure:  # noqa: BLE001 - observer cannot bypass settlement
+                    if observer_errors_fatal:
+                        failure = failure or observer_failure
+                    else:
+                        print(f"status observer failed: {observer_failure}", flush=True)
+        if return_failure and latest is not None and latest.state in TERMINAL:
+            return latest
         if latest is None or latest.state != action_pb2.ACTION_STATE_SUCCEEDED:
             detail = latest.message if latest else "no terminal status"
+            if failure is not None:
+                detail += f" (status stream interrupted: {failure})"
             raise RuntimeError("Action failed: " + detail)
+        if failure is not None and observer_errors_fatal and not isinstance(failure, grpc.RpcError):
+            raise failure
         return latest
 
     def close(self):
+        failures = []
+        def cleanup(name, operation):
+            try:
+                operation()
+            except Exception as failure:  # noqa: BLE001 - finish all owned cleanup before reporting
+                failures.append(f"{name}: {failure}")
+        settled = True
+        try:
+            self.ensure_action_settled()
+        except RuntimeError as failure:
+            settled = False
+            print(f"Closing with unresolved action: {failure}. Renewal stops; "
+                  "server lease-expiry failsafe remains responsible for control.", flush=True)
+            self.episode_outcome = "unresolved_action"
+        depth_source = getattr(self, "depth_source", None)
+        if depth_source is not None:
+            cleanup("depth source", depth_source.close)
+            self.depth_source = None
+        detector = getattr(self, "edge_detector_runtime", None)
+        if detector is not None:
+            cleanup("detector", detector.close)
+            self.edge_detector_runtime = None
         self.stop_renewal.set()
         if self.renewal_thread:
-            self.renewal_thread.join(timeout=2)
+            cleanup("renewal thread", lambda: self.renewal_thread.join(timeout=2))
         if self.episode:
-            self.episode.seal(self.episode_outcome, self.episode_score)
+            cleanup("episode seal", lambda: self.episode.seal(self.episode_outcome, self.episode_score))
             self.episode = None
-        if self.lease_id:
+        if self.lease_id and settled:
             try:
                 self.authority_api.ReleaseControl(
                     drone_api_pb2.ReleaseControlRequest(
@@ -808,7 +1171,7 @@ class MissionClient:
                 )
             except grpc.RpcError:
                 pass
-        if self.session_id:
+        if self.session_id and settled:
             try:
                 self.session_api.CloseSession(
                     drone_api_pb2.CloseSessionRequest(session_id=self.session_id),
@@ -816,7 +1179,9 @@ class MissionClient:
                 )
             except grpc.RpcError:
                 pass
-        self.channel.close()
+        cleanup("channel", self.channel.close)
+        if failures:
+            raise RuntimeError("Session cleanup failed: " + "; ".join(failures))
 
 
 def main():

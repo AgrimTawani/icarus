@@ -32,14 +32,24 @@ def main():
     output = args.directory / "sensors"
     output.mkdir()
     specs = [
-        ("rgb", "/icarus/sensors/rgbd/image", Image, 1),
-        ("depth", "/icarus/sensors/rgbd/depth_image", Image, 1),
-        ("lidar", "/icarus/sensors/lidar", LaserScan, 5),
-        ("range", "/icarus/sensors/range_down", LaserScan, 10),
-        ("imu", "/icarus/sensors/imu", IMU, 20),
-        ("gps", "/icarus/sensors/navsat", NavSat, 5),
-        ("compass", "/icarus/sensors/compass", Magnetometer, 20),
-        ("barometer", "/icarus/sensors/barometer", FluidPressure, 10),
+        ("rgb", "/icarus/sensors/d435i/image", Image, 1),
+        ("depth", "/icarus/sensors/d435i/depth_image", Image, 1),
+        ("downward_rgb", "/icarus/sensors/brio_down", Image, 1),
+        ("landing_depth_proxy", "/icarus/sensors/landing_depth_proxy/depth_image", Image, 1),
+        ("lidar", "/icarus/sensors/mid360", LaserScan, 5),
+        ("range", "/icarus/sensors/ark_flow_range", LaserScan, 10),
+        ("optical_flow", "/icarus/sensors/ark_flow/optical_flow", StringMsg, 10),
+        ("imu", "/icarus/sensors/pixhawk_imu_primary", IMU, 20),
+        ("imu_secondary", "/icarus/sensors/pixhawk_imu_secondary", IMU, 20),
+        ("imu_tertiary", "/icarus/sensors/pixhawk_imu_tertiary", IMU, 20),
+        ("d435i_imu", "/icarus/sensors/d435i_imu", IMU, 20),
+        ("mid360_imu", "/icarus/sensors/mid360_imu", IMU, 20),
+        ("ark_flow_imu", "/icarus/sensors/ark_flow_imu", IMU, 20),
+        ("gps", "/icarus/sensors/h_rtk_gnss", NavSat, 8),
+        ("compass", "/icarus/sensors/h_rtk_compass", Magnetometer, 20),
+        ("compass_secondary", "/icarus/sensors/pixhawk_magnetometer", Magnetometer, 20),
+        ("barometer", "/icarus/sensors/pixhawk_barometer", FluidPressure, 10),
+        ("barometer_secondary", "/icarus/sensors/pixhawk_barometer_secondary", FluidPressure, 10),
         (
             "battery",
             "/model/icarus_compact/battery/flight_battery/state",
@@ -113,7 +123,7 @@ def main():
                 if stamp - last_stamp.get(name, -1e10) < 1 / hz - 1e-6:
                     return
                 # Keep image metadata only. Never write camera pixels to disk.
-                if name in ("rgb", "depth"):
+                if name in ("rgb", "depth", "downward_rgb", "landing_depth_proxy"):
                     metadata = Image()
                     metadata.CopyFrom(message)
                     metadata.ClearField("data")
@@ -154,6 +164,9 @@ def main():
             {
                 "compression": "zlib",
                 "image_pixels_saved": False,
+                "hardware_profile": "icarus7-d435i-brio-mid360-arkflow-pixhawk6xpro-hrtk-v1",
+                "landing_depth_proxy_simulation_only": True,
+                "optical_flow_simulation_only_derived": True,
                 "format": "Repeated uint32 little-endian compressed length followed by zlib-compressed protobuf; index offsets point to length prefix",
                 "channels": {
                     n: {

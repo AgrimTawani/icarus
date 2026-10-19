@@ -1,0 +1,14 @@
+{
+  "schema": "icarus.operator-mission-evaluation.v1",
+  "scenario": "edge_people_building",
+  "cases": [
+    {"id": "reported_combined", "mission": "Arm, climb to 5 metres, face the north building and inspect it with the forward camera. Move to the reviewed building observation point, orbit the building once, detect and count people visible from the forward camera, hold for five seconds, then return home and land."},
+    {"id": "reported_people", "mission": "Take off to 4 metres, travel to the reviewed observation point near the north building, use the forward camera to count every visible person, hold position for five seconds so the observation is stable, then return home and land."},
+    {"id": "full_inspection", "mission": "Arm, take off to 5 metres, fly north to the building, inspect it with the forward camera, orbit it once, count all visible people, hover for 5 seconds, then return home and land."},
+    {"id": "alternate_wording", "mission": "Go up to 5 metres and check the building in front of the north area. Circle it one time, look for people from the forward camera, stay still for five seconds after the count, then come back home and land."},
+    {"id": "above_building", "mission": "Arm and take off to 3 metres. Go above the north building, inspect what it looks like using the forward camera, remain there for four seconds, and then return home and land."},
+    {"id": "people_recon", "mission": "Take off to 4 metres, travel to the reviewed observation point near the north building, use the forward camera to count every visible person, hold position for five seconds so the observation is stable, then return home and land."},
+    {"id": "longer_combined", "mission": "Arm, climb to 5 metres, face the north building and inspect it with the forward camera. Move to the reviewed building observation point, orbit the building once, detect and count people visible from the forward camera, hold for five seconds, then return home and land."},
+    {"id": "resilience_nominal", "mission": "Arm, take off to 3 metres, hold for 20 seconds, then return home and land.", "note": "Nominal execution only; injected MAVLink-loss acceptance requires a separate fault scenario."}
+  ]
+}

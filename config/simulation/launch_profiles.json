@@ -29,7 +29,7 @@
     "edge-vision": {
       "adapter": "sitl",
       "scenario": "edge_people_building",
-      "description": "Simulation-only RTX 4050 edge vision profile: Qwen Q4 flight DCM, YOLO11n and CPU-only on-demand Qwen2-VL",
+      "description": "Simulation-only edge vision: manifest-selected flight LLM, YOLO11 detector and CPU-only on-demand Qwen2-VL",
       "simulation_only": true
     },
     "hardware-bench": {
