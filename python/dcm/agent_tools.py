@@ -775,6 +775,7 @@ class ToolExecutor:
             return {
                 "status": "REJECTED",
                 "message": receipt.message,
+                "reason_code": pb.ReasonCode.Name(receipt.reason_code),
                 "action_id": receipt.action_id,
                 **({'motion': motion} if motion is not None else {}),
             }
@@ -791,6 +792,7 @@ class ToolExecutor:
             return {
                 "status": status,
                 "message": terminal.message,
+                "reason_code": pb.ReasonCode.Name(terminal.reason_code),
                 "action_id": receipt.action_id,
                 "state": message_dict(terminal.terminal_state),
                 **({'motion': movement_feedback(state, args, message_dict(terminal.terminal_state))}

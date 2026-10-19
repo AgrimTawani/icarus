@@ -619,6 +619,8 @@ def decision_messages(session, context, lean=False):
                     },
                     "status": item["result"]["status"],
                     "message": item["result"].get("message", ""),
+                    **({'reason_code': item['result']['reason_code']}
+                       if 'reason_code' in item['result'] else {}),
                     **({'motion': compact_result(item['result']['motion'])}
                        if 'motion' in item['result'] else {}),
                 }
