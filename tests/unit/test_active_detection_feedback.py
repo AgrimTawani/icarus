@@ -209,3 +209,20 @@ def test_failed_scan_never_refreshes_without_settled_success():
         'event': 'flight_failed', 'observations': [{'evidence': detected(3)['evidence']}]}})
     assert not f.needs_refresh and f.refresh(ex) is None
     assert 'counts' not in f.snapshot()['observation']
+
+
+def test_camera_interest_after_localization_is_unknown_until_real_capture():
+    f=ActiveDetectionFeedback(clock_ms=lambda:1100)
+    assert f.request_interest({'camera':'forward_d435i','classes':['person']})
+    assert f.needs_refresh
+    assert f.snapshot()['observation']['validity']=='unknown'
+    assert 'counts' not in f.snapshot()['observation']
+    ex=Executor(detected(0));f.refresh(ex)
+    assert f.snapshot()['observation']['counts']=={'person':0}
+    assert len(ex.calls)==1
+
+
+def test_localization_interest_does_not_override_existing_camera_request():
+    f=active()
+    assert not f.request_interest({'camera':'downward_brio','classes':['car']})
+    assert f.interest=={'camera':'forward_d435i','classes':['person']}

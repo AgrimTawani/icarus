@@ -394,6 +394,14 @@ def fly_mission(
             )
             session.remember_tool_result(name, args, result)
             session.detector_feedback.observe(name, args, result)
+            if (result.get('status') == 'SUCCEEDED' and
+                    (name == 'localize_target' or
+                     name in ('goto', 'orbit') and args.get('destination', {}).get('type')
+                     in ('visible_object', 'registered_target'))):
+                vocabulary = getattr(client, 'camera_detector_classes', lambda: [])()
+                if vocabulary:
+                    session.detector_feedback.request_interest(
+                        {'camera': 'forward_d435i', 'classes': vocabulary})
             from python.dcm.observation_feedback import observation_feedback
             evidence = result.get('evidence', {})
             evidence = evidence if isinstance(evidence, dict) else {}
@@ -578,8 +586,10 @@ def conversation_tail(messages, exchanges=4):
     return [copy.deepcopy(message) for index, message in enumerate(messages) if index in keep]
 
 
-def action_verification_scope(name):
+def action_verification_scope(name, arguments=None):
     """Describe receipt semantics without interpreting the operator's mission."""
+    if name in ('goto', 'orbit') and (arguments or {}).get('destination', {}).get('type') in ('visible_object', 'registered_target'):
+        return 'Measured object workflow; only relationships explicitly measured in its evidence.'
     if name in {'goto', 'move_relative', 'takeoff', 'yaw', 'face_heading'}:
         return 'Requested vehicle motion only; no proof of object-relative goal, named waypoint or visual condition.'
     if name in {'inspect_scene', 'detect'}:
@@ -638,7 +648,7 @@ def decision_messages(session, context, lean=False):
                     "index": len(executed) + 1,
                     "action": item["name"],
                     "source": entry.get("source", "model_tool_call"),
-                    "verification_scope": action_verification_scope(item['name']),
+                    "verification_scope": action_verification_scope(item['name'], item.get('arguments', {})),
                     "arguments": {
                         k: v
                         for k, v in item["arguments"].items()

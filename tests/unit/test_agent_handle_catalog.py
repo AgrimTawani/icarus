@@ -9,17 +9,29 @@ from test_direct_agent import FakeClient, call, context
 def prop(catalog, tool, field):
     schema = next(item['function']['parameters'] for item in catalog
                   if item['function']['name'] == tool)
-    return next(branch['properties'][field] for branch in schema.get('oneOf', [schema])
-                if field in branch['properties'])
+    def find(value):
+        if isinstance(value, dict):
+            if field in value.get('properties', {}):
+                return value['properties'][field]
+            for child in value.values():
+                found = find(child)
+                if found is not None: return found
+        elif isinstance(value, list):
+            for child in value:
+                found = find(child)
+                if found is not None: return found
+    result = find(schema)
+    assert result is not None, (tool, field)
+    return result
+
 
 
 def test_object_standoff_default_is_context_data_and_does_not_override_explicit_values():
     catalog = decision_tools({'defaults': {'object_standoff_m': 4.5}})
-    for name in ('approach_target', 'orbit_target'):
+    for name in ('goto', 'orbit'):
         assert prop(catalog, name, 'standoff_m')['default'] == 4.5
-        validate_call(name, {'visual_query': 'visible structure', 'standoff_m': 3,
-                             **({'camera': 'none'} if name == 'orbit_target' else {})}, tools=catalog)
-    assert 'default' not in prop(decision_tools({}), 'orbit_target', 'standoff_m')
+        validate_call(name, {'destination': {'type':'visible_object', 'visual_query':'visible structure', 'view_heading_deg':0}, 'standoff_m':3, **({'camera':'none'} if name=='orbit' else {'object_position':'standoff'})}, tools=catalog)
+    assert 'default' not in prop(decision_tools({}), 'orbit', 'standoff_m')
 
 
 def test_registered_target_handles_include_stale_and_update_without_mutating_static():
@@ -27,12 +39,12 @@ def test_registered_target_handles_include_stale_and_update_without_mutating_sta
     ctx = {'targets': [{'target_id': 'target_long_abc', 'fresh': False},
                        {'target_id': 'target_other_def', 'fresh': True}]}
     first = decision_tools(ctx)
-    for tool in ('approach_target', 'orbit_target', 'overfly_target'):
+    for tool in ('goto', 'orbit'):
         assert prop(first, tool, 'target_id')['enum'] == ['target_long_abc', 'target_other_def']
     ctx['targets'].append({'target_id': 'target_new_xyz'})
     second = decision_tools(ctx)
-    assert 'target_new_xyz' in prop(second, 'orbit_target', 'target_id')['enum']
-    assert 'target_new_xyz' not in prop(first, 'orbit_target', 'target_id')['enum']
+    assert 'target_new_xyz' in prop(second, 'orbit', 'target_id')['enum']
+    assert 'target_new_xyz' not in prop(first, 'orbit', 'target_id')['enum']
     assert TOOLS == before
     # Call validation remains typed; the backend, not this schema helper,
     # decides whether a referenced object is usable or requires new evidence.
@@ -46,10 +58,13 @@ def test_workflow_handle_choices_are_separate_and_missing_ids_hide_dependent_too
     empty = decision_tools({})
     names = {tool['function']['name'] for tool in empty}
     assert not names.intersection({'resume_heading_scan', 'resume_scan'})
-    for name in ('approach_target', 'orbit_target', 'overfly_target'):
+    for name in ('goto', 'orbit'):
         schema = next(t['function']['parameters'] for t in empty if t['function']['name'] == name)
-        assert 'visual_query' in schema['required']
-        assert 'target_id' not in schema['properties']
+        variants = schema['properties']['destination']['oneOf']
+        assert 'registered_target' not in [v['properties']['type']['const'] for v in variants]
+        visible = next(v for v in variants if v['properties']['type']['const']=='visible_object')
+        assert {'visual_query','view_heading_deg'} <= set(visible['required'])
+    assert not {'approach_target','orbit_target','overfly_target'}.intersection(names)
     assert {'localize_target', 'orbit', 'goto', 'face_heading', 'scan_area', 'scan_heading'} <= names
     assert 'enum' not in prop(TOOLS, 'resume_heading_scan', 'scan_id')
     assert 'enum' not in prop(TOOLS, 'orbit_target', 'target_id')
@@ -80,8 +95,8 @@ def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflow
     result = fly_mission(client, Runtime(), session.mission, session=session,
                          context_provider=capture, echo=lambda *args: None)
     assert result['status'] == 'completed'
-    assert prop(catalogs[0], 'orbit_target', 'target_id')['enum'] == ['target_1']
-    assert prop(catalogs[1], 'orbit_target', 'target_id')['enum'] == ['target_2']
+    assert prop(catalogs[0], 'orbit', 'target_id')['enum'] == ['target_1']
+    assert prop(catalogs[1], 'orbit', 'target_id')['enum'] == ['target_2']
     for catalog in catalogs:
         assert prop(catalog, 'resume_heading_scan', 'scan_id')['enum'] == ['current_turn']
         assert prop(catalog, 'resume_scan', 'scan_id')['enum'] == ['current_area']
@@ -120,7 +135,7 @@ def test_truncation_retry_uses_same_handle_bindings():
                 context_provider=lambda c: {**context(c), 'targets': [{'target_id': 'exact_123'}]},
                 echo=lambda *args: None)
     assert len(catalogs) == 2 and catalogs[0] == catalogs[1]
-    assert prop(catalogs[1], 'orbit_target', 'target_id')['enum'] == ['exact_123']
+    assert prop(catalogs[1], 'orbit', 'target_id')['enum'] == ['exact_123']
 
 
 def test_server_motion_limits_apply_to_nested_arguments_without_affecting_other_numbers():
@@ -143,29 +158,25 @@ def test_server_motion_limits_apply_to_nested_arguments_without_affecting_other_
         assert 'maximum' not in prop(unbound, 'takeoff', 'maximum_climb_rate_mps')
 
 
-def test_orbit_catalog_requires_explicit_visual_intent_also_inside_batches():
+def test_orbit_catalog_requires_visual_intent_and_reference_workflows_are_not_batched():
     catalog = decision_tools({'targets': [{'target_id': 'measured_target'}]})
-    for name in ('orbit', 'orbit_target'):
-        schema = next(t['function']['parameters'] for t in catalog if t['function']['name'] == name)
-        for branch in schema.get('oneOf', [schema]):
-            assert 'camera' in branch['required']
-            assert branch['properties']['camera']['enum'] == ['forward_d435i', 'downward_brio', 'none']
-    branches = prop(catalog, 'execute_sequence', 'actions')['items']['oneOf']
-    orbit = next(b['properties']['arguments'] for b in branches if b['properties']['name']['const'] == 'orbit')
-    assert 'camera' in orbit['required']
-    validate_call('orbit', {'center_reference': 'home', 'radius_m': 3,
-                           'altitude_agl_m': 8, 'camera': 'none'})
+    schema = next(t['function']['parameters'] for t in catalog if t['function']['name']=='orbit')
+    assert {'camera','destination'} <= set(schema['required'])
+    assert schema['properties']['camera']['enum'] == ['forward_d435i','downward_brio','none']
+    variants = prop(catalog, 'execute_sequence', 'actions')['items']['oneOf']
+    assert not {'goto','orbit'}.intersection(b['properties']['name']['const'] for b in variants)
+    validate_call('orbit', {'center_reference':'home','radius_m':3,'altitude_agl_m':8})
 
 
 def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monkeypatch):
     from python.dcm.agent_tools import ToolExecutor
     from test_direct_agent import Runtime
     cases = [
-        ('orbit', {'center_reference': 'home', 'radius_m': 3, 'altitude_agl_m': 8}, {}, 'camera'),
+        ('orbit', {'destination': {'type':'home'}, 'radius_m':3, 'altitude_agl_m':8}, {}, 'camera'),
         ('takeoff', {'target_altitude_agl_m': 3, 'maximum_climb_rate_mps': 3},
          {'motion_limits': {'maximum_climb_speed_mps': 2.5}}, 'maximum'),
-        ('orbit_target', {'target_id': 'invented', 'standoff_m': 3, 'camera': 'forward_d435i'},
-         {'targets': [{'target_id': 'registered'}]}, 'enum'),
+        ('orbit', {'destination': {'type':'registered_target','target_id':'invented'}, 'standoff_m':3, 'camera':'forward_d435i'},
+         {'targets':[{'target_id':'registered'}]}, 'destination'),
         ('resume_heading_scan', {'scan_id': 'completed'}, {}, 'unavailable'),
         ('resume_scan', {'scan_id': 'completed_area'}, {}, 'unavailable'),
         ('execute_sequence', {'actions': [{'name': 'arm', 'arguments': {}},
@@ -173,7 +184,7 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
                                             'maximum_climb_rate_mps': 3}}]},
          {'motion_limits': {'maximum_climb_speed_mps': 2.5}}, 'maximum'),
         ('execute_sequence', {'actions': [{'name': 'orbit', 'arguments': {
-            'center_reference': 'home', 'radius_m': 3, 'altitude_agl_m': 8}}]}, {}, 'camera'),
+            'center_reference': 'home', 'radius_m': 3, 'altitude_agl_m': 8}}]}, {}, 'actions'),
     ]
     def unexpected_execution(*args, **kwargs):
         raise AssertionError('Invalid advertised call reached ToolExecutor')
@@ -228,30 +239,24 @@ def test_direct_executor_retains_static_api_contract():
     assert [name for name, _ in client.sent] == ['Arm', 'Takeoff']
 
 
-def test_native_tagged_target_catalog_exposes_root_fields_without_weakening_union():
+def test_native_tagged_destinations_keep_root_fields_and_exact_nested_variants():
     import pytest
-    catalog = decision_tools({'targets': [{'target_id': 'known'}],
-                              'motion_limits': {'maximum_horizontal_speed_mps': 2}})
-    for name, common in (
-        ('approach_target', {'standoff_m': 3}),
-        ('orbit_target', {'standoff_m': 3, 'camera': 'forward_d435i'}),
-        ('overfly_target', {'clearance_above_m': 2}),
-    ):
-        schema = next(t['function']['parameters'] for t in catalog if t['function']['name'] == name)
-        # llama.cpp tagged_tools consumes precisely this root property map.
-        assert {'target_id', 'visual_query', *common} <= set(schema['properties'])
-        assert schema['properties']['target_id']['enum'] == ['known']
-        assert schema['properties']['maximum_ground_speed_mps']['maximum'] == 2
-        assert 'oneOf' not in schema and 'anyOf' not in schema
-        cases = [dict(common, target_id='known'), dict(common, visual_query='visible object'),
-                 {}, common, dict(common, target_id='unknown'),
-                 dict(common, target_id='known', visual_query='visible object'),
-                 dict(common, target_id='known', maximum_ground_speed_mps=3),
-                 dict(common, target_id='known', unexpected=1)]
-        for args in cases:
-            expected = args in [dict(common, target_id='known'), dict(common, visual_query='visible object')]
-            if expected:
-                validate_call(name, args, tools=catalog)
-            else:
-                with pytest.raises(ValueError):
-                    validate_call(name, args, tools=catalog)
+    catalog=decision_tools({'targets':[{'target_id':'known'}],
+                            'motion_limits':{'maximum_horizontal_speed_mps':2}})
+    for name,common in [('goto',{'object_position':'standoff','standoff_m':3}),
+                        ('orbit',{'standoff_m':3,'camera':'forward_d435i'})]:
+        schema=next(t['function']['parameters'] for t in catalog if t['function']['name']==name)
+        assert 'destination' in schema['properties'] and 'oneOf' not in schema
+        assert prop(catalog,name,'target_id')['enum']==['known']
+        assert prop(catalog,name,'maximum_ground_speed_mps')['maximum']==2
+        valid=[{'type':'registered_target','target_id':'known'},
+               {'type':'visible_object','visual_query':'visible structure','view_heading_deg':0}]
+        for destination in valid:
+            validate_call(name,{**common,'destination':destination},tools=catalog)
+        for destination in [{}, {'type':'registered_target','target_id':'invented'},
+                            {'type':'registered_target','target_id':'known','visual_query':'x'},
+                            {'type':'visible_object','visual_query':'x'}]:
+            with pytest.raises(ValueError):
+                validate_call(name,{**common,'destination':destination},tools=catalog)
+        with pytest.raises(ValueError):
+            validate_call(name,{**common,'destination':valid[0],'maximum_ground_speed_mps':3},tools=catalog)

@@ -168,7 +168,7 @@ class TargetMotion:
                 return self._stop('No measurable progress toward target distance.', measurements=history)
         return self._stop('Target approach did not converge within its bounded execution.', measurements=history)
 
-    def _acquire_orbit_geometry(self, target_id, target, standoff_m, maximum_ground_speed_mps):
+    def _acquire_target_geometry(self, target_id, target, standoff_m, maximum_ground_speed_mps, require_height=False):
         """Measure at most two new face-edge views, preserving target identity.
 
         Candidates are measured viewing positions, not inferred unseen hulls.
@@ -176,6 +176,11 @@ class TargetMotion:
         must associate the new image with the same registry identity.
         """
         history, visited = [], []
+        def ready(measurement):
+            footprint = measurement.get('footprint', {})
+            return (measurement['geometry'].get('orbit_usable') and
+                    (not require_height or footprint.get('height_m') is not None
+                     and not footprint.get('height_clipped')))
         def fail(message):
             return target, history, self._stop(message, target_id=target_id,
                                               geometry_acquisition=history)
@@ -183,7 +188,7 @@ class TargetMotion:
             for _ in range(2):
                 if self.interrupted():
                     return fail('Operator interrupted orbit geometry measurement.')
-                if target['geometry'].get('orbit_usable'):
+                if ready(target):
                     return target, history, None
                 state, north, east = pose(self.client.state())
                 origin = target['origin_id']
@@ -262,8 +267,8 @@ class TargetMotion:
                 step['orbit_usable'] = bool(target['geometry'].get('orbit_usable'))
             if self.interrupted():
                 return fail('Operator interrupted orbit geometry measurement.')
-            if not target['geometry'].get('orbit_usable'):
-                return fail('Target shape remains partial after two additional measured views. No orbit was started.')
+            if not ready(target):
+                return fail('Required target shape/height remains partial after two additional measured views. No maneuver was started.')
             return target, history, None
         except (ValueError, KeyError, RuntimeError, OSError) as error:
             return fail('Orbit geometry measurement failed: ' + str(error))
@@ -273,7 +278,7 @@ class TargetMotion:
         if self.interrupted():
             return self._stop('Operator interrupted target orbit.')
         target = self._target(target_id)
-        target, acquisition, failure = self._acquire_orbit_geometry(target_id, target, standoff_m, maximum_ground_speed_mps)
+        target, acquisition, failure = self._acquire_target_geometry(target_id, target, standoff_m, maximum_ground_speed_mps)
         if failure is not None:
             return failure
         geometry = target['geometry']
@@ -332,6 +337,16 @@ class TargetMotion:
 
     def overfly_target(self, target_id, clearance_above_m=3.0, maximum_ground_speed_mps=1.0):
         target = self._target(target_id)
+        acquisition = []
+        if (not target['geometry'].get('orbit_usable') or target['footprint'].get('height_m') is None
+                or target['footprint'].get('height_clipped')):
+            import json
+            from pathlib import Path
+            policy = json.loads((Path(__file__).resolve().parents[2] / 'config/dcm/default_policy.json').read_text())
+            target, acquisition, failure = self._acquire_target_geometry(
+                target_id, target, policy['object_standoff_m'], maximum_ground_speed_mps, require_height=True)
+            if failure is not None:
+                return failure
         footprint, geometry = target['footprint'], target['geometry']
         height = footprint.get('height_m')
         if height is None or footprint.get('height_clipped') or not geometry.get('orbit_usable'):
@@ -352,7 +367,17 @@ class TargetMotion:
         result = self.flight('goto', {'north_m': center['north_m'], 'east_m': center['east_m'],
             'altitude_agl_m': altitude, 'maximum_ground_speed_mps': maximum_ground_speed_mps},
             runtime_target=True, acceptance_radius_m=0.2, expected_origin_id=target["origin_id"])
+        observed_state, _, _ = pose(self.client.state())
+        local = observed_state['local_position_ned']
+        camera_views = {}
+        if 'down_m' in local:
+            from python.dcm.camera_geometry import project_point
+            top = {**center, 'origin_id': target['origin_id'],
+                   'down_m': local['down_m'] + observed_state['relative_altitude_m'] - float(height)}
+            camera_views = {camera: project_point(observed_state, top, camera)
+                            for camera in ('forward_d435i', 'downward_brio')}
         return {**result, 'evidence': {'target_id': target_id, 'measured_top_above_home_m': height,
+                'geometry_acquisition': acquisition, 'camera_view_geometry': camera_views,
                 'commanded_altitude_above_home_m': altitude, 'landing_assessed': False,
                 'geometry_basis': 'static target snapshot measured before climb',
-                'next_observation': 'assess_landing_zone before deciding whether to land'}}
+                'next_observation': 'Use a camera whose projection includes the measured target; geometry is not image proof. Assess landing zone only if landing there is requested.'}}

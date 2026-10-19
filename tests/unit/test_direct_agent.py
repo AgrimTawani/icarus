@@ -1031,25 +1031,22 @@ def test_camera_incompatibility_pauses_before_model_can_change_parameters():
     c = FakeClient()
     session = AgentSession('Take off to 8m and orbit launch at 3m keeping the front camera on it.')
     r = Runtime(
-        call('execute_sequence', actions=[
-            {'name': 'takeoff', 'arguments': {'target_altitude_agl_m': 8}},
-            {'name': 'orbit', 'arguments': {'center_reference': 'launch', 'radius_m': 3,
-                'altitude_agl_m': 8, 'face_center': True, 'camera': 'forward_d435i'}},
-            {'name': 'return_home', 'arguments': {}},
-        ]),
+        call('takeoff', target_altitude_agl_m=8),
+        call('orbit', destination={'type':'launch'}, radius_m=3,
+             altitude_agl_m=8, face_center=True, camera='forward_d435i'),
         call('land', mission_complete=True),
         call('finish', outcome='incomplete', message='Cancelled the incompatible camera orbit and landed.'),
     )
     result = run(c, r, session=session)
     assert result['status'] == 'awaiting_user' and session.awaiting_user
-    assert len(r.inputs) == 1
+    assert len(r.inputs) == 2
     assert [name for name, _ in c.sent] == ['Arm', 'Takeoff']
     assert '8 m' in result['message'] and '3 m radius' in result['message']
     session.answer('Cancel the orbit and land here.')
     result = run(c, r, session=session)
     assert result['status'] == 'incomplete'
     assert [name for name, _ in c.sent] == ['Arm', 'Takeoff', 'Land']
-    assert 'Cancel the orbit and land here.' in json.dumps(r.inputs[1])
+    assert 'Cancel the orbit and land here.' in json.dumps(r.inputs[2])
 
 
 def test_unknown_camera_target_height_requires_measurement_not_user_choice():
@@ -1463,7 +1460,7 @@ def test_repeated_camera_choices_preserve_operator_recovery_on_resume(recovery, 
         'north_m': 0, 'east_m': 0, 'down_m': 0, 'origin_id': 'ekf-origin'}}
     session = AgentSession('Orbit launch with the ground point in the front camera.')
     runtime = Runtime(*(
-        call('orbit', center_reference='launch', radius_m=radius, altitude_agl_m=8,
+        call('orbit', destination={'type':'launch'}, radius_m=radius, altitude_agl_m=8,
              camera='forward_d435i', face_center=True) for radius in (3, 4, 5)),
         call(recovery, mission_complete=True),
         call('finish', outcome='cancelled', message='Cancelled the orbit and completed recovery.'))
@@ -1792,3 +1789,19 @@ def test_coordinate_success_cannot_be_presented_as_object_relative_evidence():
     assert 'above_home_not_above_object' in feedback
     assert 'no proof of object-relative goal' in feedback
     assert '"registered_target_available":false' in feedback.replace(' ', '')
+
+
+def test_localization_starts_real_camera_feedback_without_another_model_call():
+    client=FakeClient()
+    client.camera_detector_classes=lambda:['person']
+    client.localize_target=lambda **kwargs:{'found':True,'target_id':'measured'}
+    client.detect=lambda **kwargs:{'camera':kwargs['camera'],'counts':{'person':2},
+                                  'captured_at_unix_ms':int(time.time()*1000)}
+    session=AgentSession('Observe the current scene.')
+    runtime=Runtime(call('localize_target',visual_query='visible subject'),
+                    call('finish',outcome='incomplete',message='Observation only.'))
+    result=run(client,runtime,session=session)
+    assert result['decisions']==2
+    assert [a['action'] for a in session.actions]==['localize_target','detect']
+    assert session.actions[1]['source']=='perception_feedback'
+    assert session.actions[1]['result']['evidence']['counts']=={'person':2}

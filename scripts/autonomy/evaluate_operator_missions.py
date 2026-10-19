@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 import subprocess
 import time
@@ -58,6 +59,8 @@ def main():
              ROOT / 'config/dcm/default_policy.json',
              *sorted((ROOT / 'config/perception').glob('*.json')),
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
+    if os.environ.get('ICARUS_WAYPOINTS_FILE'):
+        paths.append(Path(os.environ['ICARUS_WAYPOINTS_FILE']).resolve())
     provenance = {
         'runtime': descriptor.as_record(),
         'git_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),

@@ -222,11 +222,11 @@ for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
         }
 DESCRIPTIONS = {
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
-    'orbit': 'Circle a coordinate or measured home/launch reference; objects use orbit_target. center_reference resolves home or launch authoritatively; otherwise supply measured center coordinates. face_center defaults true. Select camera explicitly, or none for heading-only flight; coordinate camera targets need measured target_altitude_agl_m. Yaw faces the bearing; fixed cameras cannot tilt.',
+    'orbit': 'Choose destination.type explicitly: coordinates, home, launch, named_waypoint, visible_object or registered_target. Object orbits use standoff_m from measured hull and face the object; visual_query also needs view_heading_deg. Coordinate/home/launch orbits use radius_m and altitude_agl_m. Coordinates require coordinate_frame and local_ned requires origin_id. Select camera explicitly; none means heading-only. Fixed cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
-    'goto': 'Fly to supplied/measured absolute local north/east coordinates and above-home altitude. Unknown named waypoints need clarification. Objects use object-motion tools. Optional heading_deg is absolute.',
+    'goto': 'Choose destination.type explicitly. Visible objects use visual_query, view_heading_deg, and object_position=standoff or above; registered objects use target_id. Coordinates require coordinate_frame, north/east, altitude; local_ned also requires origin_id. Named waypoints are looked up, never guessed. Object direction is a view heading, not a range. Above positions use measured target height and footprint.',
     'arm': 'Enable motors without takeoff. Detection works disarmed: satisfy pre-arming conditions first. takeoff already arms if needed.',
     'takeoff': 'Arm if needed and climb from LANDED. When airborne change height with goto or move_relative up_m.',
     'return_home': 'Return to measured autopilot home and land by default. land_at_home=false returns and holds. Return flight may change yaw.',
@@ -319,41 +319,42 @@ def decision_tools(context, angular_scans=None, area_scans=None):
     catalog = []
     for tool in bind_limits(TOOLS):
         function = tool['function']
+        if function['name'] in TARGET_FLIGHT:
+            # The agent selects destination kind through goto/orbit. Keep the
+            # legacy controllers callable by Python without overlapping names.
+            continue
+        if function['name'] in ('goto', 'orbit'):
+            from python.dcm.destinations import destination_schema
+            function['parameters'] = bind_limits(destination_schema(function['name'], SCHEMAS[function['name']]))
+            variants = function['parameters']['properties']['destination']['oneOf']
+            waypoints = context.get('registered_waypoints', {}).get('entries', [])
+            waypoint_names = sorted({p['name'] for p in waypoints if isinstance(p, dict)
+                                     and isinstance(p.get('name'), str) and p['name']})
+            for branch in variants:
+                if branch['properties']['type']['const'] == 'named_waypoint' and waypoint_names:
+                    branch['properties']['waypoint_name']['enum'] = waypoint_names
+            for branch in list(variants):
+                if branch['properties']['type']['const'] == 'registered_target':
+                    if target_ids:
+                        branch['properties']['target_id']['enum'] = target_ids.copy()
+                    else:
+                        variants.remove(branch)
+        if function['name'] == 'execute_sequence':
+            variants = function['parameters']['properties']['actions']['items']['oneOf']
+            function['parameters']['properties']['actions']['items']['oneOf'] = [
+                branch for branch in variants if branch['properties']['name']['const'] not in ('goto', 'orbit')]
         if function['name'] == 'read_action_result':
             count = context.get('retained_action_result_count', 0)
             if type(count) is not int or count < 1:
                 continue
             function['parameters']['properties']['action_index']['maximum'] = count
-        if function['name'] in TARGET_FLIGHT:
-            branches = function['parameters']['oneOf']
-            if target_ids:
-                for branch in branches:
-                    if 'target_id' in branch['properties']:
-                        branch['properties']['target_id']['enum'] = target_ids.copy()
-                # Native tagged parsers require root properties; normalization
-                # of oneOf discards sibling properties. Publish a flat typed
-                # object and retain reference exclusivity in call validation.
-                properties = {}
-                for branch in branches:
-                    for key, value in branch['properties'].items():
-                        if key in properties and properties[key] != value:
-                            raise ValueError(f"Conflicting target parameter schema: {key}")
-                        properties[key] = copy.deepcopy(value)
-                common_required = [key for key in branches[0].get('required', [])
-                                   if all(key in branch.get('required', []) for branch in branches)]
-                function['parameters'] = dict(type='object', properties=properties,
-                                              required=common_required, additionalProperties=False,
-                                              description='Supply exactly one of target_id or description.')
-            else:
-                function['parameters'] = next(branch for branch in branches
-                                               if 'description' in branch['properties'])
         properties = function['parameters'].get('properties', {})
         if function['name'] in scan_ids and not scan_ids[function['name']]:
             continue
         choices = scan_ids.get(function['name'])
         if choices and 'scan_id' in properties:
             properties['scan_id'] = {**properties['scan_id'], 'enum': choices.copy()}
-        if function['name'] in (*TARGET_FLIGHT, 'localize_target') and 'description' in properties:
+        if function['name'] == 'localize_target' and 'description' in properties:
             # Give the model a typed image-space query rather than an
             # ambiguous target name. Existing Python callers retain their
             # description keyword through the compatibility adapter below.
@@ -384,6 +385,11 @@ def validate_call(name, arguments, *, tools=None):
     if not isinstance(name, str) or name not in SCHEMAS:
         raise ValueError(f"Unknown tool {name!r}; use a listed tool")
     schema = SCHEMAS[name]
+    reference_call = (name in ('goto', 'orbit') and isinstance(arguments, dict)
+                      and 'destination' in arguments)
+    if reference_call:
+        from python.dcm.destinations import destination_schema
+        schema = destination_schema(name, schema)
     if tools is not None:
         schema = next((tool['function']['parameters'] for tool in tools
                        if tool['function']['name'] == name), None)
@@ -418,6 +424,9 @@ def validate_call(name, arguments, *, tools=None):
     if errors:
         error = errors[0]
         raise ValueError(format_schema_error(name, error))
+    if reference_call:
+        from python.dcm.destinations import unpack_destination, validate_destination
+        validate_destination(name, unpack_destination(name, arguments))
     if tools is not None and name in TARGET_FLIGHT:
         references = [key for key in ('target_id', 'description', 'visual_query') if key in arguments]
         if len(references) != 1:
@@ -492,7 +501,10 @@ class ToolExecutor:
                 "message": "Operator interrupted the mission.",
             }
         try:
-            if name == "execute_sequence":
+            if name in ('goto', 'orbit') and 'destination' in arguments:
+                from python.dcm.destinations import execute_destination
+                result = execute_destination(self, name, arguments)
+            elif name == "execute_sequence":
                 results = []
                 for item in arguments["actions"]:
                     result = self.execute(item["name"], item["arguments"])

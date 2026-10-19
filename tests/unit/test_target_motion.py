@@ -430,3 +430,45 @@ def test_approach_no_progress_stops_boundedly():
     assert r['status'] == 'FAILED'
     assert 'No measurable progress' in r['message']
     assert [n for n, a, kw in c.calls] == ['goto']*4 + ['hold']
+
+
+def test_overflight_reuses_measured_side_views_before_climbing_over_target():
+    c=AcquisitionClient()
+    for view in c.views:view['observation_standoff_m']=6
+    result=TargetMotion(c,c.flight).execute('overfly_target',{'target_id':'a','clearance_above_m':3})
+    assert result['status']=='SUCCEEDED'
+    assert [call[0] for call in c.calls]==['goto','goto','goto']
+    assert c.calls[0][1]['altitude_agl_m']==4  # measurement view, not overflight
+    assert c.calls[1][1]['altitude_agl_m']==9
+    assert c.calls[1][1]['north_m']==c.calls[0][1]['north_m']
+    assert c.calls[2][1]['north_m']==12
+    assert result['evidence']['geometry_acquisition']
+    assert c.captures==[('the observed object',False)]
+
+
+def test_overflight_does_not_invent_a_top_when_height_stays_clipped():
+    class Clipped(AcquisitionClient):
+        def refresh_target(self,target_id):
+            result=super().refresh_target(target_id)
+            result['footprint']['height_clipped']=True
+            return result
+    c=Clipped()
+    for view in c.views:view['observation_standoff_m']=6
+    result=TargetMotion(c,c.flight).execute('overfly_target',{'target_id':'a'})
+    assert result['status']=='FAILED'
+    assert all(args.get('altitude_agl_m',4)==4 for name,args,_ in c.calls)
+    assert c.calls[-1][0]=='hold'
+
+
+def test_overhead_point_is_outside_level_front_camera_but_in_downward_view():
+    class WithPose(Client):
+        def state(self):
+            state=super().state();state['local_position_ned']['down_m']=-self.alt
+            state['attitude'].update(roll_rad=0,pitch_rad=0)
+            return state
+    c=WithPose()
+    result=TargetMotion(c,c.flight).execute('overfly_target',{'target_id':'a'})
+    views=result['evidence']['camera_view_geometry']
+    assert views['forward_d435i']['in_frame'] is False
+    assert views['downward_brio']['in_frame'] is True
+    assert not views['downward_brio']['image_proof']

@@ -81,20 +81,20 @@ def test_exactly_one_reference_in_static_and_live_catalogs(name, extra):
         with pytest.raises(ValueError):
             validate_call(name, {**extra, **reference})
         assert not static_validator.is_valid({**extra, **reference})
-    for context in ({}, {'targets': [{'target_id': 'known'}]}):
-        catalog = decision_tools(context)
-        # Native tagged generation needs a flat schema; the API validator
-        # retains reference XOR as well as the advertised field constraints.
-        validate_call(name, {**extra, 'description': 'visible object'}, tools=catalog)
+    operation='orbit' if name=='orbit_target' else 'goto'
+    args=({'camera':'none','standoff_m':3} if operation=='orbit' else
+          {'object_position':'above'} if name=='overfly_target' else
+          {'object_position':'standoff','standoff_m':3})
+    for context in ({},{'targets':[{'target_id':'known'}]}):
+        catalog=decision_tools(context)
+        validate_call(operation,{**args,'destination':{'type':'visible_object',
+            'visual_query':'visible object','view_heading_deg':0}},tools=catalog)
         if context:
-            validate_call(name, {**extra, 'target_id': 'known'}, tools=catalog)
-        else:
+            validate_call(operation,{**args,'destination':{'type':'registered_target','target_id':'known'}},tools=catalog)
+        for reference in ({},{'type':'registered_target','target_id':'invented'},
+                          {'type':'registered_target','target_id':'known','visual_query':'visible object'}):
             with pytest.raises(ValueError):
-                validate_call(name, {**extra, 'target_id': 'known'}, tools=catalog)
-        for reference in ({}, {'target_id': 'invented'},
-                          {'target_id': 'known', 'description': 'visible object'}):
-            with pytest.raises(ValueError):
-                validate_call(name, {**extra, **reference}, tools=catalog)
+                validate_call(operation,{**args,'destination':reference},tools=catalog)
 
 
 def test_object_alternatives_have_complete_typed_grammar_branches():

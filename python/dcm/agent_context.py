@@ -184,8 +184,8 @@ def capture_context(client, include_geometry=False):
     } for name in context['cameras'] if camera_calibration(name).get('available')]
     context['references'] = {'home': resolve_reference(context['state']),
         'launch': resolve_reference(context['state'], 'launch', getattr(client, '_takeoff_reference', None))}
-    context['registered_waypoints'] = {
-        'entries': [], 'source': 'No named waypoint catalogue is configured. User-supplied coordinates remain usable.'}
+    from python.dcm.destinations import waypoint_catalogue
+    context['registered_waypoints'] = waypoint_catalogue()
     context["now_unix_ms"] = now
     # Model feedback is a view of telemetry, not a protobuf dump. Preserve
     # decisions' measurements and validity; transport counters, duplicate

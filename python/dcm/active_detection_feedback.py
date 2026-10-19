@@ -38,6 +38,14 @@ class ActiveDetectionFeedback:
         self.interest = {'camera': camera, 'classes': list(dict.fromkeys(classes))}
         return True
 
+    def request_interest(self, arguments):
+        """Start sampled camera feedback after localization, without inventing a capture."""
+        if self.interest or not self._register(arguments):
+            return False
+        self._invalidate('Camera feedback requested; no detection capture yet')
+        self._pending = True
+        return True
+
     def _accept(self, result, source):
         self._pending = False
         if not isinstance(result, Mapping):

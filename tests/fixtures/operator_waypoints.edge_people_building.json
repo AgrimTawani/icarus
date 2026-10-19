@@ -1,0 +1,16 @@
+{
+  "coordinate_frame": "home_relative_ned",
+  "note": "Simulator-only reviewed observation pose. Explicit evaluation input, never a production default or mission alias. Height is deliberately left to each mission.",
+  "provenance": {
+    "camera_frame": "output/phase1-hardening-20261019/v3-acceptance/missions/alternate_wording/camera/1792422205724518466-forward_d435i.png",
+    "camera_state": "output/phase1-hardening-20261019/v3-acceptance/missions/alternate_wording/camera/1792422205724518466-forward_d435i.json"
+  },
+  "entries": [
+    {
+      "name": "north building observation point",
+      "north_m": 8.895760655403137,
+      "east_m": -8.274464070796967,
+      "heading_deg": 45.83784689734621
+    }
+  ]
+}
