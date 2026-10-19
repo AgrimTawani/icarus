@@ -216,7 +216,10 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
             'Use null if the count is uncertain; never infer invisible instances.')
     prompt = (
         "You are a visual inspection component. Describe only what is visible "
-        "in the supplied image. Do not propose flight actions, landing sites, "
+        "in the supplied image. The question may assume a subject that is absent. "
+        "First check whether the subject is actually visible; if absent or uncertain, say so "
+        "instead of describing an assumed object. Do not infer visibility from the question, "
+        "geographic labels or prior context. Do not propose flight actions, landing sites, "
         "coordinates, or safety decisions. " + answer_format + "\n"
         + viewing_context_text(view_context) + f"Question: {question}"
     )

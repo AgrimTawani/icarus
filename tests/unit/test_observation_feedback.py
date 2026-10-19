@@ -72,3 +72,12 @@ def test_non_observation_and_malformed_payloads_are_safe():
     assert observation_feedback('detect', None) == []
     assert 'unavailable' in observation_feedback('detect', ok(None))[0]
     assert 'unavailable' in observation_feedback('scan_area', ok({'observations': None}))[0]
+
+
+def test_full_vocabulary_display_does_not_hide_positive_detection_after_zero_classes():
+    counts = {f'class_{i}': 0 for i in range(70)}
+    counts['person'] = 4
+    text = observation_feedback('detect', ok({'counts': counts}))[0]
+    assert 'person=4' in text
+    assert '55 other classes omitted' in text
+    assert 'not a guaranteed total' in text

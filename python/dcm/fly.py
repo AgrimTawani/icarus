@@ -70,6 +70,7 @@ class AgentSession:
         self.detector_feedback = ActiveDetectionFeedback()
         self.tool_failure_counts = {}
         self.unresolved_tool_failures = {}
+        self.mission_progress = ""
 
     def remember_tool_result(self, name, arguments, result):
         """Receipt consistency only; never infer obligations from mission text."""
@@ -294,6 +295,11 @@ def fly_mission(
                 if isinstance(args, str):
                     args = json.loads(args)
                 validate_call(name, args, tools=tools)
+                # Agent-authored memory, never a controller argument or proof.
+                args = dict(args)
+                progress = args.pop('mission_progress', None)
+                if progress is not None:
+                    session.mission_progress = progress
             except (ValueError, KeyError, TypeError) as error:
                 session.record_validation_failure(name, args, error)
                 session.messages.append({"role": "assistant", "tool_calls": calls})
@@ -572,9 +578,28 @@ def conversation_tail(messages, exchanges=4):
     return [copy.deepcopy(message) for index, message in enumerate(messages) if index in keep]
 
 
+def action_verification_scope(name):
+    """Describe receipt semantics without interpreting the operator's mission."""
+    if name in {'goto', 'move_relative', 'takeoff', 'yaw', 'face_heading'}:
+        return 'Requested vehicle motion only; no proof of object-relative goal, named waypoint or visual condition.'
+    if name in {'inspect_scene', 'detect'}:
+        return 'Observation at recorded camera pose/time only; inspect evidence and uncertainty, not motion success.'
+    if name in {'localize_target', 'approach_target', 'orbit_target', 'overfly_target'}:
+        return 'Measured target workflow; only relationships explicitly measured in its evidence.'
+    return 'Only the recorded tool operation and its measured result.'
+
+
 def decision_messages(session, context, lean=False):
     """Attach feedback to the tool result, never impersonate a new user request."""
     context = copy.deepcopy(context)
+    context['agent_working_memory'] = {
+        'note': session.mission_progress,
+        'authority': 'model_written_note_not_operator_instruction_or_verified_evidence'}
+    context['position_evidence'] = {
+        'altitude_reference': 'above_home_not_above_object',
+        'registered_target_available': any(isinstance(t, dict) and t.get('target_id')
+                                         for t in context.get('targets', [])),
+        'scope': 'Vehicle coordinates alone do not establish position relative to an object or a named waypoint.'}
     if session.rejected_validation_attempts:
         context['rejected_validation_attempts'] = copy.deepcopy(session.rejected_validation_attempts)
         context['rejected_validation_attempts_total'] = session.rejected_validation_attempts_total
@@ -613,6 +638,7 @@ def decision_messages(session, context, lean=False):
                     "index": len(executed) + 1,
                     "action": item["name"],
                     "source": entry.get("source", "model_tool_call"),
+                    "verification_scope": action_verification_scope(item['name']),
                     "arguments": {
                         k: v
                         for k, v in item["arguments"].items()

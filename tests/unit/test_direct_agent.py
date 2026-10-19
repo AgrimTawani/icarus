@@ -1759,3 +1759,36 @@ def test_visual_answer_retains_no_flight_authority_in_compacted_model_context():
     # This is provenance preservation, not a semantic judgment of the answer.
     assert 'validity' not in compact['evidence']
     assert evidence['image'] == {'sha256': 'frame-hash'}
+
+
+def test_agent_working_note_survives_packing_without_entering_controller_arguments():
+    from python.dcm.fly import decision_messages
+    client = FakeClient()
+    session = AgentSession('Climb, observe, then land')
+    runtime = Runtime(
+        call('takeoff', target_altitude_agl_m=3,
+             mission_progress='Still need fresh camera evidence, then land.'),
+        call('ask_user', question='Which camera?',
+             mission_progress='Camera selection unresolved; observation and landing remain.'))
+    result = run(client, runtime, mission=session.mission, session=session)
+    assert result['status'] == 'awaiting_user'
+    assert [name for name, _ in client.sent] == ['Arm', 'Takeoff']
+    assert 'mission_progress' not in session.actions[0]['arguments']
+    assert session.mission_progress.startswith('Camera selection unresolved')
+    for lean in (False, True):
+        messages = decision_messages(session, context(client), lean=lean)
+        assert session.mission_progress in messages[-1]['content']
+        assert 'model_written_note_not_operator_instruction_or_verified_evidence' in messages[-1]['content']
+        assert messages[1]['content'].startswith(session.mission)
+
+
+def test_coordinate_success_cannot_be_presented_as_object_relative_evidence():
+    from python.dcm.fly import decision_messages
+    session = AgentSession('Go above the object')
+    session.actions = [{'action': 'goto', 'arguments': {'north_m': 0, 'east_m': 0,
+                        'altitude_agl_m': 6}, 'result': {'status': 'SUCCEEDED'}}]
+    messages = decision_messages(session, {'targets': []})
+    feedback = messages[-1]['content']
+    assert 'above_home_not_above_object' in feedback
+    assert 'no proof of object-relative goal' in feedback
+    assert '"registered_target_available":false' in feedback.replace(' ', '')

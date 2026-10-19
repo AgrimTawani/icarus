@@ -29,10 +29,16 @@ def _evidence(tool, evidence, camera=None):
         if not isinstance(counts, Mapping) or not counts:
             return prefix + 'accepted detection counts unavailable'
         values = []
-        for label, count in list(counts.items())[:16]:
+        entries = list(counts.items())
+        if len(entries) > 16:
+            # Keep small requested-class displays stable; broad vocabularies
+            # show detections before alphabetically earlier zero classes.
+            entries.sort(key=lambda item: not (_number(item[1]) and item[1] > 0))
+        for label, count in entries[:16]:
             valid = _number(count) and count >= 0 and int(count) == count
             values.append(f'{_text(label, 50)}={int(count) if valid else "unknown"}')
-        return prefix + 'accepted detections ' + ', '.join(values) + ' (not a guaranteed total)'
+        omitted = f'; {len(entries)-16} other classes omitted' if len(entries) > 16 else ''
+        return prefix + 'accepted detections ' + ', '.join(values) + omitted + ' (not a guaranteed total)'
     if tool == 'inspect_scene':
         answer = _text(evidence.get('answer'))
         return prefix + ('VLM answer (uncertain): ' + answer if answer else 'VLM answer unavailable')
