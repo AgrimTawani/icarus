@@ -195,3 +195,27 @@ def test_detector_missing_count_is_unknown_not_zero():
     assert result['count'] is None
     assert result['found'] is None
     assert result['validity'] == 'unknown'
+
+
+def test_viewing_pose_stays_in_receipt_and_cannot_change_the_pixel_question(tmp_path):
+    outputs = SimpleNamespace(returncode=0, stdout='{"answerable":true,"answer":"Visible structure."}',stderr='')
+    commands = []
+    for heading in (0, 123.456, 359.9):
+        context = {'camera':'forward_d435i','aircraft_heading_deg':heading}
+        result, command = run_inspection(tmp_path, outputs, result_type='description',view_context=context)
+        assert result['view_context'] == context
+        commands.append(command[command.index('-p')+1])
+    assert commands[0] == commands[1] == commands[2]
+    assert 'Measured aircraft compass heading' not in commands[0]
+    with pytest.raises(ValueError, match='finite'):
+        run_inspection(tmp_path, outputs, result_type='description',
+                       view_context={'camera':'forward_d435i','aircraft_heading_deg':float('nan')})
+
+
+@pytest.mark.parametrize('kind,payload',[('boolean',{'found':False,'answer':'Visible object is grey.'}),
+                                       ('count',{'count':0,'answer':'No visible instances.'})])
+def test_structured_answer_is_plain_evidence_not_a_second_encoded_json_document(tmp_path,kind,payload):
+    result, _ = run_inspection(tmp_path, SimpleNamespace(returncode=0,
+        stdout=json.dumps(payload),stderr=''), result_type=kind)
+    assert result['answer'] == payload['answer']
+    assert result['value'] == payload.get('found',payload.get('count'))

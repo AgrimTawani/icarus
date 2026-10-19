@@ -114,3 +114,16 @@ def test_localize_target_refuses_uncalibrated_simulators():
             assert "calibration" in str(error)
         else:
             raise AssertionError("AirSim camera calibration is not defined")
+
+
+def test_localization_retains_sensor_to_model_coordinate_provenance():
+    module = _module()
+    coordinate_evidence = {'grounding_format':'json_pixel_xyxy',
+        'pixel_box_xyxy':[8,4,72,36], 'model_pixel_box_xyxy':[16,8,144,72],
+        'image_coordinate_transform':{'source_width':80,'source_height':40,
+                                    'model_width':160,'model_height':80}}
+    client, patcher = _client(module, _grounding(True, '(319,402),(648,859)') | coordinate_evidence)
+    with patcher, patch.object(module, 'MessageToDict', return_value=STATE):
+        estimate = client.localize_target('visible structure')
+    for key, value in coordinate_evidence.items():
+        assert estimate['vlm'][key] == value

@@ -1021,6 +1021,9 @@ class MissionClient:
         estimate["vlm"] = {key: grounding[key] for key in (
             "present", "presence_answer", "grounding_text", "latency_ms",
             "model_load_ms")}
+        estimate["vlm"].update({key: grounding[key] for key in (
+            'grounding_format', 'pixel_box_xyxy', 'model_pixel_box_xyxy',
+            'image_coordinate_transform') if key in grounding})
         estimate["vlm"]["visual_query"] = grounding_target["visual_query"]
         estimate["vlm"]["view_selector"] = grounding_target["view"]
         estimate["vlm"]["view_context"] = grounding.get('view_context')

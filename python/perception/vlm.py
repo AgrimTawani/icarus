@@ -239,6 +239,10 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
             'Count only individually visible instances in this single image. Return JSON only: '
             '{"count":nonnegative integer or null,"answer":"brief visible evidence"}. '
             'Use null if the count is uncertain; never infer invisible instances.')
+    # Pose belongs to the flight agent and the observation receipt. The visual
+    # component describes pixels; small VLMs mistake heading instructions for
+    # additional subject-identity constraints and reject clearly visible objects.
+    viewing_context_text(view_context)  # validate metadata without injecting it
     prompt = (
         "You are a visual inspection component. Describe only what is visible "
         "in the supplied image. The question may assume a subject that is absent. "
@@ -246,7 +250,7 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         "instead of describing an assumed object. Do not infer visibility from the question, "
         "geographic labels or prior context. Do not propose flight actions, landing sites, "
         "coordinates, or safety decisions. " + answer_format + "\n"
-        + viewing_context_text(view_context) + f"Question: {question}"
+        + f"Question: {question}"
     )
     started = time.monotonic()
     cpu_threads = artifact.get('cpu_threads', 4)
@@ -293,7 +297,7 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         "schema": SCHEMA,
         "observed_at_unix_ms": int(time.time() * 1000),
         "question": question,
-        "answer": measurement.get("answer", answer[:MAX_ANSWER_CHARS]) if result_type == "description" else answer[:MAX_ANSWER_CHARS],
+        "answer": measurement.get("answer", answer[:MAX_ANSWER_CHARS]) if structured else answer[:MAX_ANSWER_CHARS],
         "latency_ms": round((time.monotonic() - started) * 1000, 3),
         "image": {"sha256": _sha256(image_path)},
         "runtime": ({key: artifact.get(key) for key in
