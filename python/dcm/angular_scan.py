@@ -18,7 +18,7 @@ class AngularScan:
         from python.dcm.agent_tools import message_dict, observation_call
         from python.dcm.scan_policy import scan_arguments
         args = scan_arguments(args, default_observation='detect', coverage_return='sweep')
-        observation_call(args, default_observation='detect', default_camera='forward_d435i')
+        observation_call(args, default_observation='detect', default_camera='forward_d435i', client=self.client)
         if args.get('stop_on_detection') and (args.get('observation', 'detect') != 'detect'
                 or args['stop_on_detection'] not in args.get('classes', [])):
             raise ValueError('Detection condition must name a requested class')
@@ -41,7 +41,7 @@ class AngularScan:
         if s is None:
             raise ValueError('Unknown angular scan_id')
         a = s['args']
-        name, params = observation_call(a, default_observation='detect', default_camera='forward_d435i')
+        name, params = observation_call(a, default_observation='detect', default_camera='forward_d435i', client=self.client)
         # One sweep is a scheduling chunk, not completion of an open-ended search.
         budget = a.get('sweep_deg', 360)
         chunk_start = s['swept_deg']

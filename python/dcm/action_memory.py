@@ -5,6 +5,43 @@ import json
 MAX_REPLY_BYTES = 2000
 
 
+def receipt_outcome_facts(result, *, latest=True):
+    """Keep small factual outcomes inline even when large evidence is paged.
+
+    Transport success is not object presence or object-relative positioning.
+    Scalars and small maps preserve those distinctions without replaying raw
+    geometry, telemetry, model metadata or cumulative observation arrays.
+    """
+    evidence = result.get('evidence', {})
+    if not isinstance(evidence, dict):
+        return {}
+    scalar = lambda value: value is None or type(value) in (bool, int, float, str)
+    facts = {}
+    for key, value in evidence.items():
+        if key in ('schema', 'runtime', 'image', 'provenance', 'latency_ms', 'capture_pose_quality'):
+            continue
+        if scalar(value) and (not isinstance(value, str) or len(value) <= 300):
+            facts[key] = copy.deepcopy(value)
+        elif isinstance(value, dict) and all(scalar(v) for v in value.values()) and _size(value) <= 512:
+            facts[key] = copy.deepcopy(value)
+        elif key == 'counts' and isinstance(value, dict):
+            positives = {name: count for name, count in value.items()
+                         if type(count) in (int, float) and count > 0}
+            facts['nonzero_counts'] = dict(list(positives.items())[:8])
+            facts['counts_omitted'] = True
+            facts['counts_reference'] = ['result', 'evidence', 'counts']
+    observations = evidence.get('observations')
+    if latest and isinstance(observations, list) and observations:
+        last = observations[-1]
+        facts['observed_station_count'] = len(observations)
+        facts['latest_observation'] = {
+            key: copy.deepcopy(value) for key, value in last.items()
+            if scalar(value) and (not isinstance(value, str) or len(value) <= 120)}
+        facts['latest_observation']['evidence'] = receipt_outcome_facts(
+            {'evidence': last.get('evidence', {})}, latest=False)
+    return facts
+
+
 def _size(value):
     return len(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
 

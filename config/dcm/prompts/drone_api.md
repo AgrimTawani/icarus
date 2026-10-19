@@ -11,7 +11,7 @@ Scans own turn/path–settle–observe cycles. Select exit_policy: finish_at_mat
 
 Older or large observation details stay in retained action results. Follow their action index/path with read_action_result when needed; lookup success is not flight success or fresh observation.
 
-Catalogue entries are supplied in context.registered_waypoints. Optional named waypoints come from ICARUS_WAYPOINTS_FILE: a JSON catalogue with coordinate_frame="home_relative_ned" and entries containing name, north_m, east_m, and optional altitude_agl_m and heading_deg. Unknown names require coordinates; camera poses do not create waypoints.
+context.registered_waypoints initially supplies a catalogue index; get_context(include_waypoints=true) loads saved poses for this mission. Optional named waypoints come from ICARUS_WAYPOINTS_FILE: a JSON catalogue with coordinate_frame="home_relative_ned" and entries containing name, north_m, east_m, and optional altitude_agl_m and heading_deg. Unknown names require coordinates; camera poses do not create waypoints.
 
 Catalogue role identifies navigation_pose (default), observation_pose, or explicitly supplied orbit_center. Navigation/observation poses do not identify physical object centers or overhead positions. Orbit centers may include target_altitude_agl_m for camera geometry. A confirmed fresh landed-and-disarmed state already satisfies land; never arm to repair an already completed landing.
 

@@ -71,6 +71,7 @@ class AgentSession:
         self.tool_failure_counts = {}
         self.unresolved_tool_failures = {}
         self.mission_progress = ""
+        self.include_waypoints = False
 
     def remember_tool_result(self, name, arguments, result):
         """Receipt consistency only; never infer obligations from mission text."""
@@ -198,6 +199,9 @@ def fly_mission(
                             session.detector_feedback.interest):
                         echo('  Camera feedback: ' + line)
             context = context_provider(client)
+            if session.include_waypoints:
+                from python.dcm.destinations import catalogue_context
+                context['registered_waypoints'] = catalogue_context(True)
             camera_feedback = session.detector_feedback.snapshot()
             if camera_feedback is not None:
                 metadata = {k: v for k, v in camera_feedback['observation'].items()
@@ -295,7 +299,7 @@ def fly_mission(
                 args = call["function"].get("arguments", {})
                 if isinstance(args, str):
                     args = json.loads(args)
-                validate_call(name, args, tools=tools)
+                validate_call(name, args, tools=tools, detector_classes=context.get('detector_classes'))
                 # Agent-authored memory, never a controller argument or proof.
                 args = dict(args)
                 progress = args.pop('mission_progress', None)
@@ -394,6 +398,8 @@ def fly_mission(
                 {"action": name, "arguments": args, "result": result}
             )
             session.remember_tool_result(name, args, result)
+            if name == 'get_context' and result.get('status') == 'SUCCEEDED' and 'include_waypoints' in args:
+                session.include_waypoints = args['include_waypoints']
             session.detector_feedback.observe(name, args, result)
             if (result.get('status') == 'SUCCEEDED' and
                     (name == 'localize_target' or
@@ -524,7 +530,7 @@ def compact_result(value):
             # Navigation stays server-owned. The model needs identity,
             # observability and measured goals, not duplicate sensor arrays.
             selected = {k: value[k] for k in (
-                "target_id", "description", "found", "reason", "origin_id",
+                "target_id", "description", "found", "reason", "origin_id", "requested_view_heading_deg", "motion_command_issued",
                 "surface_range_m", "surface_range_kind", "bearing_deg",
                 "measurement_view_candidates") if k in value}
             selected["geometry"] = {k: v for k, v in value.get("geometry", {}).items()
@@ -633,6 +639,7 @@ def decision_messages(session, context, lean=False):
             if key in context["state"]}
     if session.start_state is not None:
         context["mission_start_state"] = copy.deepcopy(session.start_state)
+    from python.dcm.action_memory import receipt_outcome_facts
     executed = []
     for entry in session.actions:
         if entry["action"] == "execute_sequence":
@@ -659,6 +666,7 @@ def decision_messages(session, context, lean=False):
                     },
                     "status": item["result"]["status"],
                     "message": item["result"].get("message", ""),
+                    "outcome_facts": receipt_outcome_facts(item['result']),
                     **({'reason_code': item['result']['reason_code']}
                        if 'reason_code' in item['result'] else {}),
                     **({'motion': compact_result(item['result']['motion'])}
@@ -707,7 +715,7 @@ def decision_messages(session, context, lean=False):
                     scan_observation_records[scan_id] = observation
     for index, observation in enumerate(observations, 1):
         observation['observation_index'] = index
-    context["successful_action_counts"] = successful_counts
+    context["successful_tool_call_counts"] = successful_counts
     context['unresolved_tool_failures'] = copy.deepcopy(list(session.unresolved_tool_failures.values()))
     context["observations"] = observations
     last_observation = max((e['index'] for e in executed
@@ -725,7 +733,7 @@ def decision_messages(session, context, lean=False):
     current_yaw = context.get('state', {}).get('attitude', {}).get('yaw_rad')
     import math
     motion_names = set(executor_flight_names()) - {'arm', 'disarm'}
-    last_motion_index = max((e['index'] for e in executed if e['action'] in motion_names), default=0)
+    last_motion_index = max((e['index'] for e in executed if e['action'] in motion_names or e.get('outcome_facts', {}).get('motion_command_issued') is True), default=0)
     for observation in observations:
         evidence = observation.get('evidence', {})
         capture = evidence.get('capture_pose', {})
@@ -773,6 +781,8 @@ def decision_messages(session, context, lean=False):
         except (TypeError, ValueError):
             continue
         if isinstance(item, dict) and 'evidence' in item:
+            from python.dcm.action_memory import receipt_outcome_facts
+            item['outcome_facts'] = receipt_outcome_facts(item)
             item.pop('evidence')
             item['evidence_reference'] = 'indexed observations in live feedback'
             message['content'] = json.dumps(item, separators=(',', ':'))

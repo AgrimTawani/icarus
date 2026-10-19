@@ -74,7 +74,7 @@ class ScanWorkflow:
         from python.dcm.agent_tools import observation_call
         from python.dcm.scan_policy import scan_arguments
         args = scan_arguments(args, default_observation='scene', coverage_return='completion')
-        observation_call(args, default_observation='scene', default_camera='downward_brio')
+        observation_call(args, default_observation='scene', default_camera='downward_brio', client=self.client)
         stop = args.get('stop_on_detection')
         if stop and (args.get('observation', 'scene')!='detect' or stop not in args.get('classes', [])):
             raise ValueError('stop_on_detection must be one of the requested detection classes')
@@ -99,7 +99,7 @@ class ScanWorkflow:
             return self._result(scan_id, saved, 'completed')
         args=saved['args']
         from python.dcm.agent_tools import observation_call
-        name, params = observation_call(args, default_observation='scene', default_camera='downward_brio')
+        name, params = observation_call(args, default_observation='scene', default_camera='downward_brio', client=self.client)
         while saved['next']<len(saved['indices']):
             if self.executor.interrupted():
                 return self._result(scan_id,saved,'interrupted','CANCELLED')

@@ -54,7 +54,7 @@ def compact_scan_receipts(entries):
 
     def identity(entry):
         return {k: v for k, v in entry.items() if k not in (
-            'index', 'message', 'through_index', 'executions', 'evidence_reference')}
+            'index', 'message', 'through_index', 'executions', 'evidence_reference', 'outcome_facts')}
 
     for entry in entries:
         previous = result[-1] if result else None
@@ -64,6 +64,8 @@ def compact_scan_receipts(entries):
             previous['through_index'] = entry['index']
             previous['executions'] = previous.get('executions', 1) + 1
             previous['message'] = entry.get('message', '')
+            if 'outcome_facts' in entry:
+                previous['outcome_facts'] = copy.deepcopy(entry['outcome_facts'])
             previous['evidence_reference'] = {
                 'scan_id': entry['arguments']['scan_id'],
                 'location': 'observations[].evidence: cumulative stations',

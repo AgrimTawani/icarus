@@ -138,7 +138,7 @@ class ActiveDetectionFeedback:
                 if self._register(request):
                     self._accept({'status': 'SUCCEEDED', 'evidence': last}, 'scan_observation')
             return
-        if tool in _MOTION:
+        if tool in _MOTION or result.get('evidence', {}).get('motion_command_issued') is True:
             self.motion_action = tool
             self.revision += 1
             if self.interest:

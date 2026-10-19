@@ -41,7 +41,7 @@ def advertised_motion_limits(capabilities):
     return limits
 
 
-def capture_context(client, include_geometry=False):
+def capture_context(client, include_geometry=False, include_waypoints=False):
     from python.dcm._paths import ensure_generated_proto_on_path
 
     ensure_generated_proto_on_path()
@@ -184,8 +184,9 @@ def capture_context(client, include_geometry=False):
     } for name in context['cameras'] if camera_calibration(name).get('available')]
     context['references'] = {'home': resolve_reference(context['state']),
         'launch': resolve_reference(context['state'], 'launch', getattr(client, '_takeoff_reference', None))}
-    from python.dcm.destinations import waypoint_catalogue
-    context['registered_waypoints'] = waypoint_catalogue()
+    from python.dcm.destinations import catalogue_context
+    context['registered_waypoints'] = catalogue_context(include_waypoints)
+    context['detector_classes'] = getattr(client, 'camera_detector_classes', lambda: [])()
     context["now_unix_ms"] = now
     # Model feedback is a view of telemetry, not a protobuf dump. Preserve
     # decisions' measurements and validity; transport counters, duplicate

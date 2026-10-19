@@ -194,9 +194,9 @@ SCHEMAS.update(
         ),
         "assess_landing_zone": obj(),
         "localize_target": obj(
-            {"description": {**TEXT, 'description': 'Visual subject in the current image. Compass labels are not observable in pixels: face the requested direction first, then describe the object by visible features.'}, "new_target": {**BOOL, "description": "Default false: add measurements to the same physical object across viewpoints. True explicitly discards prior views and starts a distinct target; do not use true just to refresh a measurement."}}, ["description"]
+            {"view_heading_deg": {"type":"number", "minimum":0, "exclusiveMaximum":360}, "description": {**TEXT, 'description': 'Visual subject in the current image. Compass labels are not observable in pixels: face the requested direction first, then describe the object by visible features.'}, "new_target": {**BOOL, "description": "Default false: add measurements to the same physical object across viewpoints. True explicitly discards prior views and starts a distinct target; do not use true just to refresh a measurement."}}, ["description"]
         ),
-        "get_context": obj({"include_geometry": BOOL}),
+        "get_context": obj({"include_geometry": BOOL, "include_waypoints": {**BOOL, "description": "Load saved vehicle navigation poses when a named waypoint is requested; these are not physical object positions."}}),
         "read_action_result": obj({
             "action_index": {"type": "integer", "minimum": 1},
             "path": {"type": "array", "maxItems": 16,
@@ -300,6 +300,13 @@ def decision_tools(context, angular_scans=None, area_scans=None):
             return schema
         result = {key: bind_limits(value) for key, value in schema.items()}
         properties = result.get('properties', {})
+        if 'classes' in properties:
+            # Advertise the vocabulary once as context data; retain strict
+            # membership validation before any sensor/flight dispatch.
+            properties['classes']['items'] = {'type':'string', 'minLength':1}
+            properties['classes']['description'] = 'Use supported labels from context.detector_classes.'
+            if context.get('detector_classes'):
+                properties['classes']['maxItems'] = len(context['detector_classes'])
         if ('target_altitude_agl_m' in properties and context.get('state', {}).get('landed') is False
                 and context.get('state', {}).get('armed') is True):
             properties.pop('maximum_climb_rate_mps', None)
@@ -379,6 +386,8 @@ def decision_tools(context, angular_scans=None, area_scans=None):
             function['parameters']['required'] = [
                 'visual_query' if key == 'description' else key
                 for key in function['parameters'].get('required', [])]
+            function['parameters']['required'].append('view_heading_deg')
+            function['parameters']['properties']['view_heading_deg']['description'] = ('Requested absolute viewing heading; current measured heading for a target already in front. May turn while airborne; never arms or takes off.')
             function['description'] = function['description'].replace('description', 'visual_query')
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
@@ -394,7 +403,7 @@ def decision_tools(context, angular_scans=None, area_scans=None):
     return catalog
 
 
-def validate_call(name, arguments, *, tools=None):
+def validate_call(name, arguments, *, tools=None, detector_classes=None):
     """Validate the advertised call contract, or the static API for direct callers."""
     if not isinstance(name, str) or name not in SCHEMAS:
         raise ValueError(f"Unknown tool {name!r}; use a listed tool")
@@ -409,6 +418,11 @@ def validate_call(name, arguments, *, tools=None):
                        if tool['function']['name'] == name), None)
         if schema is None:
             raise ValueError(f"Tool {name!r} is unavailable in this decision; use a listed tool")
+    if 'classes' in schema.get('properties', {}):
+        schema = copy.deepcopy(schema)
+        supported = DETECTION_CLASSES['items']['enum'] if detector_classes is None else detector_classes
+        schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
+        schema['properties']['classes']['maxItems'] = len(supported)
     arguments = copy.deepcopy(arguments)
     if name in (*TARGET_FLIGHT, 'localize_target'):
         if 'description' in arguments and 'visual_query' in arguments:
@@ -462,7 +476,7 @@ def validate_call(name, arguments, *, tools=None):
                 raise ValueError(format_schema_error(action['name'], errors[0]))
 
 
-def observation_call(args, *, default_observation, default_camera):
+def observation_call(args, *, default_observation, default_camera, client=None):
     """Validate the exact embedded sensor call before a workflow can move."""
     observation = args.get('observation', default_observation)
     if observation not in ('detect', 'scene'):
@@ -474,7 +488,8 @@ def observation_call(args, *, default_observation, default_camera):
     else:
         params['question'] = args.get('question', 'Describe visible objects and any uncertainty in this view.')
         params['question_type'] = args.get('question_type', 'description')
-    validate_call(name, params)
+    getter = getattr(client, 'camera_detector_classes', None) if name == 'detect' else None
+    validate_call(name, params, detector_classes=getter() if callable(getter) else None)
     return name, params
 
 
@@ -507,7 +522,12 @@ class ToolExecutor:
         )
 
     def execute(self, name, arguments):
-        validate_call(name, arguments)
+        vocabulary = None
+        if isinstance(arguments, dict) and 'classes' in arguments:
+            getter = getattr(self.client, 'camera_detector_classes', None)
+            if callable(getter):
+                vocabulary = getter()
+        validate_call(name, arguments, detector_classes=vocabulary)
         arguments = copy.deepcopy(arguments)
         if name in (*TARGET_FLIGHT, 'localize_target') and 'visual_query' in arguments:
             arguments['description'] = arguments.pop('visual_query')
@@ -670,10 +690,29 @@ class ToolExecutor:
 
                     shutil.rmtree(view["directory"], ignore_errors=True)
             elif name in ("assess_landing_zone", "localize_target"):
+                orientation = None
+                heading = arguments.pop('view_heading_deg', None) if name == 'localize_target' else None
+                if heading is not None:
+                    state = message_dict(self.client.state())
+                    yaw = state.get('attitude', {}).get('yaw_rad')
+                    if type(yaw) not in (int,float) or not math.isfinite(yaw):
+                        raise ValueError('Measured heading is required before directional localization')
+                    if abs(math.remainder(heading-math.degrees(yaw),360)) > 5:
+                        if state.get('landed') or not state.get('armed'):
+                            return {'status':'NEEDS_CLARIFICATION','requires_user_choice':True,
+                                'question':'The requested view needs the aircraft to turn, but it is landed. Should the view or flight requirement change?',
+                                'message':'No motors or flight command were sent for the camera request.'}
+                        orientation = self.execute('face_heading', {'heading_deg':heading})
+                        if orientation['status'] != 'SUCCEEDED':
+                            orientation.setdefault('evidence', {})['motion_command_issued'] = True
+                            return orientation
                 result = {
                     "status": "SUCCEEDED",
                     "evidence": getattr(self.client, name)(**arguments),
                 }
+                if heading is not None:
+                    result['evidence'].update(requested_view_heading_deg=heading,
+                                              motion_command_issued=orientation is not None)
             elif name == 'read_action_result':
                 from python.dcm.action_memory import read_action_result
                 if self.session is None:

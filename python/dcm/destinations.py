@@ -144,6 +144,17 @@ def waypoint_catalogue():
         return {'available': False, 'entries': [], 'source': path, 'reason': str(error)}
 
 
+def catalogue_context(include_entries=False):
+    catalogue = waypoint_catalogue()
+    if include_entries:
+        return {**catalogue, 'loaded': True}
+    return {**{key:value for key,value in catalogue.items() if key not in ('entries', 'source')},
+        'source': 'operator_configured_catalogue' if os.environ.get('ICARUS_WAYPOINTS_FILE') else catalogue['source'],
+        'entries': [], 'loaded': False, 'count': len(catalogue['entries']),
+        'kind': 'saved_vehicle_navigation_poses',
+        'load_with': {'tool':'get_context','arguments':{'include_waypoints':True}}}
+
+
 def execute_destination(executor, operation, arguments):
     from python.dcm.agent_tools import message_dict
     from python.dcm.camera_geometry import resolve_reference
