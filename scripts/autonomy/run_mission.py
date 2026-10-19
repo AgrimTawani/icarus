@@ -554,6 +554,13 @@ class MissionClient:
                 "tool": "yolo", "seconds": time.monotonic()-started, **result})
         echo("Camera detector ready.")
 
+    def camera_detector_classes(self):
+        """Configured image-detector vocabulary, independent of mission text."""
+        if self.vision_profile != 'edge-vision':
+            return []
+        from python.perception.classes import YOLO_CLASSES
+        return sorted(YOLO_CLASSES)
+
     @_exclusive_inference
     def detect(self, classes, *, window_s=None, camera=None):
         """Run a simulator camera inspection; never sends a flight command."""

@@ -82,6 +82,19 @@ class ActiveDetectionFeedback:
             if self._register(arguments):
                 self._accept(result, 'requested_detect')
             return
+        if tool == 'inspect_scene':
+            evidence = result.get('evidence', {})
+            paired = evidence.get('camera_detection', {}) if isinstance(evidence, Mapping) else {}
+            request = paired.get('arguments', {}) if isinstance(paired, Mapping) else {}
+            detection = paired.get('result', {}) if isinstance(paired, Mapping) else {}
+            if not self.interest:
+                self._register(request)
+            # An inspection must not replace an existing requested camera or
+            # class interest. Its detector can satisfy that interest only if
+            # the camera matches; _accept also validates every requested count.
+            if self.interest and request.get('camera') == self.interest['camera']:
+                self._accept(detection, 'inspection_detector')
+            return
         if tool == 'execute_sequence':
             # Observe only actions actually executed; refresh once after batch.
             for child in result.get('actions', []):

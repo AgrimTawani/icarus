@@ -1266,6 +1266,32 @@ def test_terminal_failure_preserves_api_reason_without_parsing_message(monkeypat
     assert result['reason_code']=='REASON_CODE_STATE_STALE'
 
 
+@pytest.mark.parametrize('detector_fails',[False,True])
+def test_scene_inspection_keeps_detector_receipt_separate_and_never_flies(tmp_path,monkeypatch,detector_fails):
+    client=FakeClient()
+    directory=tmp_path/'camera';directory.mkdir()
+    monkeypatch.setattr(client,'capture_view',lambda camera:{'directory':str(directory),'camera':camera},raising=False)
+    monkeypatch.setattr(client,'inspect_scene',lambda question,view:{'answer':'Two objects may be visible.'},raising=False)
+    monkeypatch.setattr(client,'camera_detector_classes',lambda:['car','person'],raising=False)
+    requested=[]
+    def detect(**args):
+        requested.append(args)
+        if detector_fails:
+            raise RuntimeError('Detector unavailable')
+        return {'camera':args['camera'],'counts':{'car':0,'person':1},
+                'captured_at_unix_ms':int(time.time()*1000)}
+    monkeypatch.setattr(client,'detect',detect)
+    result=ToolExecutor(client).execute('inspect_scene',{'question':'Describe the view.','camera':'forward_d435i'})
+    assert result['status']=='SUCCEEDED'
+    assert result['evidence']['measurement_kind']=='qualitative_vlm_answer'
+    paired=result['evidence']['camera_detection']
+    assert paired['capture_relationship']=='separate_detector_capture_after_vlm_inspection'
+    assert paired['result']['status']==('FAILED' if detector_fails else 'SUCCEEDED')
+    assert requested==[{'camera':'forward_d435i','classes':['car','person']}]
+    assert not client.sent
+    assert not directory.exists()
+
+
 def test_mission_start_reference_is_stable_and_original_request_repeated():
     from python.dcm.fly import decision_messages
     session = AgentSession("Scan a square behind the launch point")

@@ -203,7 +203,8 @@ def fly_mission(
                 context['current_camera_detection'] = {
                     **{k: v for k, v in camera_feedback.items() if k != 'observation'},
                     'observation': metadata,
-                    'evidence_reference': 'Latest indexed detection observation in chronological execution history.'}
+                    'evidence_reference': ('Latest indexed detection observation, or camera_detection inside '
+                                           'the latest scene-inspection receipt, in chronological execution history.')}
             session.angular_scans = getattr(client, '_angular_scans', {})
             session.area_scans = getattr(client, '_scan_workflows', {})
             from python.dcm.action_memory import indexed_results

@@ -232,7 +232,7 @@ DESCRIPTIONS = {
     'scan_area': 'Geometric flight plus sampled camera stations, anchored at current position. Rectangle width extends right, length forward; square needs width, circle radius, area lane_spacing_m. observation defaults scene, camera downward_brio, observation_count4. Return each station for branching; return_on=completion only for unconditional scans. stop_on_detection continues to a match. Resume with resume_scan.',
     'resume_scan': 'Resume a saved area scan with its original anchor and remaining stations.',
     'detect': 'Detect/count supported class enum labels in a current image, including while disarmed. Unsupported objects use inspect_scene/localize_target. Counts are thresholded detections, not guaranteed totals; default camera forward_d435i.',
-    'inspect_scene': 'Ask onboard VLM about visible appearance, objects or relationships. Returns uncertain visual evidence, not metric geometry.',
+    'inspect_scene': 'Ask onboard VLM about visible appearance, objects or relationships. Samples configured detector counts separately when available; VLM prose is qualitative evidence, not metric geometry or measured counts.',
     'localize_target': 'Associate a visible object with measured LiDAR/depth. Returns surface range, footprint quality and reusable target_id; another viewpoint may be needed. Reuse the query to accumulate views.',
     'approach_target': 'Choose a new measured horizontal surface-standoff point using native routing; this does not resolve a previously designated waypoint. Recede only if already closer. Supply target_id or visual_query. Refresh static-object geometry before each leg and after arrival; not continuous moving-target tracking.',
     'orbit_target': 'Circle a measured object with nose facing it. Supply target_id or visual_query. standoff_m is minimum distance from its observed hull, not center radius or global obstacle clearance; wall distance varies for non-round shapes. Partial geometry may require two measured side views first. Select camera for visual intent.',
@@ -549,6 +549,22 @@ class ToolExecutor:
                             arguments["question"], view=view
                         ),
                     }
+                    result['evidence']['measurement_kind'] = 'qualitative_vlm_answer'
+                    vocabulary = getattr(self.client, 'camera_detector_classes', lambda: [])()
+                    if vocabulary and not self.interrupted():
+                        # Quantitative feedback comes from the configured
+                        # detector, never numbers inferred from VLM prose.
+                        # This is a separate current capture with its own pose
+                        # and timestamp, not a same-frame sensor-fusion claim.
+                        request = {'camera': camera, 'classes': vocabulary}
+                        try:
+                            detection = {'status': 'SUCCEEDED',
+                                'evidence': self.client.detect(**request)}
+                        except Exception as error:
+                            detection = {'status': 'FAILED', 'message': str(error)}
+                        result['evidence']['camera_detection'] = {
+                            'arguments': request, 'result': detection,
+                            'capture_relationship': 'separate_detector_capture_after_vlm_inspection'}
                 finally:
                     # inspect_scene normally consumes the frame; clean up if inference fails early.
                     import shutil

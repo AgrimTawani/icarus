@@ -36,6 +36,43 @@ def test_no_interest_never_dispatches_even_after_motion():
     assert f.refresh(ex) is None and not ex.calls
 
 
+def inspection_pair(count=2, camera='forward_d435i', failed=False):
+    return {'status':'SUCCEEDED','evidence':{'answer':'A qualitative scene answer.',
+        'camera_detection':{'arguments':{'classes':['person'],'camera':camera},
+            'result':{'status':'FAILED','message':'Detector unavailable'} if failed else detected(count,camera)}}}
+
+
+def test_inspection_detector_starts_feedback_and_refreshes_after_motion():
+    f=ActiveDetectionFeedback(clock_ms=lambda:1100)
+    original=inspection_pair(2)
+    f.observe('inspect_scene',{},original)
+    assert f.snapshot()['observation']['counts']=={'person':2}
+    assert f.snapshot()['observation']['source_tool']=='inspection_detector'
+    f.observe('orbit_target',{}, {'status':'SUCCEEDED'})
+    ex=Executor(detected(3))
+    f.refresh(ex)
+    assert f.snapshot()['observation']['counts']=={'person':3}
+    assert original['evidence']['camera_detection']['result']['evidence']['counts']=={'person':2}
+    assert len(ex.calls)==1
+
+
+def test_inspection_does_not_replace_an_explicit_camera_interest():
+    f=active()
+    f.observe('inspect_scene',{},inspection_pair(5,camera='downward_brio'))
+    assert f.interest=={'camera':'forward_d435i','classes':['person']}
+    assert f.snapshot()['observation']['counts']=={'person':2}
+
+
+def test_failed_inspection_detector_is_unknown_and_can_refresh_after_motion():
+    f=ActiveDetectionFeedback(clock_ms=lambda:1100)
+    f.observe('inspect_scene',{},inspection_pair(failed=True))
+    assert f.snapshot()['observation']['validity']=='unknown'
+    assert 'counts' not in f.snapshot()['observation']
+    f.observe('hold',{}, {'status':'SUCCEEDED'})
+    f.refresh(Executor(detected(1)))
+    assert f.snapshot()['observation']['counts']=={'person':1}
+
+
 def test_motion_refreshes_once_with_requested_interest_preserving_history():
     f = active(); ex = Executor(); original = detected(); before = deepcopy(original)
     f.observe('detect', {'classes': ['person']}, original)
