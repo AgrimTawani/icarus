@@ -60,6 +60,8 @@ class AgentSession:
         self.rejected_validation_attempts = []
         self.rejected_validation_attempts_total = 0
         self.awaiting_user = False
+        self.pending_question = None
+        self.operator_updates = []
         self.finished = False
         self.decisions = 0
         self.start_state = None
@@ -111,9 +113,13 @@ class AgentSession:
         if not self.awaiting_user:
             raise ValueError("There is no pending clarification")
         self.messages.append({"role": "user", "content": text})
+        self.operator_updates.append({'question': self.pending_question, 'answer': text})
+        self.pending_question = None
         self.awaiting_user = False
 
     def result(self, status, message):
+        if status == 'awaiting_user':
+            self.pending_question = message
         return {
             "architecture": "direct-agent-v1",
             "mission": self.mission,
@@ -121,6 +127,7 @@ class AgentSession:
             "message": message,
             "decisions": self.decisions,
             "executed": list(self.actions),
+            "operator_updates": copy.deepcopy(self.operator_updates),
             "unresolved_tool_failures": copy.deepcopy(list(self.unresolved_tool_failures.values())),
         }
 
@@ -530,7 +537,7 @@ def compact_result(value):
             # Navigation stays server-owned. The model needs identity,
             # observability and measured goals, not duplicate sensor arrays.
             selected = {k: value[k] for k in (
-                "target_id", "description", "found", "reason", "origin_id", "requested_view_heading_deg", "motion_command_issued",
+                "target_id", "description", "found", "reason", "origin_id", "requested_view", "requested_view_heading_deg", "motion_command_issued",
                 "surface_range_m", "surface_range_kind", "bearing_deg",
                 "measurement_view_candidates") if k in value}
             selected["geometry"] = {k: v for k, v in value.get("geometry", {}).items()
@@ -550,7 +557,7 @@ def compact_result(value):
         if "counts" in value and "captured_at_unix_ms" in value:
             selected = {k: value[k] for k in ("counts", "camera", "captured_at_unix_ms",
                 "capture_pose", "validity", "error", "fresh", "confidence_threshold",
-                "age_ms", "source_tool", "count_scope", "motion_revision") if k in value}
+                "age_ms", "source_tool", "count_scope", "motion_revision", "requested_view", "requested_view_heading_deg", "motion_command_issued") if k in value}
             return {k: compact_result(v) for k, v in selected.items()}
         return {
             k: compact_result(v)
@@ -806,7 +813,8 @@ def decision_messages(session, context, lean=False):
             context['execution_progress']['last_completed_action'] = lean_execution_receipt(
                 context['execution_progress']['last_completed_action'])
         context['memory_packing'] = 'Receipt details are retained; use read_action_result by index/path when needed.'
-    feedback = context_message(context, mission=session.mission)["content"]
+    feedback = context_message(context, mission=session.mission,
+                               operator_updates=session.operator_updates)["content"]
     # Native tool conversations resume on a tool result. Adding a synthetic
     # user message here can make small models restart the original mission.
     messages[-1]["content"] = (messages[-1].get("content") or "") + "\n\n" + feedback

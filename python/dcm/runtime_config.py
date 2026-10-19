@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v3-retained-evidence'
-DIRECT_TOOL_VERSION = 'direct-tools-v11-typed-destination-geometry'
+DIRECT_PROMPT_VERSION = 'direct-agent-v4-operator-updates'
+DIRECT_TOOL_VERSION = 'direct-tools-v12-active-view'
 
 
 class DeadlineExceeded(Exception):

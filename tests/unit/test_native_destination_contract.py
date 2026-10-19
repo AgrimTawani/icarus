@@ -19,15 +19,15 @@ CASES=[
  ('goto',{'type':'coordinates','coordinate_frame':'local_ned','origin_id':'measured-origin','north_m':1,'east_m':2,'altitude_agl_m':3}),
  ('goto',{'type':'home'}),('goto',{'type':'launch'}),
  ('goto',{'type':'named_waypoint','waypoint_name':'Center A'}),
- ('approach_target',{'type':'visible_object','visual_query':'visible structure','view_heading_deg':0,'standoff_m':3}),
+ ('approach_target',{'type':'visible_object','visual_query':'visible structure','view':'north','standoff_m':3}),
  ('approach_target',{'type':'registered_target','target_id':'measured','standoff_m':3}),
  ('orbit',{'type':'coordinates','coordinate_frame':'home_relative_ned','north_m':1,'east_m':2,'altitude_agl_m':3,'radius_m':4}),
  ('orbit',{'type':'home','radius_m':4,'altitude_agl_m':3}),
  ('orbit',{'type':'launch','radius_m':4,'altitude_agl_m':3}),
  ('orbit',{'type':'named_waypoint','waypoint_name':'Center A','radius_m':4,'altitude_agl_m':3}),
- ('orbit',{'type':'visible_object','visual_query':'visible structure','view_heading_deg':0,'standoff_m':3}),
+ ('orbit',{'type':'visible_object','visual_query':'visible structure','view':'north','standoff_m':3}),
  ('orbit',{'type':'registered_target','target_id':'measured','standoff_m':3}),
- ('overfly_target',{'type':'visible_object','visual_query':'visible structure','view_heading_deg':0}),
+ ('overfly_target',{'type':'visible_object','visual_query':'visible structure','view':'north'}),
  ('overfly_target',{'type':'registered_target','target_id':'measured'}),
 ]
 
@@ -41,7 +41,7 @@ def test_advertised_variant_satisfies_real_dispatch_requirements(name,destinatio
 
 
 @pytest.mark.parametrize('name,destination',[
- ('approach_target',{'type':'visible_object','visual_query':'structure','view_heading_deg':0}),
+ ('approach_target',{'type':'visible_object','visual_query':'structure','view':'north'}),
  ('goto',{'type':'coordinates','coordinate_frame':'local_ned','north_m':1,'east_m':2,'altitude_agl_m':3}),
  ('orbit',{'type':'registered_target','target_id':'measured','radius_m':4}),
  ('orbit',{'type':'home','radius_m':4}),

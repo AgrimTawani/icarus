@@ -78,6 +78,13 @@ class ActiveDetectionFeedback:
             source_tool=source, status='SUCCEEDED', count_scope='current_camera_frame',
             count_meaning='accepted model detections, not guaranteed object totals')
 
+    def _after_motion(self,tool,result):
+        self.motion_action=tool
+        self.revision+=1
+        if self.interest:
+            self._invalidate('Viewpoint changed after motion')
+            self._pending=result.get('status')=='SUCCEEDED' and not result.get('requires_user_choice')
+
     def observe(self, tool, arguments, result):
         """Consume each completed top-level result once, before next decision.
 
@@ -86,6 +93,10 @@ class ActiveDetectionFeedback:
         """
         if not isinstance(arguments, Mapping) or not isinstance(result, Mapping):
             return
+        evidence=result.get('evidence',{})
+        moved=isinstance(evidence,Mapping) and evidence.get('motion_command_issued') is True
+        if tool not in _SCANS and (tool in _MOTION or moved):
+            self._after_motion(tool,result)
         if tool == 'detect':
             if self._register(arguments):
                 self._accept(result, 'requested_detect')
@@ -138,12 +149,6 @@ class ActiveDetectionFeedback:
                 if self._register(request):
                     self._accept({'status': 'SUCCEEDED', 'evidence': last}, 'scan_observation')
             return
-        if tool in _MOTION or result.get('evidence', {}).get('motion_command_issued') is True:
-            self.motion_action = tool
-            self.revision += 1
-            if self.interest:
-                self._invalidate('Viewpoint changed after motion')
-                self._pending = result.get('status') == 'SUCCEEDED' and not result.get('requires_user_choice')
 
     @property
     def needs_refresh(self):

@@ -532,7 +532,7 @@ def decode_pixel_box(answer, width, height):
             raise ValueError('Expected four finite pixel coordinates')
         x1, y1, x2, y2 = box
         if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
-            raise ValueError('Bounding box is inverted or outside the source image')
+            raise ValueError(f'Bounding box {box} is inverted or outside source image {width}x{height}')
         normalized = tuple(round(1000 * v / size) for v, size in
                            zip(box, (width, height, width, height)))
         if normalized[0] >= normalized[2] or normalized[1] >= normalized[3]:

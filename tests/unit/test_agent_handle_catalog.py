@@ -63,7 +63,7 @@ def test_workflow_handle_choices_are_separate_and_missing_ids_hide_dependent_too
         variants = schema['properties']['destination']['oneOf']
         assert 'registered_target' not in [v['properties']['type']['const'] for v in variants]
         visible = next(v for v in variants if v['properties']['type']['const']=='visible_object')
-        assert {'visual_query','view_heading_deg'} <= set(visible['required'])
+        assert {'visual_query','view'} <= set(visible['required'])
     assert 'orbit_target' not in names and 'approach_target' in names
     assert 'overfly_target' in names
     assert {'localize_target', 'orbit', 'goto', 'face_heading', 'scan_area', 'scan_heading'} <= names

@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+from python.dcm.viewing import VIEW_SCHEMA, resolve_view
 
 KINDS = ['coordinates', 'home', 'launch', 'named_waypoint', 'visible_object', 'registered_target']
 OBJECTS = {'visible_object', 'registered_target'}
@@ -58,9 +59,8 @@ def destination_schema(operation, legacy):
             variants.append(ref('coordinates',fields,required))
         variants += [ref('home'),ref('launch'),ref('named_waypoint',{'waypoint_name':text},['waypoint_name'])]
     object_variants = [
-        ref('visible_object',{'visual_query':{**text,'description':'Visible appearance only.'},
-            'view_heading_deg':{'type':'number','minimum':0,'exclusiveMaximum':360,
-                'description':'Absolute viewing heading before localization.'}},['visual_query','view_heading_deg']),
+        ref('visible_object',{'visual_query':{**text,'description':'Object class, visual description or image-relative referent. A class alone can begin acquisition; direction uses view.'},
+            'view':copy.deepcopy(VIEW_SCHEMA)},['visual_query','view']),
         ref('registered_target',{'target_id':text},['target_id'])]
     if operation != 'goto':
         variants += object_variants
@@ -94,6 +94,9 @@ def canonical_destination_arguments(operation, arguments):
     args=copy.deepcopy(arguments)
     reference=args.get('destination')
     if not isinstance(reference,dict):return args
+    if 'view_heading_deg' in reference:
+        if 'view' in reference:raise ValueError('Supply view once, not both heading aliases')
+        reference['view']=reference.pop('view_heading_deg')
     for field in DESTINATION_FIELDS:
         if field in args:
             if field in reference:
@@ -142,9 +145,9 @@ def validate_destination(operation, args):
         required.add('waypoint_name'); allowed.add('waypoint_name')
     elif kind in OBJECTS:
         required.add('visual_query' if kind == 'visible_object' else 'target_id')
-        allowed |= {'visual_query' if kind == 'visible_object' else 'target_id', 'view_heading_deg', 'standoff_m'}
+        allowed |= {'visual_query' if kind == 'visible_object' else 'target_id', 'view', 'view_heading_deg', 'standoff_m'}
         if kind == 'visible_object':
-            required.add('view_heading_deg')
+            if 'view_heading_deg' not in args:required.add('view')
         if operation == 'goto':
             required.add('object_position'); allowed.add('object_position')
             if args.get('object_position') == 'above':
@@ -230,6 +233,9 @@ def execute_destination(executor, operation, arguments):
             preparation.append({'name': 'move_relative', 'arguments': move, 'result': result})
             if result['status'] != 'SUCCEEDED':
                 return result
+        if 'view' in args:
+            requested_view=args.pop('view')
+            if requested_view!='current':args['view_heading_deg']=resolve_view(requested_view,state)
         if 'view_heading_deg' in args:
             heading = {'heading_deg': args.pop('view_heading_deg')}
             result = executor.execute('face_heading', heading)

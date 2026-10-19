@@ -16,6 +16,7 @@ from python.dcm.actions import (
     navigation_acceptance_radius,
 )
 from python.dcm.validation_diagnostics import format_schema_error
+from python.dcm.viewing import VIEW_SCHEMA, canonical_view_arguments, resolve_view
 
 
 def obj(properties=None, required=()):
@@ -68,8 +69,7 @@ FLIGHT = {
     ),
     "hold": obj({"duration_s": POSITIVE}),
     "yaw": obj({"angle_deg": {**NUMBER, "description": "Relative turn from current heading in degrees; positive clockwise, negative counterclockwise. Not an absolute heading."}, "rate_deg_s": {"type": "number", "minimum": 5, "maximum": 60}}, ["angle_deg"]),
-    "face_heading": obj({"heading_deg": {"type": "number", "minimum": 0,
-                                          "exclusiveMaximum": 360}}, ['heading_deg']),
+    "face_heading": obj({"view": VIEW_SCHEMA}, ["view"]),
     "orbit": obj(
         {
             "center_north_m": NUMBER,
@@ -194,7 +194,7 @@ SCHEMAS.update(
         ),
         "assess_landing_zone": obj(),
         "localize_target": obj(
-            {"view_heading_deg": {"type":"number", "minimum":0, "exclusiveMaximum":360}, "description": {**TEXT, 'description': 'Visual subject in the current image. Compass labels are not observable in pixels: face the requested direction first, then describe the object by visible features.'}, "new_target": {**BOOL, "description": "Default false: add measurements to the same physical object across viewpoints. True explicitly discards prior views and starts a distinct target; do not use true just to refresh a measurement."}}, ["description"]
+            {"view": VIEW_SCHEMA, "view_heading_deg": {"type":"number", "minimum":0, "exclusiveMaximum":360}, "description": {**TEXT, 'description': 'Visual subject in the current image. Compass labels are not observable in pixels: face the requested direction first, then describe the object by visible features.'}, "new_target": {**BOOL, "description": "Default false: add measurements to the same physical object across viewpoints. True explicitly discards prior views and starts a distinct target; do not use true just to refresh a measurement."}}, ["description"]
         ),
         "get_context": obj({"include_geometry": BOOL, "include_waypoints": {**BOOL, "description": "Load saved vehicle navigation poses when a named waypoint is requested; these are not physical object positions."}}),
         "read_action_result": obj({
@@ -223,7 +223,7 @@ for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
         }
 DESCRIPTIONS = {
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
-    'orbit': 'Choose destination.type explicitly: coordinates, home, launch, named_waypoint, visible_object or registered_target. Object orbits use standoff_m from measured hull and face the object; visual_query also needs view_heading_deg. Coordinate/home/launch orbits use radius_m and altitude_agl_m. Coordinates require coordinate_frame and local_ned requires origin_id. Select camera explicitly; none means heading-only. Fixed cameras cannot tilt.',
+    'orbit': 'Choose destination.type explicitly: coordinates, home, launch, named_waypoint, visible_object or registered_target. Object orbits use standoff_m from measured hull and face the object; visual_query also needs view. Coordinate/home/launch orbits use radius_m and altitude_agl_m. Coordinates require coordinate_frame and local_ned requires origin_id. Select camera explicitly; none means heading-only. Fixed cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
@@ -242,12 +242,16 @@ DESCRIPTIONS = {
     'localize_target': 'Associate a visible object with measured LiDAR/depth. Returns surface range, footprint quality and reusable target_id; another viewpoint may be needed. Reuse the query to accumulate views.',
     'approach_target': 'Move to a measured surface standoff from a visible or registered object destination. Recede only if already closer. This does not establish being above it. Another viewpoint may be needed to measure its geometry.',
     'orbit_target': 'Circle a measured object with nose facing it. Supply target_id or visual_query. standoff_m is minimum distance from its observed hull, not center radius or global obstacle clearance; wall distance varies for non-round shapes. Partial geometry may require two measured side views first. Select camera for visual intent.',
-    'overfly_target': 'Fly ABOVE a physical object: climb above its measured top, then move over its footprint center. destination selects visible_object with visual_query and view_heading_deg, or registered_target with target_id. An observation waypoint is not above the object. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
+    'overfly_target': 'Fly ABOVE a physical object: climb above its measured top, then move over its footprint center. destination selects visible_object with visual_query and view, or registered_target with target_id. An observation waypoint is not above the object. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
     'get_context': 'Refresh state/health/perception; include_geometry adds obstacle bounds. Normally refreshed automatically.',
     'read_action_result': 'Read retained history by executed_actions index. Omit path to discover receipt fields. Optional path lists exact returned keys/array indices, starting at action/arguments/result; follow retained_details paths or returned fields. An absent path returns path_found=false and valid paths, never the missing data. offset/limit page large data. Read-only: historical data never establishes a current condition.',
-    'ask_user': 'Resolve missing choices or named waypoint locations with one concise question before related travel. Seeing an object does not define a previously named waypoint. The answer resumes this mission without repeating completed work.',
+    'ask_user': 'Ask one concise question about operator intent or ambiguity left after available sensing. Use available tools yourself; do not ask the operator to perform their actions. The answer continues this mission.',
     'finish': 'Report measured outcome, operating defaults/assumptions used and limitations. completed requires all requested work; incomplete/rejected explains what prevents progress.',
 }
+SCHEMAS['inspect_scene']['properties']['view'] = VIEW_SCHEMA
+SCHEMAS['detect']['properties']['view'] = VIEW_SCHEMA
+
+
 TOOLS = [
     {
         "type": "function",
@@ -379,13 +383,13 @@ def decision_tools(context, angular_scans=None, area_scans=None):
             # description keyword through the compatibility adapter below.
             properties['visual_query'] = properties.pop('description')
             properties['visual_query']['description'] = (
-                'Visible appearance or image-relative relationship only. '
-                'Exclude geographic names and compass labels; orient the camera first.')
+                'Object class, visual description or image-relative referent. '
+                'A class alone can begin acquisition; direction uses view.')
             function['parameters']['required'] = [
                 'visual_query' if key == 'description' else key
                 for key in function['parameters'].get('required', [])]
-            function['parameters']['required'].append('view_heading_deg')
-            function['parameters']['properties']['view_heading_deg']['description'] = ('Requested absolute viewing heading; current measured heading for a target already in front. May turn while airborne; never arms or takes off.')
+            function['parameters']['required'].append('view')
+            function['parameters']['properties'].pop('view_heading_deg',None)
             function['description'] = function['description'].replace('description', 'visual_query')
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
@@ -421,7 +425,7 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         supported = DETECTION_CLASSES['items']['enum'] if detector_classes is None else detector_classes
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
-    arguments = copy.deepcopy(arguments)
+    arguments = canonical_view_arguments(name, copy.deepcopy(arguments))
     if reference_call:
         from python.dcm.destinations import canonical_destination_arguments
         arguments = canonical_destination_arguments(name, arguments)
@@ -538,7 +542,29 @@ class ToolExecutor:
                 "status": "CANCELLED",
                 "message": "Operator interrupted the mission.",
             }
+        orientation = None
+        requested_view = None
+        heading = None
         try:
+            if name == 'face_heading' and 'view' in arguments:
+                arguments['heading_deg'] = resolve_view(arguments.pop('view'), message_dict(self.client.state()))
+            if name in ('inspect_scene','localize_target','detect'):
+                requested_view = arguments.pop('view', arguments.pop('view_heading_deg', None))
+                if requested_view is not None and requested_view != 'current':
+                    state = message_dict(self.client.state())
+                    heading = resolve_view(requested_view, state)
+                    yaw = state.get('attitude',{}).get('yaw_rad')
+                    if type(yaw) not in (int,float) or not math.isfinite(yaw):
+                        raise ValueError('Measured heading is required before directional observation')
+                    if abs(math.remainder(heading-math.degrees(yaw),360)) > 5:
+                        if state.get('landed') or not state.get('armed'):
+                            return {'status':'NEEDS_CLARIFICATION','requires_user_choice':True,
+                                'question':'The requested view needs the aircraft to turn, but it is landed. Should the view or flight requirement change?',
+                                'message':'No motors or flight command were sent for the camera request.'}
+                        orientation = self.execute('face_heading', {'view':heading})
+                        if orientation['status'] != 'SUCCEEDED':
+                            orientation.setdefault('evidence',{})['motion_command_issued']=True
+                            return orientation
             if name in ('goto', 'orbit', 'overfly_target','approach_target') and 'destination' in arguments:
                 from python.dcm.destinations import execute_destination
                 operation = 'goto' if name in ('overfly_target','approach_target') else name
@@ -691,29 +717,10 @@ class ToolExecutor:
 
                     shutil.rmtree(view["directory"], ignore_errors=True)
             elif name in ("assess_landing_zone", "localize_target"):
-                orientation = None
-                heading = arguments.pop('view_heading_deg', None) if name == 'localize_target' else None
-                if heading is not None:
-                    state = message_dict(self.client.state())
-                    yaw = state.get('attitude', {}).get('yaw_rad')
-                    if type(yaw) not in (int,float) or not math.isfinite(yaw):
-                        raise ValueError('Measured heading is required before directional localization')
-                    if abs(math.remainder(heading-math.degrees(yaw),360)) > 5:
-                        if state.get('landed') or not state.get('armed'):
-                            return {'status':'NEEDS_CLARIFICATION','requires_user_choice':True,
-                                'question':'The requested view needs the aircraft to turn, but it is landed. Should the view or flight requirement change?',
-                                'message':'No motors or flight command were sent for the camera request.'}
-                        orientation = self.execute('face_heading', {'heading_deg':heading})
-                        if orientation['status'] != 'SUCCEEDED':
-                            orientation.setdefault('evidence', {})['motion_command_issued'] = True
-                            return orientation
                 result = {
                     "status": "SUCCEEDED",
                     "evidence": getattr(self.client, name)(**arguments),
                 }
-                if heading is not None:
-                    result['evidence'].update(requested_view_heading_deg=heading,
-                                              motion_command_issued=orientation is not None)
             elif name == 'read_action_result':
                 from python.dcm.action_memory import read_action_result
                 if self.session is None:
@@ -733,6 +740,20 @@ class ToolExecutor:
                 )
         except Exception as error:  # noqa: BLE001 - report boundary failures without losing control cleanup
             result = {"status": "FAILED", "message": str(error)}
+            if isinstance(getattr(error, 'code', None), str):
+                result['error_code'] = error.code
+            if orientation is not None:
+                # A failed capture after a completed turn must not leave the
+                # previous camera direction's detections marked current.
+                result['evidence'] = {'motion_command_issued': True}
+        if name in ('inspect_scene','localize_target','detect') and not isinstance(result.get('evidence'),dict):
+            if result.get('status')=='SUCCEEDED':
+                result.update(status='FAILED',message='Perception tool returned no structured evidence')
+            result['evidence']={}
+        if requested_view is not None:
+            result.setdefault('evidence',{}).update(requested_view=requested_view,
+                motion_command_issued=orientation is not None)
+            if heading is not None:result['evidence']['requested_view_heading_deg']=heading
         if complete and result["status"] == "SUCCEEDED" and result.get("workflow_complete", True) and not self.interrupted():
             result["mission_complete"] = True
         return result
