@@ -29,7 +29,8 @@ def destination_schema(operation, legacy):
     def ref(kind, properties=None, required=()):
         fields = dict(properties or {})
         required = list(required)
-        fields['altitude_agl_m'] = copy.deepcopy(goal['altitude_agl_m'])
+        if operation != 'overfly':
+            fields['altitude_agl_m'] = copy.deepcopy(goal['altitude_agl_m'])
         if kind in OBJECTS:
             if operation != 'overfly':
                 fields['standoff_m'] = copy.deepcopy(goal['standoff_m'])

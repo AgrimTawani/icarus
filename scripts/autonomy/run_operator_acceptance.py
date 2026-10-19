@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Own a headless acceptance stack and clean up only its processes."""
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -101,6 +102,18 @@ def evaluation_command(args):
     return command
 
 
+def terminal_campaign(campaign, process_exit_code):
+    """A dead evaluator's running placeholder proves no mission or recovery."""
+    campaign = copy.deepcopy(campaign)
+    for row in campaign.get('results', []):
+        if row.get('status') in (None, 'running', 'pending'):
+            campaign['evaluation_report_incomplete'] = True
+            row.update(saved_status_at_exit=row.get('status'), status='error',
+                       process_exit_code=process_exit_code,
+                       message='Evaluation exited without a terminal report; mission outcome and recovery are unverified.')
+    return campaign
+
+
 def run_isolated_cases(args, cases):
     """Give each episode a fresh physical simulation, including battery charge.
 
@@ -133,6 +146,7 @@ def run_isolated_cases(args, cases):
         directory.mkdir(parents=True, exist_ok=True)
         child = None
         tracked = set()
+        interrupted = False
         print('Fresh headless simulator for ' + case['id'], flush=True)
         try:
             with (directory / 'runner.log').open('w') as log:
@@ -144,8 +158,8 @@ def run_isolated_cases(args, cases):
             child_code = child.returncode
         except KeyboardInterrupt:
             print('Stopping the current case and waiting for its recovery/cleanup.', flush=True)
-            code = 130
-            break
+            code = child_code = 130
+            interrupted = True
         finally:
             stop_owned(child, timeout=180, tracked=tracked)
         source = directory / 'missions/results.json'
@@ -154,12 +168,15 @@ def run_isolated_cases(args, cases):
                 'message': 'Owned case did not produce results; inspect its runner/startup logs.'})
             save()
             return child_code or 1
-        campaign = json.loads(source.read_text())
+        campaign = terminal_campaign(json.loads(source.read_text()), child_code)
         report['case_campaigns'][case['id']] = campaign
         report['results'].extend(campaign['results'])
         save()
         print(case['id'] + ': ' + ', '.join(r.get('status', 'unknown') for r in campaign['results']), flush=True)
-        if child_code not in (0, 2) or campaign.get('source_changed_during_campaign'):
+        if interrupted:
+            return 130
+        if (child_code not in (0, 2) or campaign.get('source_changed_during_campaign')
+                or campaign.get('evaluation_report_incomplete')):
             return child_code or 1
         if child_code:
             code = 2

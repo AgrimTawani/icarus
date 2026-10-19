@@ -10,10 +10,12 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
+import signal
 import sys
 import subprocess
 import time
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +24,33 @@ sys.path.insert(0, str(ROOT))
 from python.dcm.fly import AgentSession, fly_mission, safe_exit_recovery, session_episode_summary
 from python.dcm.llama_runtime import LlamaCppRuntime
 from python.dcm.runtime_config import RuntimeDescriptor
+
+
+def fixture_reply(item, question):
+    """Test-only operator answers apply only to their declared question type."""
+    if (not isinstance(item, dict) or set(item) != {'question_pattern', 'answer'}
+            or not isinstance(item['question_pattern'], str) or not item['question_pattern']
+            or not isinstance(item['answer'], str) or not item['answer'].strip()):
+        raise ValueError('Operator reply fixture needs a question_pattern and answer')
+    return item['answer'] if re.search(item['question_pattern'], question, re.IGNORECASE) else None
+
+
+@contextmanager
+def defer_stop_during_recovery(result):
+    """A stop request must not tear down the recovery it has already requested.
+
+    The owning runner still enforces its finite recovery timeout and can force
+    termination. Only ordinary SIGINT is deferred while landing and saving the
+    terminal report; SIGTERM/SIGKILL retain their normal escalation behavior.
+    """
+    previous = signal.getsignal(signal.SIGINT)
+    def deferred(signum, frame):
+        result['recovery_interrupts_deferred'] = result.get('recovery_interrupts_deferred', 0) + 1
+    signal.signal(signal.SIGINT, deferred)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
 
 
 def main():
@@ -116,6 +145,7 @@ def main():
                         runtime_started = True
                     session = AgentSession(case['mission'])
                     replies = iter(args.clarification_answer)
+                    guarded_replies = iter(case.get('operator_replies', []))
                     while True:
                         result.update(fly_mission(client, runtime, case['mission'],
                             max_decisions=args.max_decisions, session=session,
@@ -123,6 +153,14 @@ def main():
                         if result['status'] != 'awaiting_user':
                             break
                         answer = next(replies, None)
+                        if answer is None:
+                            scripted = next(guarded_replies, None)
+                            if scripted is not None:
+                                answer = fixture_reply(scripted, result['message'])
+                                if answer is None:
+                                    result['scripted_reply_not_applied'] = {
+                                        'question': result['message'],
+                                        'expected_question_pattern': scripted['question_pattern']}
                         if answer is None:
                             break
                         exchange = {'question': result['message'], 'answer': answer}
@@ -138,30 +176,31 @@ def main():
                     result.update(status='error', message=f'{type(error).__name__}: {error}')
                     client.episode_outcome = 'failed'
                 finally:
-                    try:
-                        result['recovery'] = safe_exit_recovery(client)
-                    except Exception as error:
-                        result['recovery'] = {'status': 'FAILED', 'message': str(error)}
-                    finally:
-                        if result.get('recovery', {}).get('status') not in ('SUCCEEDED', 'manual_override'):
-                            if result.get('status') == 'completed':
-                                result['agent_status'] = result['status']
-                                result['status'] = 'incomplete'
-                            client.episode_outcome, client.episode_score = session_episode_summary(
-                                [result], 'Exit recovery did not complete')
-                        episode = getattr(client, 'episode', None)
-                        result['episode'] = str(episode.directory) if episode is not None else None
+                    with defer_stop_during_recovery(result):
                         try:
-                            client.close()
+                            result['recovery'] = safe_exit_recovery(client)
                         except Exception as error:
-                            result['cleanup_error'] = str(error)
-            result['seconds'] = round(time.monotonic() - started, 2)
-            changed = [name for name, digest in provenance['source_sha256'].items()
-                       if not (ROOT / name).is_file()
-                       or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest]
-            if changed:
-                provenance['source_changed_during_campaign'] = changed
-            save_results()
+                            result['recovery'] = {'status': 'FAILED', 'message': str(error)}
+                        finally:
+                            if result.get('recovery', {}).get('status') not in ('SUCCEEDED', 'manual_override'):
+                                if result.get('status') == 'completed':
+                                    result['agent_status'] = result['status']
+                                    result['status'] = 'incomplete'
+                                client.episode_outcome, client.episode_score = session_episode_summary(
+                                    [result], 'Exit recovery did not complete')
+                            episode = getattr(client, 'episode', None)
+                            result['episode'] = str(episode.directory) if episode is not None else None
+                            try:
+                                client.close()
+                            except Exception as error:
+                                result['cleanup_error'] = str(error)
+                        result['seconds'] = round(time.monotonic() - started, 2)
+                        changed = [name for name, digest in provenance['source_sha256'].items()
+                                   if not (ROOT / name).is_file()
+                                   or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest]
+                        if changed:
+                            provenance['source_changed_during_campaign'] = changed
+                        save_results()
             print(case['id'] + ': ' + result.get('status', 'unknown'), flush=True)
             if changed:
                 print('Stopping after recovery: source/config changed; start a fresh campaign.', flush=True)

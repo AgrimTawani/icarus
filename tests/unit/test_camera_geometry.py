@@ -130,3 +130,44 @@ class CameraGeometryTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_yaw_cannot_bring_a_directly_below_point_into_a_fixed_forward_camera():
+    for roll in (0.,.1,-.1):
+        for yaw in (0.,math.pi/2,math.pi,3*math.pi/2):
+            s=state();s['attitude'].update(roll_rad=roll,yaw_rad=yaw)
+            point={**s['local_position_ned'],'down_m':s['local_position_ned']['down_m']+3}
+            front=project_point(s,point,'forward_d435i')
+            down=project_point(s,point,'downward_brio')
+            assert front['in_frame'] is False
+            assert front['yaw_alone_can_resolve'] is False
+            assert 'elevation' in front['reason']
+            assert down['in_frame'] is True
+            assert down['yaw_alone_can_resolve'] is True
+            assert front['image_proof'] is down['image_proof'] is False
+
+
+def test_unknown_yaw_reachability_is_not_an_impossibility_claim():
+    s=state();point={**s['local_position_ned'],'north_m':s['local_position_ned']['north_m']-5}
+    result=project_point(s,point)
+    assert result['in_frame'] is False
+    assert result['yaw_alone_can_resolve'] is None
+    s['attitude']['yaw_rad']=math.pi
+    visible=project_point(s,point)
+    assert visible['in_frame'] is True and visible['yaw_alone_can_resolve'] is True
+
+
+def test_proven_elevation_limits_remain_outside_the_frustum_across_yaw():
+    proven=0
+    for camera in ('forward_d435i','downward_brio'):
+        for roll,pitch in ((0.,0.),(.2,-.15),(-.15,.2)):
+            for north,east,down in ((0,0,3),(0,0,-3),(.5,.2,5),(10,8,-1),(4,-6,2)):
+                s=state();s['attitude'].update(roll_rad=roll,pitch_rad=pitch)
+                p={k:s['local_position_ned'][k]+v for k,v in zip(('north_m','east_m','down_m'),(north,east,down))}
+                p['origin_id']=s['local_position_ned']['origin_id']
+                if project_point(s,p,camera)['yaw_alone_can_resolve'] is False:
+                    proven+=1
+                    for degree in range(0,360,10):
+                        s['attitude']['yaw_rad']=math.radians(degree)
+                        assert project_point(s,p,camera)['in_frame'] is False
+    assert proven>0

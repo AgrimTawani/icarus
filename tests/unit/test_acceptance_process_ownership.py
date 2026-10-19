@@ -125,3 +125,65 @@ def test_primary_manifest_reaches_the_evaluator_without_starting_a_simulator(tmp
     assert command[command.index('--manifest')+1]==str(args.manifest.resolve())
     assert command.count('--manifest')==1 and command[command.index('--case')+1]=='one'
     assert command[command.index('--clarification-answer')+1]=='Use another view.'
+
+
+def test_nonterminal_report_cannot_be_promoted_when_evaluator_has_exited():
+    module=load_runner()
+    source={'results':[{'case':'example','status':'running'},
+                       {'case':'finished','status':'completed','recovery':{'status':'SUCCEEDED'}}]}
+    report=module.terminal_campaign(source,130)
+    assert report['evaluation_report_incomplete'] is True
+    assert report['results'][0]['status']=='error'
+    assert report['results'][0]['saved_status_at_exit']=='running'
+    assert report['results'][0]['process_exit_code']==130
+    assert 'unverified' in report['results'][0]['message']
+    assert report['results'][1]==source['results'][1]
+    assert source['results'][0]['status']=='running'
+
+
+def test_stop_during_recovery_is_deferred_and_signal_handlers_are_restored():
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    code='''import importlib.util,json,os,signal,sys
+spec=importlib.util.spec_from_file_location('evaluation',sys.argv[1]);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+previous=signal.getsignal(signal.SIGINT);termination=signal.getsignal(signal.SIGTERM);result={}
+with module.defer_stop_during_recovery(result):
+    os.kill(os.getpid(),signal.SIGINT)
+    result['recovery']={'status':'SUCCEEDED'}
+    assert signal.getsignal(signal.SIGTERM)==termination
+assert signal.getsignal(signal.SIGINT)==previous
+print(json.dumps(result))
+'''
+    completed=subprocess.run([sys.executable,'-c',code,str(path)],capture_output=True,text=True,check=True,timeout=10)
+    result=json.loads(completed.stdout)
+    assert result=={'recovery_interrupts_deferred':1,'recovery':{'status':'SUCCEEDED'}}
+
+
+def test_parent_stop_still_collects_the_childs_terminal_recovery_report(tmp_path,monkeypatch):
+    module=load_runner()
+    args=SimpleNamespace(output=tmp_path,cases=tmp_path/'cases.json',manifest=tmp_path/'model.json',
+                         max_decisions=4,clarification_answer=[])
+    case={'id':'case'}
+    class Child:
+        pid=123
+        returncode=130
+        def poll(self):raise KeyboardInterrupt()
+    def recovered(*args,**kwargs):
+        result=tmp_path/'cases/case/missions/results.json';result.parent.mkdir(parents=True,exist_ok=True)
+        result.write_text(json.dumps({'results':[{'case':'case','status':'cancelled','recovery':{'status':'SUCCEEDED'}}]}))
+    monkeypatch.setattr(module.subprocess,'Popen',lambda *a,**k:Child())
+    monkeypatch.setattr(module,'stop_owned',recovered)
+    monkeypatch.setattr(module,'descendants',lambda pid:set())
+    assert module.run_isolated_cases(args,[case])==130
+    report=json.loads((tmp_path/'missions/results.json').read_text())
+    assert report['results'][0]['recovery']['status']=='SUCCEEDED'
+    assert report['results'][0]['status']=='cancelled'
+
+
+def test_fixture_answer_does_not_amend_an_unrelated_operator_question():
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('guarded_eval',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    item={'question_pattern':'downward camera','answer':'Use the downward camera.'}
+    assert module.fixture_reply(item,'May I use the downward camera?')==item['answer']
+    assert module.fixture_reply(item,'What appearance identifies the subject?') is None
+    assert module.fixture_reply(item,'Should I change the flight height?') is None

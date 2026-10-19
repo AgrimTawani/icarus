@@ -114,6 +114,33 @@ def camera_calibration(camera='forward_d435i'):
         return {'available': False, 'reason': str(error)}
 
 
+def _yaw_elevation_limit(rotation, ned, calibration):
+    """Prove unreachable elevation using a conservative cone around the frustum.
+
+    Yaw rotates the camera origin and optical axis around world vertical. Their
+    heights and axis elevation stay fixed. Bound every possible point elevation
+    using the camera-origin circle; only declare impossible for disjoint bounds.
+    Overlap is unknown, not proof that some yaw or an unoccluded view exists.
+    """
+    pose = calibration['pose_flu']
+    mount = _rotation(*pose[3:])
+    axis_frd = (mount[0][0], -mount[1][0], -mount[2][0])
+    origin_frd = (pose[0], -pose[1], -pose[2])
+    world = lambda vector: tuple(sum(rotation[i][j]*vector[j] for j in range(3)) for i in range(3))
+    axis, offset = world(axis_frd), world(origin_frd)
+    axis_elevation = math.atan2(-axis[2], math.hypot(*axis[:2]))
+    cone = math.atan(math.hypot(math.tan(calibration['horizontal_fov_rad']/2),
+                               math.tan(calibration['vertical_fov_rad']/2)))
+    horizontal, radius = math.hypot(*ned[:2]), math.hypot(*offset[:2])
+    vertical = ned[2]-offset[2]
+    elevations = sorted(math.atan2(-vertical, distance)
+                        for distance in (abs(horizontal-radius), horizontal+radius))
+    outside = elevations[1] < axis_elevation-cone or elevations[0] > axis_elevation+cone
+    return {'yaw_alone_can_resolve': False if outside else None,
+            **({'yaw_limit_reason': 'Point elevation is outside this fixed camera reach; change camera or vehicle position.'}
+               if outside else {})}
+
+
 def project_point(state, target, camera='forward_d435i'):
     """Project a point into RGB pixels. In-frame does not prove unoccluded visibility."""
     try:
@@ -130,14 +157,17 @@ def project_point(state, target, camera='forward_d435i'):
         sensor = _inverse_rotate(_rotation(*pose[3:]), tuple(flu[i]-pose[i] for i in range(3)))
         x, y, z = sensor
         result = {'available': True, 'camera': camera, 'image_proof': False,
-                  'occlusion_checked': False, 'optical_depth_m': x}
+                  'occlusion_checked': False, 'optical_depth_m': x,
+                  **_yaw_elevation_limit(rotation, ned, cal)}
         if x <= 0:
-            return {**result, 'in_frame': False, 'reason': 'Target is behind the camera'}
+            return {**result, 'in_frame': False, 'reason': result.get('yaw_limit_reason', 'Target is behind the camera')}
         focal = cal['width']/(2*math.tan(cal['horizontal_fov_rad']/2))
         u, v = cal['width']/2-focal*y/x, cal['height']/2-focal*z/x
         inside = 0 <= u < cal['width'] and 0 <= v < cal['height'] and cal['near_m'] <= x <= cal['far_m']
+        if inside:
+            result['yaw_alone_can_resolve'] = True
         return {**result, 'in_frame': inside, 'pixel_x': u, 'pixel_y': v,
-                'reason': 'Geometrically in RGB frustum; image evidence still required' if inside else 'Target is outside RGB field of view or clipping range'}
+                'reason': 'Geometrically in RGB frustum; image evidence still required' if inside else result.get('yaw_limit_reason', 'Target is outside RGB field of view or clipping range')}
     except (ValueError, TypeError, OSError, ET.ParseError, AttributeError) as error:
         return {'available': False, 'in_frame': None, 'image_proof': False, 'reason': str(error)}
 

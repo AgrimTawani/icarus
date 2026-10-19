@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 DIRECT_PROMPT_VERSION = 'direct-agent-v7-literal-working-memory'
-DIRECT_TOOL_VERSION = 'direct-tools-v14-core-object-actions'
+DIRECT_TOOL_VERSION = 'direct-tools-v15-camera-feedback'
 
 
 class DeadlineExceeded(Exception):

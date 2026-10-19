@@ -16,13 +16,23 @@ def receipt_outcome_facts(result, *, latest=True):
     if not isinstance(evidence, dict):
         return {}
     scalar = lambda value: value is None or type(value) in (bool, int, float, str)
+    def bounded_map(value, depth=0):
+        # Preserve nested flags/conditions/readiness maps without inlining raw
+        # point clouds, station arrays or unbounded model/transport metadata.
+        if not isinstance(value, dict):
+            return False
+        limit = 2048 if any(isinstance(child, dict) for child in value.values()) else 512
+        return (isinstance(value, dict) and depth <= 3 and _size(value) <= limit
+                and all(scalar(child) or bounded_map(child, depth + 1)
+                        for child in value.values()))
     facts = {}
     for key, value in evidence.items():
-        if key in ('schema', 'runtime', 'image', 'provenance', 'latency_ms', 'capture_pose_quality'):
+        if key in ('schema', 'runtime', 'image', 'provenance', 'latency_ms', 'capture_pose_quality',
+                   'geometry', 'footprint', 'capture_pose'):
             continue
         if scalar(value) and (not isinstance(value, str) or len(value) <= 300):
             facts[key] = copy.deepcopy(value)
-        elif isinstance(value, dict) and all(scalar(v) for v in value.values()) and _size(value) <= 512:
+        elif bounded_map(value):
             facts[key] = copy.deepcopy(value)
         elif key == 'counts' and isinstance(value, dict):
             positives = {name: count for name, count in value.items()
