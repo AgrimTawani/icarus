@@ -1,6 +1,8 @@
 """Fast process-lifecycle checks; no simulator or models are started."""
 import importlib.util
 import json
+import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -81,3 +83,33 @@ def test_interrupt_recovers_current_stack_and_never_starts_next_case(tmp_path, m
     assert module.run_isolated_cases(args,[{'id':'first'},{'id':'second'}])==130
     assert len(calls)==1
     assert cleaned==[180]
+
+
+def test_sigterm_runs_owned_child_cleanup_instead_of_orphaning_it():
+    module=load_runner()
+    code=("import importlib.util,signal,subprocess,sys,time; "
+          f"s=importlib.util.spec_from_file_location('runner',{str(Path(module.__file__))!r}); "
+          "m=importlib.util.module_from_spec(s);s.loader.exec_module(m); "
+          "signal.signal(signal.SIGTERM,m.terminate_as_interrupt); "
+          "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)'],start_new_session=True); "
+          "print(child.pid,flush=True)\n"
+          "try:\n time.sleep(30)\n"
+          "except KeyboardInterrupt:\n m.stop_owned(child,timeout=1)\n")
+    parent=subprocess.Popen([sys.executable,'-c',code],stdout=subprocess.PIPE,
+                            text=True,start_new_session=True)
+    child=None
+    try:
+        child=int(parent.stdout.readline())
+        before=module.process_identity(child)
+        parent.send_signal(signal.SIGTERM)
+        parent.wait(timeout=5)
+        after=module.process_identity(child)
+        assert parent.returncode==0
+        assert after is None or after[1]!=before[1] or after[2]=='Z'
+    finally:
+        module.stop_owned(parent,timeout=0.1)
+        after=module.process_identity(child) if child else None
+        if after and after[1]==before[1] and after[2]!='Z':
+            try: os.kill(child,signal.SIGKILL)
+            except ProcessLookupError: pass
+        parent.stdout.close()

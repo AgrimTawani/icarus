@@ -15,6 +15,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def terminate_as_interrupt(signum, frame):
+    """Let ordinary termination follow the same recovery path as Ctrl+C."""
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    raise KeyboardInterrupt
+
+
 def process_identity(pid):
     try:
         fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
@@ -255,4 +261,5 @@ def main():
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, terminate_as_interrupt)
     raise SystemExit(main())
