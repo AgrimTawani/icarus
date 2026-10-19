@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Own a headless acceptance stack and clean up only its processes."""
 import argparse
+import hashlib
 import json
 import os
 import signal
@@ -72,6 +73,81 @@ def stop_owned(process, timeout=15, tracked=()):
                 time.sleep(0.1)
 
 
+def isolated_case_command(args, case_id, directory):
+    command = [sys.executable, str(Path(__file__).resolve()),
+               '--cases', str(args.cases), '--case', case_id,
+               '--output', str(directory), '--max-decisions', str(args.max_decisions)]
+    for answer in args.clarification_answer:
+        command += ['--clarification-answer', answer]
+    return command
+
+
+def run_isolated_cases(args, cases):
+    """Give each episode a fresh physical simulation, including battery charge.
+
+    Rewriting a live battery counter would conceal real exhaustion. Starting a
+    new owned simulator also prevents a prior test's pose/faults/lease from
+    contaminating the next case. Each child retains its complete provenance.
+    """
+    args.output.mkdir(parents=True, exist_ok=True)
+    report = {'campaign_type': 'isolated_simulator_per_case',
+              'case_campaigns': {}, 'results': []}
+    destination = args.output / 'missions/results.json'
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    def save():
+        pending = destination.with_suffix('.json.tmp')
+        pending.write_text(json.dumps(report, indent=2) + '\n')
+        pending.replace(destination)
+    code = 0
+    for case in cases:
+        if report['case_campaigns']:
+            first = next(iter(report['case_campaigns'].values()))
+            changed = [name for name, digest in first.get('source_sha256', {}).items()
+                       if not (ROOT / name).is_file()
+                       or hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest]
+            if changed:
+                report['source_changed_between_cases'] = changed
+                save()
+                print('Stopping before the next case: source/config changed.', flush=True)
+                return 1
+        directory = args.output / 'cases' / case['id']
+        directory.mkdir(parents=True, exist_ok=True)
+        child = None
+        tracked = set()
+        print('Fresh headless simulator for ' + case['id'], flush=True)
+        try:
+            with (directory / 'runner.log').open('w') as log:
+                child = subprocess.Popen(isolated_case_command(args, case['id'], directory),
+                    cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                while child.poll() is None:
+                    tracked.update(descendants(child.pid))
+                    time.sleep(1)
+            child_code = child.returncode
+        except KeyboardInterrupt:
+            print('Stopping the current case and waiting for its recovery/cleanup.', flush=True)
+            code = 130
+            break
+        finally:
+            stop_owned(child, timeout=180, tracked=tracked)
+        source = directory / 'missions/results.json'
+        if not source.is_file():
+            report['results'].append({'case': case['id'], 'status': 'error',
+                'message': 'Owned case did not produce results; inspect its runner/startup logs.'})
+            save()
+            return child_code or 1
+        campaign = json.loads(source.read_text())
+        report['case_campaigns'][case['id']] = campaign
+        report['results'].extend(campaign['results'])
+        save()
+        print(case['id'] + ': ' + ', '.join(r.get('status', 'unknown') for r in campaign['results']), flush=True)
+        if child_code not in (0, 2) or campaign.get('source_changed_during_campaign'):
+            return child_code or 1
+        if child_code:
+            code = 2
+    save()
+    return code
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', type=Path, required=True)
@@ -83,7 +159,11 @@ def main():
     args.output = args.output.resolve()
     args.cases = args.cases.resolve()
     requested = json.loads(args.cases.read_text())['cases']
-    expected_count = sum(1 for case in requested if not args.case or case['id'] in args.case)
+    unknown = set(args.case) - {case['id'] for case in requested}
+    if unknown:
+        parser.error('Unknown case IDs: ' + ', '.join(sorted(unknown)))
+    selected = [case for case in requested if not args.case or case['id'] in args.case]
+    expected_count = len(selected)
     with socket.socket() as probe:
         if probe.connect_ex(('127.0.0.1', 50051)) == 0:
             parser.error('A Drone API is already listening; this runner owns a separate acceptance stack.')
@@ -92,6 +172,8 @@ def main():
         session = json.loads(active.read_text())
         if process_identity(session.get('launcher_pid', -1)):
             parser.error('A simulator is already active; stop it before starting this owned acceptance stack.')
+    if len(selected) > 1:
+        return run_isolated_cases(args, selected)
     args.output.mkdir(parents=True, exist_ok=True)
     processes = {}; tracked = {}
     def remember():
