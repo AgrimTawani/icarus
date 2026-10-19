@@ -28,7 +28,7 @@ def prop(catalog, tool, field):
 
 def test_object_standoff_default_is_context_data_and_does_not_override_explicit_values():
     catalog = decision_tools({'defaults': {'object_standoff_m': 4.5}})
-    for name in ('goto', 'orbit'):
+    for name in ('approach_target', 'orbit'):
         assert prop(catalog, name, 'standoff_m')['default'] == 4.5
         validate_call(name, {'destination': {'type':'visible_object', 'visual_query':'visible structure', 'view_heading_deg':0}, 'standoff_m':3, **({'camera':'none'} if name=='orbit' else {'object_position':'standoff'})}, tools=catalog)
     assert 'default' not in prop(decision_tools({}), 'orbit', 'standoff_m')
@@ -39,7 +39,7 @@ def test_registered_target_handles_include_stale_and_update_without_mutating_sta
     ctx = {'targets': [{'target_id': 'target_long_abc', 'fresh': False},
                        {'target_id': 'target_other_def', 'fresh': True}]}
     first = decision_tools(ctx)
-    for tool in ('goto', 'orbit'):
+    for tool in ('approach_target', 'orbit'):
         assert prop(first, tool, 'target_id')['enum'] == ['target_long_abc', 'target_other_def']
     ctx['targets'].append({'target_id': 'target_new_xyz'})
     second = decision_tools(ctx)
@@ -58,13 +58,13 @@ def test_workflow_handle_choices_are_separate_and_missing_ids_hide_dependent_too
     empty = decision_tools({})
     names = {tool['function']['name'] for tool in empty}
     assert not names.intersection({'resume_heading_scan', 'resume_scan'})
-    for name in ('goto', 'orbit'):
+    for name in ('approach_target', 'orbit'):
         schema = next(t['function']['parameters'] for t in empty if t['function']['name'] == name)
         variants = schema['properties']['destination']['oneOf']
         assert 'registered_target' not in [v['properties']['type']['const'] for v in variants]
         visible = next(v for v in variants if v['properties']['type']['const']=='visible_object')
         assert {'visual_query','view_heading_deg'} <= set(visible['required'])
-    assert not {'approach_target','orbit_target'}.intersection(names)
+    assert 'orbit_target' not in names and 'approach_target' in names
     assert 'overfly_target' in names
     assert {'localize_target', 'orbit', 'goto', 'face_heading', 'scan_area', 'scan_heading'} <= names
     assert 'enum' not in prop(TOOLS, 'resume_heading_scan', 'scan_id')
@@ -244,7 +244,7 @@ def test_native_tagged_destinations_keep_root_fields_and_exact_nested_variants()
     import pytest
     catalog=decision_tools({'targets':[{'target_id':'known'}],
                             'motion_limits':{'maximum_horizontal_speed_mps':2}})
-    for name,common in [('goto',{'object_position':'standoff','standoff_m':3}),
+    for name,common in [('approach_target',{'object_position':'standoff','standoff_m':3}),
                         ('orbit',{'standoff_m':3,'camera':'forward_d435i'})]:
         schema=next(t['function']['parameters'] for t in catalog if t['function']['name']==name)
         assert 'destination' in schema['properties'] and 'oneOf' not in schema

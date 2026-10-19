@@ -37,7 +37,7 @@ DETECTION_CLASSES = {"type": "array", "items": {"type": "string", "enum": sorted
 ORBIT_CAMERA = {"type": "string", "enum": ["forward_d435i", "downward_brio", "none"],
                 "description": "Requested target view: front/forward camera=forward_d435i; downward camera=downward_brio. none means the user requested only flight/heading, with no camera visibility requirement."}
 NAV = {"north_m": NUMBER, "east_m": NUMBER, "altitude_agl_m": NUMBER}
-SPEED = {"maximum_ground_speed_mps": POSITIVE, "minimum_clearance_m": POSITIVE}
+SPEED = {"maximum_ground_speed_mps": POSITIVE, "minimum_clearance_m": {**POSITIVE, "description":"Optional obstacle-path clearance; omit for controller policy. Not target standoff."}}
 POINT = obj(
     {
         **NAV,
@@ -227,7 +227,7 @@ DESCRIPTIONS = {
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
-    'goto': 'Choose destination.type explicitly. Visible objects use visual_query, view_heading_deg, and object_position=standoff; above-object travel uses overfly_target; registered objects use target_id. Coordinates require coordinate_frame, north/east, altitude; local_ned also requires origin_id. Named waypoints are looked up, never guessed. Object direction is a view heading, not a range. Above positions use measured target height and footprint.',
+    'goto': 'Fly to coordinates, home, launch or a saved navigation pose. Arrival geometry belongs inside destination. Object-relative movement uses approach_target for surface standoff or overfly_target for above-object travel.',
     'arm': 'Enable motors without takeoff. Detection works disarmed: satisfy pre-arming conditions first. takeoff already arms if needed.',
     'takeoff': 'Reach the requested altitude above home. From landed, arm if needed and take off. If already flying, change height vertically with native goto while holding current horizontal position. Explicit maximum_climb_rate_mps applies only to ground departure.',
     'return_home': 'Return to measured autopilot home and land by default. land_at_home=false returns and holds. Return flight may change yaw.',
@@ -240,7 +240,7 @@ DESCRIPTIONS = {
     'detect': 'Detect/count supported class enum labels in a current image, including while disarmed. Unsupported objects use inspect_scene/localize_target. Counts are thresholded detections, not guaranteed totals; default camera forward_d435i.',
     'inspect_scene': 'Ask onboard VLM about visible appearance, objects or relationships. Samples configured detector counts separately when available; VLM prose is qualitative evidence, not metric geometry or measured counts.',
     'localize_target': 'Associate a visible object with measured LiDAR/depth. Returns surface range, footprint quality and reusable target_id; another viewpoint may be needed. Reuse the query to accumulate views.',
-    'approach_target': 'Choose a new measured horizontal surface-standoff point using native routing; this does not resolve a previously designated waypoint. Recede only if already closer. Supply target_id or visual_query. Refresh static-object geometry before each leg and after arrival; not continuous moving-target tracking.',
+    'approach_target': 'Move to a measured surface standoff from a visible or registered object destination. Recede only if already closer. This does not establish being above it. Another viewpoint may be needed to measure its geometry.',
     'orbit_target': 'Circle a measured object with nose facing it. Supply target_id or visual_query. standoff_m is minimum distance from its observed hull, not center radius or global obstacle clearance; wall distance varies for non-round shapes. Partial geometry may require two measured side views first. Select camera for visual intent.',
     'overfly_target': 'Fly ABOVE a physical object: climb above its measured top, then move over its footprint center. destination selects visible_object with visual_query and view_heading_deg, or registered_target with target_id. An observation waypoint is not above the object. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
     'get_context': 'Refresh state/health/perception; include_geometry adds obstacle bounds. Normally refreshed automatically.',
@@ -330,17 +330,15 @@ def decision_tools(context, angular_scans=None, area_scans=None):
     catalog = []
     for tool in bind_limits(TOOLS):
         function = tool['function']
-        if function['name'] in TARGET_FLIGHT and function['name'] != 'overfly_target':
-            # Approach/orbit select references through goto/orbit. Overflight
-            # exposes its own spatial goal; Python retains all controllers.
+        if function['name'] in TARGET_FLIGHT and function['name'] not in ('overfly_target','approach_target'):
+            # Native tools distinguish approach from overflight; object orbit
+            # still selects its measured reference through orbit.
             continue
-        if function['name'] in ('goto', 'orbit', 'overfly_target'):
-            from python.dcm.destinations import destination_schema, overflight_schema
+        if function['name'] in ('goto', 'orbit', 'overfly_target','approach_target'):
+            from python.dcm.destinations import destination_schema, overflight_schema, approach_schema
             function['parameters'] = bind_limits(overflight_schema(SCHEMAS['overfly_target']) if function['name'] == 'overfly_target'
+                else approach_schema(SCHEMAS['approach_target']) if function['name']=='approach_target'
                 else destination_schema(function['name'], SCHEMAS[function['name']]))
-            if function['name'] == 'goto':
-                function['parameters']['properties']['object_position']['enum'] = ['standoff']
-                function['parameters']['properties'].pop('clearance_above_m', None)
             variants = function['parameters']['properties']['destination']['oneOf']
             waypoints = context.get('registered_waypoints', {}).get('entries', [])
             waypoint_names = sorted({p['name'] for p in waypoints if isinstance(p, dict)
@@ -408,11 +406,11 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
     if not isinstance(name, str) or name not in SCHEMAS:
         raise ValueError(f"Unknown tool {name!r}; use a listed tool")
     schema = SCHEMAS[name]
-    reference_call = (name in ('goto', 'orbit', 'overfly_target') and isinstance(arguments, dict)
+    reference_call = (name in ('goto', 'orbit', 'overfly_target','approach_target') and isinstance(arguments, dict)
                       and 'destination' in arguments)
     if reference_call:
-        from python.dcm.destinations import destination_schema, overflight_schema
-        schema = overflight_schema(schema) if name == 'overfly_target' else destination_schema(name, schema)
+        from python.dcm.destinations import destination_schema, overflight_schema, approach_schema
+        schema = overflight_schema(schema) if name == 'overfly_target' else approach_schema(schema) if name=='approach_target' else destination_schema(name,schema)
     if tools is not None:
         schema = next((tool['function']['parameters'] for tool in tools
                        if tool['function']['name'] == name), None)
@@ -424,6 +422,9 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
     arguments = copy.deepcopy(arguments)
+    if reference_call:
+        from python.dcm.destinations import canonical_destination_arguments
+        arguments = canonical_destination_arguments(name, arguments)
     if name in (*TARGET_FLIGHT, 'localize_target'):
         if 'description' in arguments and 'visual_query' in arguments:
             raise ValueError('Supply one visual_query, not both query aliases')
@@ -454,7 +455,7 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         raise ValueError(format_schema_error(name, error))
     if reference_call:
         from python.dcm.destinations import unpack_destination, validate_destination
-        operation = 'goto' if name == 'overfly_target' else name
+        operation = 'goto' if name in ('overfly_target','approach_target') else name
         bound = dict(arguments, object_position='above') if name == 'overfly_target' else arguments
         validate_destination(operation, unpack_destination(operation, bound))
     if tools is not None and name in TARGET_FLIGHT and not reference_call:
@@ -538,9 +539,9 @@ class ToolExecutor:
                 "message": "Operator interrupted the mission.",
             }
         try:
-            if name in ('goto', 'orbit', 'overfly_target') and 'destination' in arguments:
+            if name in ('goto', 'orbit', 'overfly_target','approach_target') and 'destination' in arguments:
                 from python.dcm.destinations import execute_destination
-                operation = 'goto' if name == 'overfly_target' else name
+                operation = 'goto' if name in ('overfly_target','approach_target') else name
                 bound = dict(arguments, object_position='above') if name == 'overfly_target' else arguments
                 result = execute_destination(self, operation, bound)
             elif name == "execute_sequence":

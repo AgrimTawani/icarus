@@ -27,12 +27,12 @@ class Executor:
 
 def checked(operation,args,ex=None):
     validate_call(operation,args,tools=decision_tools({'targets':[{'target_id':'known'}]}))
-    return execute_destination(ex or Executor(),operation,args)
+    return execute_destination(ex or Executor(),'goto' if operation=='approach_target' else operation,args)
 
 
 def test_visible_destination_orients_then_localizes_through_existing_controller():
     ex=Executor()
-    result=checked('goto',{'destination':{'type':'visible_object','visual_query':'visible structure',
+    result=checked('approach_target',{'destination':{'type':'visible_object','visual_query':'visible structure',
                  'view_heading_deg':0},'object_position':'standoff','standoff_m':4},ex)
     assert ex.calls==[('face_heading',{'heading_deg':0}),
                      ('approach_target',{'visual_query':'visible structure','standoff_m':4})]
@@ -57,7 +57,7 @@ def test_object_orbit_uses_surface_controller_not_coordinate_radius():
 
 def test_failed_orientation_cannot_continue_to_object_motion():
     ex=Executor();ex.failure='FAILED'
-    result=checked('goto',{'destination':{'type':'visible_object','visual_query':'visible structure',
+    result=checked('approach_target',{'destination':{'type':'visible_object','visual_query':'visible structure',
         'view_heading_deg':0},'object_position':'standoff','standoff_m':4},ex)
     assert result['status']=='FAILED' and len(ex.calls)==1
 

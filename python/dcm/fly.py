@@ -403,7 +403,7 @@ def fly_mission(
             session.detector_feedback.observe(name, args, result)
             if (result.get('status') == 'SUCCEEDED' and
                     (name == 'localize_target' or
-                     name in ('goto', 'orbit', 'overfly_target') and args.get('destination', {}).get('type')
+                     name in ('goto', 'orbit', 'overfly_target','approach_target') and args.get('destination', {}).get('type')
                      in ('visible_object', 'registered_target'))):
                 vocabulary = getattr(client, 'camera_detector_classes', lambda: [])()
                 if vocabulary:

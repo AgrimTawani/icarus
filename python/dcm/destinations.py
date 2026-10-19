@@ -10,53 +10,98 @@ KINDS = ['coordinates', 'home', 'launch', 'named_waypoint', 'visible_object', 'r
 OBJECTS = {'visible_object', 'registered_target'}
 
 
+DESTINATION_FIELDS = ('altitude_agl_m','standoff_m','radius_m','heading_deg',
+    'minimum_clearance_m','target_altitude_agl_m','face_center','viewpoints','viewpoint_dwell_s')
+
+
 def destination_schema(operation, legacy):
-    # Keep a real tagged union inside a root property. llama.cpp's native
-    # tagged-tools parser needs root properties, while nested unions already
-    # support exact per-variant fields (as used by execute_sequence).
+    """Each tagged reference owns its applicable geometry and arrival fields."""
     schema = copy.deepcopy(legacy)
     props = schema['properties']
     for name in ('north_m', 'east_m', 'center_north_m', 'center_east_m', 'center_reference'):
         props.pop(name, None)
-    text = {'type': 'string', 'minLength': 1}
-    number = {'type': 'number'}
+    goal = {name: props.pop(name) for name in DESTINATION_FIELDS if name in props}
+    goal.setdefault('altitude_agl_m', {'type':'number'})
+    goal['standoff_m'] = {'type':'number','exclusiveMinimum':0,
+        'description':'Distance from measured object surface, not center radius.'}
+    text = {'type':'string','minLength':1}
     def ref(kind, properties=None, required=()):
-        return {'type': 'object', 'properties': {'type': {'const': kind}, **(properties or {})},
-                'required': ['type', *required], 'additionalProperties': False}
-    props['destination'] = {'oneOf': [
-        ref('coordinates', {'north_m': number, 'east_m': number,
-            'coordinate_frame': {'enum': ['home_relative_ned', 'local_ned']}, 'origin_id': text},
-            ['north_m', 'east_m', 'coordinate_frame']),
-        ref('home'), ref('launch'),
-        ref('named_waypoint', {'waypoint_name': text}, ['waypoint_name']),
-        ref('visible_object', {'visual_query': {**text, 'description': 'Visible appearance only.'},
-            'view_heading_deg': {'type': 'number', 'minimum': 0, 'exclusiveMaximum': 360,
-                'description': 'Absolute camera heading before localization; current heading for an object already in front.'}},
-            ['visual_query', 'view_heading_deg']),
-        ref('registered_target', {'target_id': text}, ['target_id'])]}
-    props['standoff_m'] = {'type': 'number', 'exclusiveMinimum': 0,
-                           'description': 'Distance from measured object surface, not center radius.'}
-    if operation == 'goto':
-        props.update(object_position={'enum': ['standoff', 'above']},
-                     clearance_above_m={'type': 'number', 'exclusiveMinimum': 0})
-    schema['required'] = ['destination'] + (['camera'] if operation == 'orbit' else [])
+        fields = dict(properties or {})
+        required = list(required)
+        fields['altitude_agl_m'] = copy.deepcopy(goal['altitude_agl_m'])
+        if kind in OBJECTS:
+            if operation != 'overfly':
+                fields['standoff_m'] = copy.deepcopy(goal['standoff_m'])
+                required.append('standoff_m')
+            if operation == 'orbit':
+                fields['face_center'] = {'const':True}
+        else:
+            for key in ('minimum_clearance_m',):
+                if key in goal:fields[key]=copy.deepcopy(goal[key])
+            if operation == 'goto' and kind != 'named_waypoint' and 'heading_deg' in goal:
+                fields['heading_deg']=copy.deepcopy(goal['heading_deg'])
+            if operation == 'orbit':
+                for key in ('radius_m','target_altitude_agl_m','face_center','viewpoints','viewpoint_dwell_s'):
+                    if key in goal:fields[key]=copy.deepcopy(goal[key])
+                required += ['radius_m','altitude_agl_m']
+            elif kind == 'coordinates':
+                required.append('altitude_agl_m')
+        return {'type':'object','properties':{'type':{'const':kind},**fields},
+                'required':['type',*required],'additionalProperties':False}
+    variants=[]
+    if operation in ('goto', 'orbit'):
+        for frame in ('home_relative_ned','local_ned'):
+            fields={'north_m':{'type':'number'},'east_m':{'type':'number'},
+                    'coordinate_frame':{'const':frame}}
+            required=['north_m','east_m','coordinate_frame']
+            if frame=='local_ned':fields['origin_id']=text;required.append('origin_id')
+            variants.append(ref('coordinates',fields,required))
+        variants += [ref('home'),ref('launch'),ref('named_waypoint',{'waypoint_name':text},['waypoint_name'])]
+    object_variants = [
+        ref('visible_object',{'visual_query':{**text,'description':'Visible appearance only.'},
+            'view_heading_deg':{'type':'number','minimum':0,'exclusiveMaximum':360,
+                'description':'Absolute viewing heading before localization.'}},['visual_query','view_heading_deg']),
+        ref('registered_target',{'target_id':text},['target_id'])]
+    if operation != 'goto':
+        variants += object_variants
+    props['destination']={'oneOf':variants}
+    schema['required']=['destination']+(['camera'] if operation=='orbit' else [])
     return schema
+
+
+def object_destination_schema(operation, legacy):
+    base=copy.deepcopy(legacy.get('oneOf',[legacy])[0])
+    for key in ('target_id','description','visual_query'):
+        base['properties'].pop(key,None)
+    base['required']=[]
+    return destination_schema(operation,base)
 
 
 def overflight_schema(legacy):
-    base = copy.deepcopy(legacy.get('oneOf', [legacy])[0])
-    for key in ('target_id', 'description', 'visual_query'):
-        base['properties'].pop(key, None)
-    base['required'] = [key for key in base.get('required', [])
-                        if key not in ('target_id', 'description', 'visual_query')]
-    base['properties']['altitude_agl_m'] = {'type': 'number'}
-    schema = destination_schema('goto', base)
-    props = schema['properties']
-    props['destination']['oneOf'] = [v for v in props['destination']['oneOf']
-        if v['properties']['type']['const'] in OBJECTS]
-    props.pop('object_position', None)
-    props.pop('standoff_m', None)
-    return schema
+    return object_destination_schema('overfly',legacy)
+
+
+def approach_schema(legacy):
+    return object_destination_schema('approach',legacy)
+
+
+def canonical_destination_arguments(operation, arguments):
+    """Accept legacy Python keyword placement; native schemas use typed fields.
+
+    No values are inferred or changed. Conflicting duplicate quantities cannot
+    silently override one another. Above-object motion has its own API tool.
+    """
+    args=copy.deepcopy(arguments)
+    reference=args.get('destination')
+    if not isinstance(reference,dict):return args
+    for field in DESTINATION_FIELDS:
+        if field in args:
+            if field in reference:
+                raise ValueError(f'Supply {field} once, inside destination')
+            reference[field]=args.pop(field)
+    if operation in ('goto','approach_target') and args.get('object_position')=='standoff':
+        args.pop('object_position')
+    return args
 
 
 def unpack_destination(operation, arguments):
@@ -66,7 +111,13 @@ def unpack_destination(operation, arguments):
     if operation == 'orbit' and kind == 'coordinates':
         reference['center_north_m'] = reference.pop('north_m')
         reference['center_east_m'] = reference.pop('east_m')
-    return {**args, **reference, 'destination_type': kind}
+    duplicates=args.keys() & reference.keys()
+    if duplicates:
+        raise ValueError(f'Destination fields supplied twice: {sorted(duplicates)}')
+    combined={**args, **reference, 'destination_type':kind}
+    if operation=='goto' and kind in OBJECTS:
+        combined.setdefault('object_position','standoff')
+    return combined
 
 
 def validate_destination(operation, args):
@@ -151,7 +202,7 @@ def catalogue_context(include_entries=False):
         # Keep its full position/heading together in the resolver; copying only
         # numeric position into a coordinates call loses pose semantics.
         entries = [{**{key:value for key,value in point.items()
-                       if key not in ('north_m', 'east_m')},
+                       if key not in ('north_m', 'east_m', 'heading_deg', 'altitude_agl_m', 'target_altitude_agl_m')},
                     'destination': {'type':'named_waypoint', 'waypoint_name':point['name']},
                     'position_resolved_by_tool': True} for point in catalogue['entries']]
         return {**{key:value for key,value in catalogue.items() if key != 'source'},

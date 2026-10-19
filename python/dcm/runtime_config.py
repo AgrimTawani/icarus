@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 DIRECT_PROMPT_VERSION = 'direct-agent-v3-retained-evidence'
-DIRECT_TOOL_VERSION = 'direct-tools-v10-saved-pose-references'
+DIRECT_TOOL_VERSION = 'direct-tools-v11-typed-destination-geometry'
 
 
 class DeadlineExceeded(Exception):
