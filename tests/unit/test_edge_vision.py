@@ -95,7 +95,14 @@ class EdgeVisionTests(unittest.TestCase):
                                        "mmproj_path": str(mmproj),
                                        "mmproj_sha256": hashlib.sha256(
                                            mmproj.read_bytes()).hexdigest()}]}
-            self.assertTrue(verify_edge_manifest_files(manifest))
+            for family in ("qwen2-vl", "qwen2.5-vl", "other-compatible-gguf"):
+                with self.subTest(family=family):
+                    manifest["artifacts"][-1].update(family=family, runtime="llama_cpp")
+                    self.assertTrue(verify_edge_manifest_files(manifest))
+            original_projector = mmproj.read_bytes()
+            mmproj.write_bytes(b"swapped-projector")
+            with self.assertRaises(ValueError): verify_edge_manifest_files(manifest)
+            mmproj.write_bytes(original_projector)
             yolo.write_bytes(b"swapped")
             with self.assertRaises(ValueError): verify_edge_manifest_files(manifest)
 

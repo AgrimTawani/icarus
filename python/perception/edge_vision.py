@@ -323,7 +323,7 @@ def verify_edge_manifest_files(manifest):
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != artifacts[role]["sha256"]:
             raise ValueError(f"edge manifest {role} checksum mismatch")
     vlm = artifacts["vlm"]
-    if vlm.get("family") == "qwen2-vl":
+    if vlm.get("runtime") == "llama_cpp" or "mmproj_path" in vlm:
         for path_key, hash_key in (("path", "sha256"),
                                    ("mmproj_path", "mmproj_sha256")):
             path = Path(vlm.get(path_key, ""))
