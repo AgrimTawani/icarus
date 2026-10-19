@@ -21,6 +21,12 @@ def test_default_index_omits_names_coordinates_and_filesystem_path(tmp_path,monk
     loaded=catalogue_context(True)
     assert loaded['entries'][0]['name']=='Saved view A' and loaded['loaded']
     assert loaded['entries'][0]['role']=='observation_pose'
+    assert loaded['entries'][0]['destination']=={'type':'named_waypoint','waypoint_name':'Saved view A'}
+    assert not {'north_m','east_m'} & loaded['entries'][0].keys()
+    from python.dcm.destinations import waypoint_catalogue
+    assert waypoint_catalogue()['entries'][0]['north_m']==2
+    assert waypoint_catalogue()['entries'][0]['east_m']==-3
+    assert waypoint_catalogue()['entries'][0]['heading_deg']==45
 
 
 def test_explicit_retrieval_persists_only_in_the_current_mission(tmp_path,monkeypatch):

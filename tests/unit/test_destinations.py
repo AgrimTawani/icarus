@@ -91,10 +91,10 @@ def test_unknown_named_waypoint_requests_coordinates_without_movement(monkeypatc
 
 def test_operator_catalogue_waypoint_is_data_not_a_mission_alias(tmp_path,monkeypatch):
     p=tmp_path/'points.json';p.write_text(json.dumps({'coordinate_frame':'home_relative_ned',
-        'entries':[{'name':'Survey A','north_m':2,'east_m':-3,'altitude_agl_m':5}]}))
+        'entries':[{'name':'Survey A','north_m':2,'east_m':-3,'altitude_agl_m':5,'heading_deg':123}]}))
     monkeypatch.setenv('ICARUS_WAYPOINTS_FILE',str(p))
     ex=Executor();result=checked('goto',{'destination':{'type':'named_waypoint','waypoint_name':'survey a'}},ex)
-    assert ex.calls==[('goto',{'north_m':12,'east_m':17,'altitude_agl_m':5})]
+    assert ex.calls==[('goto',{'north_m':12,'east_m':17,'altitude_agl_m':5,'heading_deg':123})]
     assert result['evidence']['destination']['catalogue_sha256']==waypoint_catalogue()['sha256']
 
 

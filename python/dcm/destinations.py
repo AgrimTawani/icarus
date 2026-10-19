@@ -147,7 +147,15 @@ def waypoint_catalogue():
 def catalogue_context(include_entries=False):
     catalogue = waypoint_catalogue()
     if include_entries:
-        return {**catalogue, 'loaded': True}
+        # A saved pose is an executable reference, not a coordinate recipe.
+        # Keep its full position/heading together in the resolver; copying only
+        # numeric position into a coordinates call loses pose semantics.
+        entries = [{**{key:value for key,value in point.items()
+                       if key not in ('north_m', 'east_m')},
+                    'destination': {'type':'named_waypoint', 'waypoint_name':point['name']},
+                    'position_resolved_by_tool': True} for point in catalogue['entries']]
+        return {**{key:value for key,value in catalogue.items() if key != 'source'},
+                'source': 'operator_configured_catalogue', 'entries':entries, 'loaded': True}
     return {**{key:value for key,value in catalogue.items() if key not in ('entries', 'source')},
         'source': 'operator_configured_catalogue' if os.environ.get('ICARUS_WAYPOINTS_FILE') else catalogue['source'],
         'entries': [], 'loaded': False, 'count': len(catalogue['entries']),
