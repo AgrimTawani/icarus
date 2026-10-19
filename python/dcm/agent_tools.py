@@ -389,9 +389,9 @@ def decision_tools(context, angular_scans=None, area_scans=None):
             function['description'] = function['description'].replace('description', 'visual_query')
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
+        # Its meaning is defined once in SYSTEM.md, not repeated per tool.
         function['parameters']['properties']['mission_progress'] = {
-            'type': 'string', 'maxLength': 600,
-            'description': 'Working note: unfinished user requirements, pending conditions and missing evidence. Not a flight argument.'}
+            'type': 'string', 'maxLength': 600}
         if function['name'] in ('scan_heading', 'scan_area'):
             # Legacy scheduling aliases remain available to Python callers;
             # the agent makes one explicit lifecycle choice instead.
