@@ -226,11 +226,8 @@ def fly_mission(
             session.area_scans = getattr(client, '_scan_workflows', {})
             from python.dcm.action_memory import indexed_results
             context['retained_action_result_count'] = sum(1 for _ in indexed_results(session.actions))
-            context['optional_tools'] = {
-                'scan_heading': 'Turn-settle-observe cycles, conditional stopping and resumable scans.',
-                'scan_area': 'Geometric area/perimeter flight with sampled camera observations.',
-                'fly_pattern': 'Camera-free geometric perimeter/area flight delegated to ArduPilot.',
-                'execute_route': 'Explicit waypoint list delegated to ArduPilot AUTO.'}
+            from python.dcm.agent_tools import OPTIONAL_TOOL_SUMMARIES
+            context['optional_tools'] = dict(OPTIONAL_TOOL_SUMMARIES)
             context['loaded_tools'] = sorted(session.loaded_tools)
             tools = decision_tools(context, session.angular_scans, session.area_scans,
                                    loaded_tools=session.loaded_tools)

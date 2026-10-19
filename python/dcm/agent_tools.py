@@ -160,7 +160,17 @@ WORKFLOW_FLIGHT["fly_pattern"] = obj({
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
 SEQUENCE_FLIGHT = {name: schema for name, schema in FLIGHT.items()
                    if name != 'execute_route'}
-OPTIONAL_TOOLS = ("scan_heading", "scan_area", "fly_pattern", "execute_route")
+OPTIONAL_TOOL_SUMMARIES = {
+    'goto': 'Fly to supplied coordinates, home/launch or a saved navigation pose.',
+    'approach_target': 'Measure a visible object and reach a surface standoff.',
+    'overfly_target': 'Measure an object and fly above its footprint and top.',
+    'orbit': 'Circle an object or coordinate center; supports target-facing camera intent.',
+    'localize_target': 'Acquire/update object geometry from camera, depth and LiDAR.',
+    'scan_heading': 'Turn-settle-observe cycles, conditional stopping and resumable scans.',
+    'scan_area': 'Geometric area/perimeter flight with sampled camera observations.',
+    'fly_pattern': 'Camera-free geometric perimeter/area flight delegated to ArduPilot.',
+    'execute_route': 'Explicit waypoint list delegated to ArduPilot AUTO.'}
+OPTIONAL_TOOLS = tuple(OPTIONAL_TOOL_SUMMARIES)
 SCHEMAS.update(
     {
         "load_tools": obj({"names": {"type": "array", "items": {"enum": list(OPTIONAL_TOOLS)}, "minItems": 1, "uniqueItems": True}}, ["names"]),
@@ -224,7 +234,7 @@ for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
             "description": "True only if this finishes ALL requested work.",
         }
 DESCRIPTIONS = {
-    'load_tools': 'Load optional controller workflow schemas for subsequent decisions. Read-only; performs no flight or observation. Names and purposes are listed in context.optional_tools.',
+    'load_tools': 'Load optional navigation/observation tool schemas for subsequent decisions. Read-only; performs no flight or observation. Names and purposes are listed in context.optional_tools.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Choose destination.type explicitly: coordinates, home, launch, named_waypoint, visible_object or registered_target. Object orbits use standoff_m from measured hull and face the object; visual_query also needs view. Coordinate/home/launch orbits use radius_m and altitude_agl_m. Coordinates require coordinate_frame and local_ned requires origin_id. Select camera explicitly; none means heading-only. Fixed cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',

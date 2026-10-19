@@ -1035,6 +1035,7 @@ def test_impossible_camera_orbit_stops_batch_before_return_home():
 def test_camera_incompatibility_pauses_before_model_can_change_parameters():
     c = FakeClient()
     session = AgentSession('Take off to 8m and orbit launch at 3m keeping the front camera on it.')
+    session.loaded_tools.add('orbit')
     r = Runtime(
         call('takeoff', target_altitude_agl_m=8),
         call('orbit', destination={'type':'launch'}, radius_m=3,
@@ -1470,6 +1471,7 @@ def test_repeated_camera_choices_preserve_operator_recovery_on_resume(recovery, 
     c._takeoff_reference = {'local_position_ned': {
         'north_m': 0, 'east_m': 0, 'down_m': 0, 'origin_id': 'ekf-origin'}}
     session = AgentSession('Orbit launch with the ground point in the front camera.')
+    session.loaded_tools.add('orbit')
     runtime = Runtime(*(
         call('orbit', destination={'type':'launch'}, radius_m=radius, altitude_agl_m=8,
              camera='forward_d435i', face_center=True) for radius in (3, 4, 5)),
@@ -1809,6 +1811,7 @@ def test_localization_starts_real_camera_feedback_without_another_model_call():
     client.detect=lambda **kwargs:{'camera':kwargs['camera'],'counts':{'person':2},
                                   'captured_at_unix_ms':int(time.time()*1000)}
     session=AgentSession('Observe the current scene.')
+    session.loaded_tools.add('localize_target')
     runtime=Runtime(call('localize_target',visual_query='visible subject',view_heading_deg=0),
                     call('finish',outcome='incomplete',message='Observation only.'))
     result=run(client,runtime,session=session)

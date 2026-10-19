@@ -76,6 +76,8 @@ def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflow
     client._angular_scans = {'previous_turn': {}}
     client._scan_workflows = {'previous_area': {}}
     session = AgentSession('Hold and report.')
+    # Handle-contract tests exercise already-discovered tools.
+    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target"})
     session.angular_scans = {'current_turn': {'completed': False, 'phase': 'observe',
                                             'swept_deg': 30, 'observations': []}}
     session.area_scans = {'current_area': {'completed': False}}
@@ -132,7 +134,9 @@ def test_truncation_retry_uses_same_handle_bindings():
                 raise IncompleteModelResponse('truncated')
             return call('finish', outcome='incomplete', message='No flight needed.')
 
-    fly_mission(client, Runtime(), 'Report.',
+    session = AgentSession('Report.')
+    session.loaded_tools.add('orbit')
+    fly_mission(client, Runtime(), 'Report.', session=session,
                 context_provider=lambda c: {**context(c), 'targets': [{'target_id': 'exact_123'}]},
                 echo=lambda *args: None)
     assert len(catalogs) == 2 and catalogs[0] == catalogs[1]
@@ -193,6 +197,8 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
     for name, arguments, extra_context, diagnostic in cases:
         client = FakeClient()
         session = AgentSession('Exercise tool contract.')
+        # Handle-contract tests exercise already-discovered tools.
+        session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target"})
         session.angular_scans = {'completed': {'completed': True}}
         session.area_scans = {'completed_area': {'completed': True}}
         runtime = Runtime(call(name, **arguments),
@@ -212,6 +218,8 @@ def test_exact_contract_is_also_used_after_truncation_retry():
     from python.dcm.llama_runtime import IncompleteModelResponse
     client = FakeClient()
     session = AgentSession('Check retry contract.')
+    # Handle-contract tests exercise already-discovered tools.
+    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target"})
     catalogs = []
     class Runtime:
         def decide(self, messages, tools, concise=False):
