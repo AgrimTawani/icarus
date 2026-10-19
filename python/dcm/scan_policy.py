@@ -33,10 +33,21 @@ def scan_arguments(arguments, *, default_observation, coverage_return):
         raise ValueError('A detection predicate requires pause_at_match or finish_at_match')
     if args.get('repeat_until_match') and policy in ('complete_coverage', 'pause_at_match'):
         raise ValueError('repeat_until_match cannot use this exit_policy')
-    if policy == 'complete_coverage' and args.get('observation', default_observation) == 'scene':
-        raise ValueError('Scene interpretation requires each_observation for agent decisions')
     expected_return = coverage_return if policy == 'complete_coverage' else 'observation'
     if 'return_on' in args and args['return_on'] != expected_return:
         raise ValueError('return_on conflicts with exit_policy')
     args['return_on'] = expected_return
     return args
+
+
+def completion_reason(completed, observations):
+    if not completed:
+        return None
+    last = observations[-1] if observations else {}
+    return ('detection_match' if last.get('workflow_stop_filter', {}).get('matched')
+            else 'coverage_complete')
+
+
+def failure_receipt(result, workflow_receipt):
+    """Keep the original action failure and the workflow's pending obligation."""
+    return {**workflow_receipt, **result, 'evidence': workflow_receipt['evidence']}

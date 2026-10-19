@@ -4,6 +4,7 @@ import uuid
 
 from python.dcm.scan_geometry import generate_scan
 from python.dcm.observation_receipt import stop_filter_receipt
+from python.dcm.scan_policy import failure_receipt
 
 
 def route_tolerances(points):
@@ -105,11 +106,11 @@ class ScanWorkflow:
             end=saved['indices'][saved['next']]
             result=self._route(saved['points'][saved['path_index']:end+1],saved['anchor']['origin_id'])
             if result['status']!='SUCCEEDED':
-                return {**result,'evidence':self._result(scan_id,saved,'flight_failed')['evidence']}
+                return failure_receipt(result,self._result(scan_id,saved,'flight_failed'))
             # Observation failure retries the same station, not a later one.
             observed=self.executor.execute(name, params)
             if observed['status']!='SUCCEEDED':
-                return {**observed,'evidence':self._result(scan_id,saved,'observation_failed')['evidence']}
+                return failure_receipt(observed,self._result(scan_id,saved,'observation_failed'))
             evidence=observed.get('evidence',{})
             if (evidence.get('validity') in ('unknown', 'error', 'invalid')
                     or evidence.get('fresh') is False
@@ -134,18 +135,24 @@ class ScanWorkflow:
         if saved['path_index']<len(saved['points']):
             result=self._route(saved['points'][saved['path_index']:],saved['anchor']['origin_id'])
             if result['status']!='SUCCEEDED':
-                return {**result,'evidence':self._result(scan_id,saved,'flight_failed')['evidence']}
+                return failure_receipt(result,self._result(scan_id,saved,'flight_failed'))
             saved['path_index']=len(saved['points'])
         saved['completed']=True
         return self._result(scan_id,saved,'completed')
 
     @staticmethod
     def _result(ident,saved,event,status='SUCCEEDED'):
+        from python.dcm.scan_policy import completion_reason
+        reason = completion_reason(saved['completed'], saved['observations'])
+        message = ('Scan finished at detector match.' if reason == 'detection_match' else
+                   'Scan path and observation checkpoints completed.' if saved['completed'] else
+                   'Scan paused: '+event)
         return {'status':status,'workflow_complete':saved['completed'],
-            'message':'Scan observation checkpoints completed.' if saved['completed'] else 'Scan paused: '+event,
+            'message':message,
             'evidence':{'scan_id':ident,'event':event,'backend':'ardupilot_auto',
                 'anchor':saved['anchor'],'completed':saved['completed'],
                 'exit_policy':saved['args'].get('exit_policy', 'legacy'),
+                'termination_reason':reason,
                 'coverage_complete':saved['path_index'] >= len(saved['points']),
                 **({'workflow_stop_filter': dict(saved['observations'][-1]['workflow_stop_filter'])}
                    if status == 'SUCCEEDED' and saved['observations']

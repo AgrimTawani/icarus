@@ -131,3 +131,23 @@ def test_finish_policy_retries_unknown_observation_without_extra_turn():
     done = workflow.resume_heading_scan(first['evidence']['scan_id'])
     assert done['workflow_complete'] and done['evidence']['event'] == 'condition_met'
     assert [name for name, _ in ex.calls] == ['yaw', 'detect', 'detect']
+
+
+def test_explicit_unconditional_scene_scan_covers_all_stations_without_model_calls():
+    ex = Executor([{'status': 'SUCCEEDED', 'evidence': {'answer': 'Visible terrain.'}}] * 2)
+    result = AngularScan(ex).scan_heading(step_deg=30, sweep_deg=60,
+        observation='scene', exit_policy='complete_coverage')
+    assert [name for name, _ in ex.calls] == ['yaw', 'inspect_scene'] * 2
+    assert result['workflow_complete'] and result['evidence']['coverage_complete']
+    assert result['evidence']['termination_reason'] == 'coverage_complete'
+
+
+def test_final_turn_without_valid_observation_is_not_completed_coverage():
+    ex = Executor([{'status': 'FAILED', 'message': 'camera unavailable'}])
+    workflow = AngularScan(ex)
+    result = workflow.scan_heading(step_deg=30, sweep_deg=30, classes=['person'],
+                                   exit_policy='complete_coverage')
+    assert not result['workflow_complete'] and not result['evidence']['coverage_complete']
+    done = workflow.resume_heading_scan(result['evidence']['scan_id'])
+    assert done['workflow_complete'] and done['evidence']['coverage_complete']
+    assert [name for name, _ in ex.calls] == ['yaw', 'detect', 'detect']

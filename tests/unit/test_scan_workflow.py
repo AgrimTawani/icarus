@@ -159,3 +159,24 @@ def test_conflicting_exit_policies_fail_before_any_route(extra):
     with pytest.raises(ValueError):
         ScanWorkflow(ex).scan_area(shape='square',width_m=2,**extra)
     assert not ex.routes
+
+
+def test_terminal_detector_match_does_not_claim_unflown_coverage_on_resume():
+    ex=Executor([{'status':'SUCCEEDED','evidence':{'counts':{'person':1}}}])
+    workflow=ScanWorkflow(ex)
+    result=workflow.scan_area(shape='square',width_m=2,observation='detect',
+        classes=['person'],stop_on_detection='person',exit_policy='finish_at_match')
+    for receipt in (result,workflow.resume_scan(result['evidence']['scan_id'])):
+        assert receipt['evidence']['termination_reason']=='detection_match'
+        assert 'detector match' in receipt['message']
+        assert not receipt['evidence']['coverage_complete']
+    assert len(ex.routes)==1
+
+
+def test_explicit_unconditional_scene_area_scan_is_supported():
+    ex=Executor([{'status':'SUCCEEDED','evidence':{'answer':'Visible terrain.'}}]*4)
+    result=ScanWorkflow(ex).scan_area(shape='square',width_m=2,observation='scene',
+                                     exit_policy='complete_coverage')
+    assert result['workflow_complete'] and result['evidence']['coverage_complete']
+    assert len(result['evidence']['observations'])==4
+    assert len(ex.routes)==5

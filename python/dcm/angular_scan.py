@@ -4,6 +4,7 @@ import math
 import uuid
 
 from python.dcm.observation_receipt import stop_filter_receipt
+from python.dcm.scan_policy import failure_receipt
 
 
 class AngularScan:
@@ -58,7 +59,7 @@ class AngularScan:
                 angle = min(a['step_deg'], remaining) * (1 if a.get('clockwise', False) else -1)
                 r = self.executor._flight('yaw', {'angle_deg': angle, 'rate_deg_s': a.get('rate_deg_s', 10)})
                 if r['status'] != 'SUCCEEDED':
-                    return {**r, 'evidence': self.result(scan_id, s, 'turn_failed')['evidence']}
+                    return failure_receipt(r, self.result(scan_id, s, 'turn_failed'))
                 s['swept_deg'] += abs(angle)
                 s['phase'] = 'observe'
                 s['heading_after_turn'] = math.degrees(message_dict(self.client.state())['attitude']['yaw_rad']) % 360
@@ -70,10 +71,10 @@ class AngularScan:
             if abs(delta) > 5:
                 r = self.executor._flight('yaw', {'angle_deg': delta, 'rate_deg_s': a.get('rate_deg_s', 10)})
                 if r['status'] != 'SUCCEEDED':
-                    return r
+                    return failure_receipt(r, self.result(scan_id, s, 'viewpoint_restore_failed'))
             r = self.executor.execute(name, params)
             if r['status'] != 'SUCCEEDED':
-                return {**r, 'evidence': self.result(scan_id, s, 'observation_failed')['evidence']}
+                return failure_receipt(r, self.result(scan_id, s, 'observation_failed'))
             evidence = r.get('evidence', {})
             if (evidence.get('validity') in ('unknown', 'error', 'invalid')
                     or evidence.get('fresh') is False
@@ -95,18 +96,22 @@ class AngularScan:
                                   or a.get('exit_policy') == 'finish_at_match')
                 return self.result(scan_id, s, 'condition_met')
             # Semantic observations return each station for arbitrary nested decisions.
-            if name == 'inspect_scene' or (not a.get('stop_on_detection') and a.get('return_on', 'observation') != 'sweep'):
+            if ((name == 'inspect_scene' and a.get('exit_policy') != 'complete_coverage')
+                    or (not a.get('stop_on_detection') and a.get('return_on', 'observation') != 'sweep')):
                 return self.result(scan_id, s, 'observation_ready')
         return self.result(scan_id, s, 'completed')
 
     @staticmethod
     def result(ident, s, event, status='SUCCEEDED'):
+        from python.dcm.scan_policy import completion_reason
         return {'status': status, 'workflow_complete': s['completed'],
             'message': f"Angular observation scan: {event}; {len(s['observations'])} observed stations; completed turn commands total {s['swept_deg']:g} degrees.",
             'evidence': {'scan_id': ident, 'event': event, 'completed': s['completed'],
                 'pending_phase': s['phase'], 'swept_deg': s['swept_deg'],
                 'exit_policy': s['args'].get('exit_policy', 'legacy'),
-                'coverage_complete': (not s['args'].get('repeat_until_match', False)
+                'termination_reason': completion_reason(s['completed'], s['observations']),
+                'coverage_complete': (s['phase'] != 'observe'
+                                      and not s['args'].get('repeat_until_match', False)
                                       and s['swept_deg'] >= s['args'].get('sweep_deg', 360)),
                 **({'workflow_stop_filter': copy.deepcopy(s['observations'][-1]['workflow_stop_filter'])}
                    if status == 'SUCCEEDED' and s['observations']
