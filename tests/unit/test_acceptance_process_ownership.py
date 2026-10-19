@@ -40,7 +40,7 @@ def test_forced_parent_cleanup_stops_detached_child_but_preserves_unrelated_proc
 def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path/'run', cases=tmp_path/'cases.json',
-                         max_decisions=20, clarification_answer=['Use a measured viewpoint.'])
+                         manifest=tmp_path/'selected-runtime.json', max_decisions=20, clarification_answer=['Use a measured viewpoint.'])
     calls=[]; cleaned=[]
     class Finished:
         pid=123456789
@@ -63,6 +63,7 @@ def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monk
     directories=[c[c.index('--output')+1] for c in calls]
     assert len(set(directories))==2
     assert all(c.count('--case')==1 and '--clarification-answer' in c for c in calls)
+    assert all(c[c.index('--manifest')+1]==str(args.manifest) for c in calls)
     report=json.loads((args.output/'missions/results.json').read_text())
     assert [r['status'] for r in report['results']]==['awaiting_user','completed']
     assert set(report['case_campaigns'])=={'missing_location','flight'}
@@ -71,7 +72,7 @@ def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monk
 def test_interrupt_recovers_current_stack_and_never_starts_next_case(tmp_path, monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path/'run',cases=tmp_path/'cases.json',
-                         max_decisions=20,clarification_answer=[])
+                         manifest=tmp_path/'selected-runtime.json',max_decisions=20,clarification_answer=[])
     calls=[]; cleaned=[]
     class Interrupted:
         pid=123456789
@@ -113,3 +114,14 @@ def test_sigterm_runs_owned_child_cleanup_instead_of_orphaning_it():
             try: os.kill(child,signal.SIGKILL)
             except ProcessLookupError: pass
         parent.stdout.close()
+
+
+def test_primary_manifest_reaches_the_evaluator_without_starting_a_simulator(tmp_path):
+    module=load_runner()
+    args=SimpleNamespace(cases=tmp_path/'cases.json',output=tmp_path/'run',
+        manifest=tmp_path/'candidate-runtime.json',case=['one'],
+        max_decisions=20,clarification_answer=['Use another view.'])
+    command=module.evaluation_command(args)
+    assert command[command.index('--manifest')+1]==str(args.manifest.resolve())
+    assert command.count('--manifest')==1 and command[command.index('--case')+1]=='one'
+    assert command[command.index('--clarification-answer')+1]=='Use another view.'

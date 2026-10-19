@@ -82,9 +82,22 @@ def stop_owned(process, timeout=15, tracked=()):
 def isolated_case_command(args, case_id, directory):
     command = [sys.executable, str(Path(__file__).resolve()),
                '--cases', str(args.cases), '--case', case_id,
+               '--manifest', str(args.manifest),
                '--output', str(directory), '--max-decisions', str(args.max_decisions)]
     for answer in args.clarification_answer:
         command += ['--clarification-answer', answer]
+    return command
+
+
+def evaluation_command(args):
+    command = [sys.executable, str(ROOT/'scripts/autonomy/evaluate_operator_missions.py'),
+               '--cases', str(args.cases.resolve()), '--manifest', str(args.manifest.resolve()),
+               '--output', str((args.output/'missions').resolve()),
+               '--max-decisions', str(args.max_decisions)]
+    for value in args.case:
+        command += ['--case', value]
+    for value in args.clarification_answer:
+        command += ['--clarification-answer', value]
     return command
 
 
@@ -157,6 +170,7 @@ def run_isolated_cases(args, cases):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', type=Path, required=True)
+    parser.add_argument('--manifest', type=Path, default=ROOT/'config/dcm/agent-runtime.json')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', action='append', default=[])
     parser.add_argument('--clarification-answer', action='append', default=[])
@@ -164,6 +178,9 @@ def main():
     args = parser.parse_args()
     args.output = args.output.resolve()
     args.cases = args.cases.resolve()
+    args.manifest = args.manifest.resolve()
+    if not args.manifest.is_file():
+        parser.error('Mission runtime manifest is missing: ' + str(args.manifest))
     requested = json.loads(args.cases.read_text())['cases']
     unknown = set(args.case) - {case['id'] for case in requested}
     if unknown:
@@ -219,14 +236,7 @@ def main():
             wait_until(simulator_ready, simulator, 240)
             api = start('autonomy', [str(ROOT/'scripts/start-autonomy'), '--profile', 'edge-vision'], stack)
             wait_until(api_ready, api, 240)
-            command = [sys.executable, str(ROOT/'scripts/autonomy/evaluate_operator_missions.py'),
-                       '--cases', str(args.cases.resolve()), '--output', str((args.output/'missions').resolve()),
-                       '--max-decisions', str(args.max_decisions)]
-            for value in args.case:
-                command += ['--case', value]
-            for value in args.clarification_answer:
-                command += ['--clarification-answer', value]
-            evaluator = start('evaluation', command, stack)
+            evaluator = start('evaluation', evaluation_command(args), stack)
             start('camera', [sys.executable, str(ROOT/'scripts/autonomy/record_camera_evidence.py'),
                  '--process', str(evaluator.pid), '--directory', str((args.output/'camera').resolve())], stack)
             print('Headless acceptance running; evidence: ' + str(args.output), flush=True)
