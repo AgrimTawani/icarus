@@ -14,3 +14,5 @@ Older or large observation details stay in retained action results. Follow their
 Catalogue entries are supplied in context.registered_waypoints. Optional named waypoints come from ICARUS_WAYPOINTS_FILE: a JSON catalogue with coordinate_frame="home_relative_ned" and entries containing name, north_m, east_m, and optional altitude_agl_m and heading_deg. Unknown names require coordinates; camera poses do not create waypoints.
 
 Catalogue role identifies navigation_pose (default), observation_pose, or explicitly supplied orbit_center. Navigation/observation poses do not identify physical object centers or overhead positions. Orbit centers may include target_altitude_agl_m for camera geometry. A confirmed fresh landed-and-disarmed state already satisfies land; never arm to repair an already completed landing.
+
+The takeoff tool is phase-aware: from landed it arms and departs; while airborne it reaches the requested altitude above home while holding horizontal position. It never re-arms in flight. An explicit departure climb rate is not silently applied to an airborne goto.

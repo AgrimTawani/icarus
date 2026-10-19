@@ -181,3 +181,46 @@ def test_landing_cannot_infer_an_already_satisfied_end_state(condition):
     if condition=='airborne':client.vehicle.landed=False
     ToolExecutor(client).execute('land',{})
     assert [n for n,_ in client.sent]==['Land']
+
+
+@pytest.mark.parametrize('height',[2,5,8])
+def test_airborne_altitude_request_preserves_xy_without_arming_or_launch_reset(height):
+    client=FakeClient();client.vehicle.landed=False;client.vehicle.armed=True
+    client.vehicle.relative_altitude_m=3
+    client.vehicle.local_position_ned.north_m=7;client.vehicle.local_position_ned.east_m=-4
+    client._takeoff_reference={'sentinel':'original measured launch'}
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':height})
+    assert result['status']=='SUCCEEDED'
+    assert [n for n,_ in client.sent]==['Goto']
+    request=client.sent[0][1]
+    assert request.destination.local_ned.north_m==7 and request.destination.local_ned.east_m==-4
+    assert request.destination.local_ned.altitude_above_home_m==height
+    assert client._takeoff_reference=={'sentinel':'original measured launch'}
+
+
+def test_airborne_altitude_cannot_drop_an_explicit_rate_requirement():
+    client=FakeClient();client.vehicle.landed=False;client.vehicle.armed=True
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':5,'maximum_climb_rate_mps':1})
+    assert result['requires_user_choice'] and not client.sent
+
+
+def test_airborne_altitude_cannot_invent_an_origin():
+    client=FakeClient();client.vehicle.landed=False;client.vehicle.armed=True
+    client.vehicle.local_position_ned.origin_id=''
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':5})
+    assert result['status']=='FAILED' and not client.sent
+
+
+def test_airborne_tool_catalogue_only_offers_supported_altitude_options():
+    tools=decision_tools({'state':{'landed':False,'armed':True}})
+    schema=next(t['function']['parameters'] for t in tools if t['function']['name']=='takeoff')
+    assert 'maximum_climb_rate_mps' not in schema['properties']
+    validate_call('takeoff',{'target_altitude_agl_m':5},tools=tools)
+    with pytest.raises(ValueError):validate_call('takeoff',
+        {'target_altitude_agl_m':5,'maximum_climb_rate_mps':1},tools=tools)
+
+
+def test_airborne_batch_cannot_reintroduce_unsupported_departure_rate():
+    tools=decision_tools({'state':{'landed':False,'armed':True}})
+    args={'actions':[{'name':'takeoff','arguments':{'target_altitude_agl_m':5,'maximum_climb_rate_mps':1}}]}
+    with pytest.raises(ValueError):validate_call('execute_sequence',args,tools=tools)

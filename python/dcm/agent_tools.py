@@ -228,7 +228,7 @@ DESCRIPTIONS = {
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
     'goto': 'Choose destination.type explicitly. Visible objects use visual_query, view_heading_deg, and object_position=standoff; above-object travel uses overfly_target; registered objects use target_id. Coordinates require coordinate_frame, north/east, altitude; local_ned also requires origin_id. Named waypoints are looked up, never guessed. Object direction is a view heading, not a range. Above positions use measured target height and footprint.',
     'arm': 'Enable motors without takeoff. Detection works disarmed: satisfy pre-arming conditions first. takeoff already arms if needed.',
-    'takeoff': 'Arm if needed and climb from LANDED. When airborne change height with goto or move_relative up_m.',
+    'takeoff': 'Reach the requested altitude above home. From landed, arm if needed and take off. If already flying, change height vertically with native goto while holding current horizontal position. Explicit maximum_climb_rate_mps applies only to ground departure.',
     'return_home': 'Return to measured autopilot home and land by default. land_at_home=false returns and holds. Return flight may change yaw.',
     "move_relative": "Move a specified body-frame distance, or one derived from a current metric measurement. Never guess a distance to reach a named waypoint or visual object: ask about missing waypoints, or use object-motion tools. Forward/right follow current heading; up increases altitude; negative values reverse direction.",
     'execute_sequence': 'Execute 2–3 contiguous unconditional flight actions in order, stopping at failure. Do not cross an intervening observation or decision.',
@@ -299,6 +299,9 @@ def decision_tools(context, angular_scans=None, area_scans=None):
             return schema
         result = {key: bind_limits(value) for key, value in schema.items()}
         properties = result.get('properties', {})
+        if ('target_altitude_agl_m' in properties and context.get('state', {}).get('landed') is False
+                and context.get('state', {}).get('armed') is True):
+            properties.pop('maximum_climb_rate_mps', None)
         standoff = context.get('defaults', {}).get('object_standoff_m')
         if ('standoff_m' in properties and isinstance(standoff, (int, float))
                 and not isinstance(standoff, bool) and math.isfinite(standoff) and standoff > 0):
@@ -533,40 +536,57 @@ class ToolExecutor:
                                   question=results[-1]['result']['question'])
             elif name == "takeoff":
                 state = message_dict(self.client.state())
-                launch = copy.deepcopy(state) if state.get('landed') else None
-                if state.get("landed") and not state.get("armed"):
-                    arm = self.execute("arm", {})
-                    if arm["status"] != "SUCCEEDED":
-                        return arm
-                result = self._flight(name, arguments)
-                if (launch is not None
-                        and result.get('status') in ('FAILED', 'REJECTED')
-                        and result.get('reason_code') in (
-                            'REASON_CODE_AUTOPILOT_REJECTED', 'REASON_CODE_NOT_ARMED')
-                        and not self.interrupted()):
-                    # A ground arm can expire during a model decision. Its
-                    # heartbeat may arrive after the explicit command reject.
-                    # Re-arm only after confirming disarmed + landed, once;
-                    # never retry a timeout or bypass a live preflight check.
-                    disarmed = self._confirm_disarmed_ground()
-                    if disarmed is not None:
-                        failed = {k: result[k] for k in
-                                  ('status', 'reason_code', 'message', 'action_id') if k in result}
-                        arm = self.execute('arm', {})
-                        if self.interrupted():
-                            result = {'status': 'CANCELLED',
-                                      'message': 'Operator interrupted takeoff recovery.'}
-                        else:
-                            result = self._flight(name, arguments) if arm['status'] == 'SUCCEEDED' else arm
-                        result['takeoff_recovery'] = {
-                            'trigger': 'confirmed_disarmed_ground_after_explicit_rejection',
-                            'failed_attempt': failed, 'rearm_status': arm['status']}
-                        launch = disarmed
-                if launch is not None and (result['status'] == 'SUCCEEDED'
-                        or result.get('state', {}).get('landed') is False):
-                    # Preserve the actual launch across subsequent airborne
-                    # missions; a rejected takeoff does not establish one.
-                    self.client._takeoff_reference = launch
+                if state.get('landed') is False and state.get('armed') is True:
+                    if 'maximum_climb_rate_mps' in arguments:
+                        result = {'status': 'NEEDS_CLARIFICATION', 'requires_user_choice': True,
+                            'question': 'The aircraft is already flying. May it change altitude using the configured flight-controller climb rate?',
+                            'message': 'An explicit takeoff climb rate cannot be applied to an airborne goto; no command sent.'}
+                    else:
+                        position = state.get('local_position_ned', {})
+                        if not position.get('origin_id') or any(type(position.get(k)) not in (int,float)
+                            or not math.isfinite(position[k]) for k in ('north_m','east_m')):
+                            raise ValueError('Measured position and origin are required for an airborne altitude change')
+                        result = self._flight('goto', {'north_m':position['north_m'],
+                            'east_m':position['east_m'], 'altitude_agl_m':arguments['target_altitude_agl_m']},
+                            expected_origin_id=position['origin_id'])
+                        result.setdefault('evidence', {})['altitude_transition'] = {
+                            'reference':'above_home', 'requested_altitude_m':arguments['target_altitude_agl_m'],
+                            'already_airborne':True, 'controller':'native_goto', 'horizontal_goal':'hold_current_position'}
+                else:
+                    launch = copy.deepcopy(state) if state.get('landed') else None
+                    if state.get("landed") and not state.get("armed"):
+                        arm = self.execute("arm", {})
+                        if arm["status"] != "SUCCEEDED":
+                            return arm
+                    result = self._flight(name, arguments)
+                    if (launch is not None
+                            and result.get('status') in ('FAILED', 'REJECTED')
+                            and result.get('reason_code') in (
+                                'REASON_CODE_AUTOPILOT_REJECTED', 'REASON_CODE_NOT_ARMED')
+                            and not self.interrupted()):
+                        # A ground arm can expire during a model decision. Its
+                        # heartbeat may arrive after the explicit command reject.
+                        # Re-arm only after confirming disarmed + landed, once;
+                        # never retry a timeout or bypass a live preflight check.
+                        disarmed = self._confirm_disarmed_ground()
+                        if disarmed is not None:
+                            failed = {k: result[k] for k in
+                                      ('status', 'reason_code', 'message', 'action_id') if k in result}
+                            arm = self.execute('arm', {})
+                            if self.interrupted():
+                                result = {'status': 'CANCELLED',
+                                          'message': 'Operator interrupted takeoff recovery.'}
+                            else:
+                                result = self._flight(name, arguments) if arm['status'] == 'SUCCEEDED' else arm
+                            result['takeoff_recovery'] = {
+                                'trigger': 'confirmed_disarmed_ground_after_explicit_rejection',
+                                'failed_attempt': failed, 'rearm_status': arm['status']}
+                            launch = disarmed
+                    if launch is not None and (result['status'] == 'SUCCEEDED'
+                            or result.get('state', {}).get('landed') is False):
+                        # Preserve the actual launch across subsequent airborne
+                        # missions; a rejected takeoff does not establish one.
+                        self.client._takeoff_reference = launch
             elif name in TARGET_FLIGHT:
                 from python.dcm.target_motion import TargetMotion
                 localization = None

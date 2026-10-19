@@ -206,7 +206,10 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         raise ValueError("VLM result_type must be boolean or count")
     structured = structured or result_type is not None
     result_type = result_type or "boolean"
-    answer_format = "Answer in one concise sentence."
+    answer_format = (
+        "First describe the visible colors, surfaces and their image placement, then answer briefly. "
+        "A cropped or partial surface does not establish the whole object's shape, height or distance. "
+        "State which part is visible and what cannot be determined; do not complete unseen parts.")
     if structured:
         answer_format = (
             'Return JSON only: {"found":true or false or null,"answer":"brief visible evidence"}. '

@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 DIRECT_PROMPT_VERSION = 'direct-agent-v3-retained-evidence'
-DIRECT_TOOL_VERSION = 'direct-tools-v6-reference-roles'
+DIRECT_TOOL_VERSION = 'direct-tools-v7-phase-aware-altitude'
 
 
 class DeadlineExceeded(Exception):
