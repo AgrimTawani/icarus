@@ -13,6 +13,10 @@
     {
       "id": "turn_observe_until_people",
       "mission": "Get up to 3 metres and slowly look round to the left. Every 30 degrees check the front camera for people. If anyone shows up, stop turning, go up to 5 metres, move 2 metres forward then land. If you make one full turn without seeing anyone, come home and land. Tell me where you saw them."
+    },
+    {
+      "id": "south_start_repeated_observation",
+      "mission": "Go up 3 metres, face south, and have a slow look round to your left. Every 30 degrees look for people out front. If somebody appears, stop turning, climb to 5 metres, go 2 metres forward and land there. If you go right round and still see nobody, come home and land. Tell me when you saw anyone."
     }
   ]
 }
