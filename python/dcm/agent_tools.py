@@ -160,8 +160,10 @@ WORKFLOW_FLIGHT["fly_pattern"] = obj({
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
 SEQUENCE_FLIGHT = {name: schema for name, schema in FLIGHT.items()
                    if name != 'execute_route'}
+OPTIONAL_TOOLS = ("scan_heading", "scan_area", "fly_pattern", "execute_route")
 SCHEMAS.update(
     {
+        "load_tools": obj({"names": {"type": "array", "items": {"enum": list(OPTIONAL_TOOLS)}, "minItems": 1, "uniqueItems": True}}, ["names"]),
         "execute_sequence": obj(
             {
                 "actions": {
@@ -222,6 +224,7 @@ for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
             "description": "True only if this finishes ALL requested work.",
         }
 DESCRIPTIONS = {
+    'load_tools': 'Load optional controller workflow schemas for subsequent decisions. Read-only; performs no flight or observation. Names and purposes are listed in context.optional_tools.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Choose destination.type explicitly: coordinates, home, launch, named_waypoint, visible_object or registered_target. Object orbits use standoff_m from measured hull and face the object; visual_query also needs view. Coordinate/home/launch orbits use radius_m and altitude_agl_m. Coordinates require coordinate_frame and local_ned requires origin_id. Select camera explicitly; none means heading-only. Fixed cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
@@ -267,7 +270,7 @@ TOOLS = [
 ]
 
 
-def decision_tools(context, angular_scans=None, area_scans=None):
+def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=None):
     """Bind opaque handles to exact currently known values, without rewriting calls.
 
     Geometry validity and workflow ownership remain backend responsibilities.
@@ -334,6 +337,8 @@ def decision_tools(context, angular_scans=None, area_scans=None):
     catalog = []
     for tool in bind_limits(TOOLS):
         function = tool['function']
+        if loaded_tools is not None and function['name'] in OPTIONAL_TOOLS and function['name'] not in loaded_tools:
+            continue
         if function['name'] in TARGET_FLIGHT and function['name'] not in ('overfly_target','approach_target'):
             # Native tools distinguish approach from overflight; object orbit
             # still selects its measured reference through orbit.
@@ -727,6 +732,12 @@ class ToolExecutor:
                     raise ValueError('Receipt lookup needs the active mission conversation')
                 result = {'status': 'SUCCEEDED',
                           'retained_result': read_action_result(self.session.actions, **arguments)}
+            elif name == 'load_tools':
+                if self.session is None:
+                    raise ValueError('Tool loading needs an active mission session')
+                self.session.loaded_tools.update(arguments['names'])
+                result = {'status': 'SUCCEEDED', 'loaded_tools': sorted(self.session.loaded_tools),
+                          'message': 'Schemas available on the next decision; no flight executed.'}
             elif name == "get_context":
                 from python.dcm.agent_context import capture_context
 

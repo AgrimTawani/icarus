@@ -14,6 +14,7 @@ import threading
 import time
 import uuid
 from functools import wraps
+from contextlib import nullcontext
 from pathlib import Path
 
 import grpc
@@ -783,15 +784,15 @@ class MissionClient:
                 if self.edge_vlm_limiter is None:
                     self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
                 self.edge_vlm_limiter.admit()
-                # Keep the flight LLM on the 6 GB GPU. The stronger pinned
-                # Qwen2-VL model runs CPU-offloaded and releases after this one
-                # bounded question, avoiding VRAM contention and the inaccurate
-                # 256M-model answers observed during live acceptance.
-                result = inspect_image(
-                    output, question, self._edge_manifest(),
-                    timeout_s=45.0, gpu_layers=0,
-                    view_context=_visual_view_context(view.get('capture_pose', {}), view.get('camera', 'forward_d435i')) if view else None,
-                    **({"structured": True, "result_type": result_type} if structured or result_type else {}))
+                # Release the owned flight model before using the shared GPU.
+                # Standalone callers without a runtime lease remain CPU-only.
+                lease = getattr(self, 'visual_inference', lambda: nullcontext(0))
+                with lease() as gpu_layers:
+                    result = inspect_image(
+                        output, question, self._edge_manifest(),
+                        timeout_s=45.0, gpu_layers=gpu_layers,
+                        view_context=_visual_view_context(view.get('capture_pose', {}), view.get('camera', 'forward_d435i')) if view else None,
+                        **({"structured": True, "result_type": result_type} if structured or result_type else {}))
             else:
                 result = inspect_image(output, question, Path.home() / "models/vision/MANIFEST.json",
                                        **({"structured": True, "result_type": result_type} if structured or result_type else {}))
@@ -999,11 +1000,11 @@ class MissionClient:
             if getattr(self, "edge_vlm_limiter", None) is None:
                 self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
             self.edge_vlm_limiter.admit()
-            # CPU-only for the same reason as inspect_scene: keep the flight
-            # LLM's VRAM uncontended on the 6 GB device.
-            grounding = ground_description(
-                output, grounding_target["visual_query"], manifest,
-                timeout_s=90.0, gpu_layers=0, view_context=_visual_view_context(state))
+            lease = getattr(self, 'visual_inference', lambda: nullcontext(0))
+            with lease() as gpu_layers:
+                grounding = ground_description(
+                    output, grounding_target["visual_query"], manifest,
+                    timeout_s=90.0, gpu_layers=gpu_layers, view_context=_visual_view_context(state))
         estimate = self.target_localizer.observe(
             description,
             vlm_text=grounding["grounding_text"] if grounding["present"] else None,

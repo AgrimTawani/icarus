@@ -74,6 +74,7 @@ class AgentSession:
         self.unresolved_tool_failures = {}
         self.mission_progress = ""
         self.include_waypoints = False
+        self.loaded_tools = set()
 
     def remember_tool_result(self, name, arguments, result):
         """Receipt consistency only; never infer obligations from mission text."""
@@ -154,6 +155,9 @@ def fly_mission(
     interrupt.enable_safety(client)
     interrupt.arm(client)
     executor = ToolExecutor(client, interrupt, session=session)
+    visual_inference = getattr(runtime, "visual_inference", None)
+    if callable(visual_inference):
+        client.visual_inference = visual_inference
     # Clarification resumes the same mission. It must not reset unchanged
     # backend failures and permit endless retries after each user answer.
     failures = 0
@@ -222,7 +226,14 @@ def fly_mission(
             session.area_scans = getattr(client, '_scan_workflows', {})
             from python.dcm.action_memory import indexed_results
             context['retained_action_result_count'] = sum(1 for _ in indexed_results(session.actions))
-            tools = decision_tools(context, session.angular_scans, session.area_scans)
+            context['optional_tools'] = {
+                'scan_heading': 'Turn-settle-observe cycles, conditional stopping and resumable scans.',
+                'scan_area': 'Geometric area/perimeter flight with sampled camera observations.',
+                'fly_pattern': 'Camera-free geometric perimeter/area flight delegated to ArduPilot.',
+                'execute_route': 'Explicit waypoint list delegated to ArduPilot AUTO.'}
+            context['loaded_tools'] = sorted(session.loaded_tools)
+            tools = decision_tools(context, session.angular_scans, session.area_scans,
+                                   loaded_tools=session.loaded_tools)
             messages = decision_messages(session, context)
             if show_prompts:
                 echo(json.dumps({"messages": messages, "tools": tools}, indent=2))

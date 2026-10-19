@@ -284,6 +284,24 @@ class LlamaCppRuntime:
         """Return one native assistant message; no whole-mission schema."""
         return self._chat({"messages": messages, "tools": tools, "concise": concise}, max_tokens=768)
 
+    @contextlib.contextmanager
+    def visual_inference(self):
+        """Serialize accelerator ownership with ephemeral onboard vision.
+
+        Stop only this runtime's owned server. The next decision lazily reloads
+        it; failures and cancellation never leave a second model racing it.
+        CPU-configured deployments remain CPU-only.
+        """
+        if not self._inference_lock.acquire(blocking=False):
+            raise RuntimeError("previous model inference is still completing")
+        try:
+            layers = 0 if self.gpu_layers == 0 else 99
+            if layers:
+                self.stop()
+            yield layers
+        finally:
+            self._inference_lock.release()
+
     def _chat(self, prompt, max_tokens=None, response_format=None):
         """One session-owned request, including deadline recovery.
 
