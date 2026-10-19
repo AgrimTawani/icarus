@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 DIRECT_PROMPT_VERSION = 'direct-agent-v3-retained-evidence'
-DIRECT_TOOL_VERSION = 'direct-tools-v3-retained-results'
+DIRECT_TOOL_VERSION = 'direct-tools-v4-explicit-scan-exit'
 
 
 class DeadlineExceeded(Exception):

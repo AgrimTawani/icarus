@@ -113,8 +113,11 @@ TARGET_FLIGHT = {
     "overfly_target": object_motion_schema({"clearance_above_m": POSITIVE,
                            "maximum_ground_speed_mps": POSITIVE}),
 }
+from python.dcm.scan_policy import EXIT_POLICY
+
 WORKFLOW_FLIGHT = {
     "scan_heading": obj({
+        "exit_policy": copy.deepcopy(EXIT_POLICY),
         "step_deg": {"type": "number", "exclusiveMinimum": 0, "maximum": 360},
         "sweep_deg": {"type": "number", "exclusiveMinimum": 0, "maximum": 360},
         "clockwise": BOOL, "rate_deg_s": {"type": "number", "minimum": 5, "maximum": 60},
@@ -127,6 +130,7 @@ WORKFLOW_FLIGHT = {
     }, ["step_deg"]),
     "resume_heading_scan": obj({"scan_id": TEXT}, ["scan_id"]),
     "scan_area": obj({
+        "exit_policy": copy.deepcopy(EXIT_POLICY),
         "shape": {"enum": ["square", "rectangle", "circle"]},
         "coverage": {"enum": ["perimeter", "area"]},
         "width_m": POSITIVE, "length_m": POSITIVE, "radius_m": POSITIVE,
@@ -151,7 +155,7 @@ WORKFLOW_FLIGHT["fly_pattern"] = obj({
     name: copy.deepcopy(schema)
     for name, schema in WORKFLOW_FLIGHT["scan_area"]["properties"].items()
     if name not in {"observation", "camera", "observation_count", "question",
-                    "classes", "stop_on_detection", "minimum_count", "return_on"}
+                    "classes", "stop_on_detection", "minimum_count", "return_on", "exit_policy"}
 }, ["shape", "coverage"])
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
 SEQUENCE_FLIGHT = {name: schema for name, schema in FLIGHT.items()
@@ -219,7 +223,7 @@ for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
 DESCRIPTIONS = {
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Circle a coordinate or measured home/launch reference; objects use orbit_target. center_reference resolves home or launch authoritatively; otherwise supply measured center coordinates. face_center defaults true. Select camera explicitly, or none for heading-only flight; coordinate camera targets need measured target_altitude_agl_m. Yaw faces the bearing; fixed cameras cannot tilt.',
-    'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Without a predicate return each observation for branching. stop_on_detection/minimum_count continues to a match; repeat_until_match searches across sweeps. return_on=sweep only for unconditional scans; scene returns each station. Resume with resume_heading_scan.',
+    'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
     'goto': 'Fly to supplied/measured absolute local north/east coordinates and above-home altitude. Unknown named waypoints need clarification. Objects use object-motion tools. Optional heading_deg is absolute.',
@@ -230,7 +234,7 @@ DESCRIPTIONS = {
     'execute_sequence': 'Execute 2–3 contiguous unconditional flight actions in order, stopping at failure. Do not cross an intervening observation or decision.',
     'execute_route': 'Upload local waypoints as one ArduPilot AUTO route. Stopped checkpoints honor heading/dwell; fly_through=true permits continuous course-facing motion without them. Altitudes are above home.',
     'fly_pattern': 'ArduPilot geometric flight without observations, anchored at current position. Square needs width; rectangle width extends right, length forward; circle center lies one radius forward; area needs lane_spacing_m. Heading defaults current; clockwise=false starts rightward. Perimeters return to start. repetitions repeats; hold_time_s dwells; camera_heading_deg fixes heading.',
-    'scan_area': 'Geometric flight plus sampled camera stations, anchored at current position. Rectangle width extends right, length forward; square needs width, circle radius, area lane_spacing_m. observation defaults scene, camera downward_brio, observation_count4. Return each station for branching; return_on=completion only for unconditional scans. stop_on_detection continues to a match. Resume with resume_scan.',
+    'scan_area': 'Geometric flight plus sampled camera stations, anchored at current position. Rectangle width extends right, length forward; square needs width, circle radius, area lane_spacing_m. observation defaults scene, camera downward_brio, observation_count4. Select exit_policy explicitly: each_observation for arbitrary branching, finish_at_match to end at a detector match, pause_at_match for nested branches that resume, complete_coverage for unconditional detection scans. Resume with resume_scan.',
     'resume_scan': 'Resume a saved area scan with its original anchor and remaining stations.',
     'detect': 'Detect/count supported class enum labels in a current image, including while disarmed. Unsupported objects use inspect_scene/localize_target. Counts are thresholded detections, not guaranteed totals; default camera forward_d435i.',
     'inspect_scene': 'Ask onboard VLM about visible appearance, objects or relationships. Samples configured detector counts separately when available; VLM prose is qualitative evidence, not metric geometry or measured counts.',
@@ -366,6 +370,11 @@ def decision_tools(context, angular_scans=None, area_scans=None):
         function['parameters']['properties']['mission_progress'] = {
             'type': 'string', 'maxLength': 600,
             'description': 'Working note: unfinished user requirements, pending conditions and missing evidence. Not a flight argument.'}
+        if function['name'] in ('scan_heading', 'scan_area'):
+            # Legacy scheduling aliases remain available to Python callers;
+            # the agent makes one explicit lifecycle choice instead.
+            function['parameters']['properties'].pop('return_on', None)
+            function['parameters']['required'].append('exit_policy')
         catalog.append(tool)
     return catalog
 
@@ -413,6 +422,10 @@ def validate_call(name, arguments, *, tools=None):
         references = [key for key in ('target_id', 'description', 'visual_query') if key in arguments]
         if len(references) != 1:
             raise ValueError(f"{name}: supply exactly one of target_id or description; received {references}")
+    if name in ('scan_heading', 'scan_area'):
+        from python.dcm.scan_policy import scan_arguments
+        scan_arguments(arguments, default_observation='detect' if name == 'scan_heading' else 'scene',
+                       coverage_return='sweep' if name == 'scan_heading' else 'completion')
     if name == "execute_sequence" and tools is None:
         for action in arguments["actions"]:
             errors = list(

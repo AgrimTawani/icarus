@@ -122,3 +122,40 @@ def test_incomplete_contract_does_not_fly(kwargs):
     ex=Executor()
     with pytest.raises(ValueError):ScanWorkflow(ex).scan_area(shape='square',width_m=1,**kwargs)
     assert not ex.routes
+
+
+def test_area_finish_at_match_stops_route_and_cannot_resume():
+    ex=Executor([{'status':'SUCCEEDED','evidence':{'counts':{'person':2}}}])
+    workflow=ScanWorkflow(ex)
+    result=workflow.scan_area(shape='square',width_m=2,observation='detect',
+        classes=['person'],stop_on_detection='person',minimum_count=2,exit_policy='finish_at_match')
+    assert result['workflow_complete'] and result['evidence']['event']=='condition_met'
+    assert not result['evidence']['coverage_complete']
+    assert len(ex.routes)==1
+    workflow.resume_scan(result['evidence']['scan_id'])
+    assert len(ex.routes)==1
+
+
+def test_area_explicit_pause_allows_resuming_after_match():
+    ex=Executor([{'status':'SUCCEEDED','evidence':{'counts':{'person':1}}}])
+    workflow=ScanWorkflow(ex)
+    result=workflow.scan_area(shape='square',width_m=2,observation='detect',
+        classes=['person'],stop_on_detection='person',exit_policy='pause_at_match')
+    assert not result['workflow_complete']
+    done=workflow.resume_scan(result['evidence']['scan_id'])
+    assert done['workflow_complete'] and done['evidence']['coverage_complete']
+    assert len(ex.routes)==5
+
+
+@pytest.mark.parametrize('extra', [
+    {'exit_policy':'finish_at_match'},
+    {'exit_policy':'pause_at_match','stop_on_detection':'car','classes':['person']},
+    {'exit_policy':'complete_coverage','stop_on_detection':'person','classes':['person']},
+    {'exit_policy':'each_observation','minimum_count':2},
+    {'exit_policy':'finish_at_match','stop_on_detection':'person','classes':['person'],'observation':'scene'},
+])
+def test_conflicting_exit_policies_fail_before_any_route(extra):
+    ex=Executor()
+    with pytest.raises(ValueError):
+        ScanWorkflow(ex).scan_area(shape='square',width_m=2,**extra)
+    assert not ex.routes

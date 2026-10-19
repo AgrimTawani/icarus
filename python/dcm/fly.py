@@ -743,7 +743,10 @@ def decision_messages(session, context, lean=False):
     # Workflows retain pending observations independently of model history.
     context['active_observation_workflows'] = [
         {'scan_id': ident, 'pending_phase': saved['phase'], 'swept_deg': saved['swept_deg'],
-         'completed_observations': len(saved['observations']), 'resume_tool': 'resume_heading_scan'}
+         'completed_observations': len(saved['observations']), 'resume_tool': 'resume_heading_scan',
+         'exit_policy': saved.get('args', {}).get('exit_policy', 'legacy'),
+         'continuation': ('pending_observation' if saved['phase'] == 'observe'
+                          else 'optional_next_station_after_agent_branch_decision')}
         for ident, saved in getattr(session, 'angular_scans', {}).items() if not saved['completed']
     ]
     messages = conversation_tail(session.messages, exchanges=1 if lean else 4)

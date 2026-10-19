@@ -15,6 +15,8 @@ class AngularScan:
 
     def scan_heading(self, **args):
         from python.dcm.agent_tools import message_dict, observation_call
+        from python.dcm.scan_policy import scan_arguments
+        args = scan_arguments(args, default_observation='detect', coverage_return='sweep')
         observation_call(args, default_observation='detect', default_camera='forward_d435i')
         if args.get('stop_on_detection') and (args.get('observation', 'detect') != 'detect'
                 or args['stop_on_detection'] not in args.get('classes', [])):
@@ -89,7 +91,8 @@ class AngularScan:
             s['completed'] = (not a.get('repeat_until_match', False)
                               and s['swept_deg'] >= budget - 1e-6)
             if receipt and receipt['matched']:
-                s['completed'] = s['completed'] or bool(a.get('repeat_until_match'))
+                s['completed'] = (s['completed'] or bool(a.get('repeat_until_match'))
+                                  or a.get('exit_policy') == 'finish_at_match')
                 return self.result(scan_id, s, 'condition_met')
             # Semantic observations return each station for arbitrary nested decisions.
             if name == 'inspect_scene' or (not a.get('stop_on_detection') and a.get('return_on', 'observation') != 'sweep'):
@@ -102,6 +105,9 @@ class AngularScan:
             'message': f"Angular observation scan: {event}; {len(s['observations'])} observed stations; completed turn commands total {s['swept_deg']:g} degrees.",
             'evidence': {'scan_id': ident, 'event': event, 'completed': s['completed'],
                 'pending_phase': s['phase'], 'swept_deg': s['swept_deg'],
+                'exit_policy': s['args'].get('exit_policy', 'legacy'),
+                'coverage_complete': (not s['args'].get('repeat_until_match', False)
+                                      and s['swept_deg'] >= s['args'].get('sweep_deg', 360)),
                 **({'workflow_stop_filter': copy.deepcopy(s['observations'][-1]['workflow_stop_filter'])}
                    if status == 'SUCCEEDED' and s['observations']
                    and 'workflow_stop_filter' in s['observations'][-1] else {}),

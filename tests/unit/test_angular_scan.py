@@ -90,3 +90,44 @@ def test_single_large_turn_observes_only_after_full_requested_arc():
     completed = workflow.resume_heading_scan(result['evidence']['scan_id'])
     assert completed['workflow_complete']
     assert len(ex.calls) == 2
+
+
+def test_explicit_finish_at_match_is_terminal_before_next_turn():
+    ex = Executor([{'status': 'SUCCEEDED', 'evidence': {'counts': {'person': n}}}
+                   for n in (0, 0, 1)])
+    workflow = AngularScan(ex)
+    result = workflow.scan_heading(step_deg=30, classes=['person'],
+        stop_on_detection='person', exit_policy='finish_at_match')
+    assert [name for name, _ in ex.calls] == ['yaw', 'detect'] * 3
+    assert result['workflow_complete']
+    assert result['evidence']['event'] == 'condition_met'
+    assert not result['evidence']['coverage_complete']
+    count = len(ex.calls)
+    assert workflow.resume_heading_scan(result['evidence']['scan_id'])['workflow_complete']
+    assert len(ex.calls) == count
+    from python.dcm.agent_tools import decision_tools
+    assert 'resume_heading_scan' not in [t['function']['name'] for t in
+        decision_tools({}, angular_scans=ex.client._angular_scans)]
+
+
+def test_explicit_pause_at_match_preserves_remaining_scan_for_nested_branch():
+    ex = Executor([{'status': 'SUCCEEDED', 'evidence': {'counts': {'person': 1}}}])
+    workflow = AngularScan(ex)
+    result = workflow.scan_heading(step_deg=30, sweep_deg=60, classes=['person'],
+        stop_on_detection='person', exit_policy='pause_at_match')
+    assert not result['workflow_complete'] and len(ex.calls) == 2
+    done = workflow.resume_heading_scan(result['evidence']['scan_id'])
+    assert done['workflow_complete'] and done['evidence']['coverage_complete']
+    assert len(ex.calls) == 4
+
+
+def test_finish_policy_retries_unknown_observation_without_extra_turn():
+    ex = Executor([{'status': 'SUCCEEDED', 'evidence': {'counts': {}}},
+                   {'status': 'SUCCEEDED', 'evidence': {'counts': {'person': 1}}}])
+    workflow = AngularScan(ex)
+    first = workflow.scan_heading(step_deg=30, classes=['person'],
+        stop_on_detection='person', exit_policy='finish_at_match')
+    assert first['status'] == 'FAILED' and not first['workflow_complete']
+    done = workflow.resume_heading_scan(first['evidence']['scan_id'])
+    assert done['workflow_complete'] and done['evidence']['event'] == 'condition_met'
+    assert [name for name, _ in ex.calls] == ['yaw', 'detect', 'detect']

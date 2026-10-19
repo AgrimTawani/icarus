@@ -71,6 +71,8 @@ class ScanWorkflow:
     def scan_area(self, **args):
         from python.dcm.agent_tools import message_dict
         from python.dcm.agent_tools import observation_call
+        from python.dcm.scan_policy import scan_arguments
+        args = scan_arguments(args, default_observation='scene', coverage_return='completion')
         observation_call(args, default_observation='scene', default_camera='downward_brio')
         stop = args.get('stop_on_detection')
         if stop and (args.get('observation', 'scene')!='detect' or stop not in args.get('classes', [])):
@@ -125,6 +127,7 @@ class ScanWorkflow:
             # Native flight has already established a hold. A measured event
             # returns to the agent for arbitrary/nested semantic branching.
             if receipt and receipt['matched']:
+                saved['completed'] = args.get('exit_policy') == 'finish_at_match'
                 return self._result(scan_id,saved,'condition_met')
             if not args.get('stop_on_detection') and args.get('return_on', 'observation') != 'completion':
                 return self._result(scan_id,saved,'observation_ready')
@@ -142,6 +145,8 @@ class ScanWorkflow:
             'message':'Scan observation checkpoints completed.' if saved['completed'] else 'Scan paused: '+event,
             'evidence':{'scan_id':ident,'event':event,'backend':'ardupilot_auto',
                 'anchor':saved['anchor'],'completed':saved['completed'],
+                'exit_policy':saved['args'].get('exit_policy', 'legacy'),
+                'coverage_complete':saved['path_index'] >= len(saved['points']),
                 **({'workflow_stop_filter': dict(saved['observations'][-1]['workflow_stop_filter'])}
                    if status == 'SUCCEEDED' and saved['observations']
                    and 'workflow_stop_filter' in saved['observations'][-1] else {}),
