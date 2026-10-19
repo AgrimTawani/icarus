@@ -62,11 +62,15 @@ def main():
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
     if os.environ.get('ICARUS_WAYPOINTS_FILE'):
         paths.append(Path(os.environ['ICARUS_WAYPOINTS_FILE']).resolve())
+    # Camera artifacts may be provisioned outside the checkout or supplied as
+    # a candidate. Freeze that selection as well as source and flight model.
+    paths.append(Path(os.environ.get('EDGE_VISION_MANIFEST') or
+                      (Path.home() / 'models/edge/MANIFEST.json')).resolve())
     provenance = {
         'runtime': descriptor.as_record(),
         'git_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
-        'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-                          for p in paths if p.is_relative_to(ROOT)},
+        'source_sha256': {(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p)):
+                          hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
         'results': results}
     def save_results():
         pending = args.output / 'results.json.tmp'

@@ -14,5 +14,9 @@
   "description": {
     "schema_sha256": "1bcd5f15d3dac4784bd6e686a75c6c7ee740b16c2f3f76cf9b4c34ce00131b4e",
     "grammar": "answer ::= \"\\\"\" char{0,300} \"\\\"\"\nanswer-kv ::= \"\\\"answer\\\"\" space \":\" space answer\nanswerable ::= boolean | null\nanswerable-kv ::= \"\\\"answerable\\\"\" space \":\" space answerable\nboolean ::= (\"true\" | \"false\")\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\nnull ::= \"null\"\nroot ::= \"{\" space answerable-kv \",\" space answer-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
+  },
+  "pixel_box": {
+    "schema_sha256": "a5a8e8d2408ed342c766d592ff94f962eb4d2101366f2ed90aa8b5cca8f9733a",
+    "grammar": "bbox ::= bbox-0 | null\nbbox-0 ::= \"[\" space number (\",\" space number){3,3} space \"]\"\nbbox-kv ::= \"\\\"bbox\\\"\" space \":\" space bbox\ndecimal-part ::= [0-9]{1,16}\nintegral-part ::= [0] | [1-9] [0-9]{0,15}\nnull ::= \"null\"\nnumber ::= (\"-\"? integral-part) (\".\" decimal-part)? ([eE] [-+]? integral-part)?\nroot ::= \"{\" space bbox-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
   }
 }

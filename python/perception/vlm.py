@@ -44,6 +44,13 @@ DESCRIPTION_SCHEMA = {
     "required": ["answerable", "answer"], "additionalProperties": False,
 }
 
+PIXEL_BOX_SCHEMA = {
+    "type": "object", "properties": {
+        "bbox": {"type": ["array", "null"], "items": {"type": "number"},
+                 "minItems": 4, "maxItems": 4}},
+    "required": ["bbox"], "additionalProperties": False,
+}
+
 
 class VlmInferenceError(RuntimeError):
     """Inference failed before producing usable visual evidence."""
@@ -93,7 +100,8 @@ def measurement_grammar(result_type):
     same JSON language; no free-text inference fallback is permitted.
     Regenerate with scripts/autonomy/generate_vlm_grammars.py after schema edits.
     """
-    schemas = {"boolean": CONDITION_SCHEMA, "count": COUNT_SCHEMA, "description": DESCRIPTION_SCHEMA}
+    schemas = {"boolean": CONDITION_SCHEMA, "count": COUNT_SCHEMA,
+               "description": DESCRIPTION_SCHEMA, "pixel_box": PIXEL_BOX_SCHEMA}
     if result_type not in schemas:
         raise ValueError("VLM result_type must be boolean, count or description")
     artifact = json.loads(Path(__file__).with_name("vlm_grammars.json").read_text())
@@ -382,7 +390,7 @@ class _GroundingServer:
             self.process.wait()
 
     def complete(self, image_b64: str, question: str, prefill: str,
-                 n_predict: int) -> str:
+                 n_predict: int, *, grammar=None) -> str:
         # Qwen2-VL's own chat layout; the image marker is expanded by mtmd.
         prompt = ("<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
                   "<|im_start|>user\n" + self.marker + question +
@@ -391,6 +399,8 @@ class _GroundingServer:
             "prompt": {"prompt_string": prompt, "multimodal_data": [image_b64]},
             "temperature": 0, "n_predict": n_predict, "cache_prompt": True,
         }
+        if grammar is not None:
+            payload['grammar'] = grammar
         body = json.dumps(payload).encode()
         request = urllib.request.Request(
             self.url + "/completion", body, {"Content-Type": "application/json"})
@@ -418,19 +428,19 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
                        gpu_layers: int = 0, view_context=None) -> dict:
     """Ask the pinned VLM whether a described thing is visible, and where.
 
-    Two bounded questions on one image: a yes/no presence gate, then (only on
-    yes) Qwen2-VL's native grounding format, forced by prefilling
-    ``<|object_ref_start|>...<|box_start|>(`` so the answer is a box in the
-    model's 0..1000 image coordinates.  The box is image evidence only; this
-    function never produces metric coordinates or a confidence.
+    The artifact declares its coordinate/output contract. Legacy Qwen2-VL
+    uses presence plus native normalized box tokens. JSON pixel models use presence then a
+    constrained box observation converted from original-image coordinates. Neither
+    format produces metric coordinates, confidence or a flight authorization.
     """
     description = normalize_description(description)
     image_path = Path(image_path)
     artifact = load_vlm(manifest_path)
-    if artifact.get("family") != "qwen2-vl":
-        # The prefilled box tokens are Qwen2-VL's grounding format; another
-        # model family would return an unvalidated imitation of a box.
-        raise ValueError("VLM grounding requires the pinned qwen2-vl artifact")
+    grounding_format = artifact.get('grounding_format')
+    if grounding_format is None and artifact.get('family') == 'qwen2-vl':
+        grounding_format = 'qwen2vl_box_1000'  # Existing pinned manifests.
+    if grounding_format not in ('qwen2vl_box_1000', 'json_pixel_xyxy'):
+        raise ValueError('VLM artifact requires a supported explicit grounding_format')
     executable = binary or (Path(__file__).resolve().parents[2]
                             / "third_party/llama.cpp/build/bin/llama-server")
     if not executable.is_file():
@@ -446,6 +456,7 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
     # Validate supplied metadata without turning it into an image assertion.
     viewing_context_text(view_context)
     started = time.monotonic()
+    pixel_box = None
     with _GroundingServer(executable, artifact, gpu_layers,
                           started + timeout_s) as server:
         loaded = time.monotonic()
@@ -456,10 +467,24 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
         first_word = presence.lower().replace('.', ' ').replace(',', ' ').split()
         if not first_word or first_word[0] not in ('yes', 'no'):
             raise VlmInferenceError('invalid_presence',
-                                    'VLM did not provide a usable yes/no observation; presence is unknown')
+                'VLM did not provide a usable yes/no observation; presence is unknown')
         present = presence_answer_is_yes(presence)
         grounding = None
-        if present:
+        if present and grounding_format == 'json_pixel_xyxy':
+            from PIL import Image
+            with Image.open(image_path) as image:
+                width, height = image.size
+            raw = server.complete(image_b64,
+                f'Locate the physical object referred to as: {description}. '
+                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] in original image pixels '
+                f'({width} wide, {height} high). Use bbox=null if the object is not visible.',
+                '', 96, grammar=measurement_grammar('pixel_box'))
+            pixel_box, normalized = decode_pixel_box(raw, width, height)
+            if normalized is None:
+                raise VlmInferenceError('inconsistent_presence',
+                    'Positive presence did not produce a measured image box')
+            grounding = f'({normalized[0]},{normalized[1]}),({normalized[2]},{normalized[3]})'
+        elif present:
             grounding = "(" + server.complete(
                 image_b64, f"Locate the physical object referred to as: {description}.",
                 f"<|object_ref_start|>the {description}<|object_ref_end|>"
@@ -472,6 +497,8 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
         "present": present,
         "presence_answer": presence[:MAX_ANSWER_CHARS],
         "grounding_text": None if grounding is None else grounding[:MAX_ANSWER_CHARS],
+        "grounding_format": grounding_format,
+        "pixel_box_xyxy": pixel_box,
         "view_context": view_context,
         "latency_ms": round((finished - started) * 1000, 3),
         "model_load_ms": round((loaded - started) * 1000, 3),
@@ -483,3 +510,33 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
                                                    "server": "llama-server"}),
         "flight_authority": False,
     }
+
+
+def decode_pixel_box(answer, width, height):
+    """Validate source-image coordinates before conversion to the existing API.
+
+    Null alone means an observed absence. Malformed, inverted, nonfinite or
+    off-image coordinates are unknown measurements, never clipped successes.
+    """
+    try:
+        if any(type(size) is not int or size <= 0 for size in (width, height)):
+            raise ValueError('Invalid image dimensions')
+        value = json.loads(answer)
+        if not isinstance(value, dict) or set(value) != {'bbox'}:
+            raise ValueError('Expected exactly one bbox field')
+        box = value['bbox']
+        if box is None:
+            return None, None
+        if (not isinstance(box, list) or len(box) != 4 or
+                any(type(v) not in (int, float) or not math.isfinite(v) for v in box)):
+            raise ValueError('Expected four finite pixel coordinates')
+        x1, y1, x2, y2 = box
+        if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
+            raise ValueError('Bounding box is inverted or outside the source image')
+        normalized = tuple(round(1000 * v / size) for v, size in
+                           zip(box, (width, height, width, height)))
+        if normalized[0] >= normalized[2] or normalized[1] >= normalized[3]:
+            raise ValueError('Box is below the supported coordinate resolution')
+        return box, normalized
+    except (ValueError, TypeError) as error:
+        raise VlmInferenceError('invalid_pixel_box', str(error)) from error

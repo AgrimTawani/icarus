@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from python.perception.vlm import CONDITION_SCHEMA, COUNT_SCHEMA, DESCRIPTION_SCHEMA
+from python.perception.vlm import CONDITION_SCHEMA, COUNT_SCHEMA, DESCRIPTION_SCHEMA, PIXEL_BOX_SCHEMA
 
 CONVERTER = r'''
 #include "json-schema-to-grammar.h"
@@ -42,7 +42,7 @@ def generate():
         subprocess.run(["g++", "-std=c++17", "-I", str(checkout / "common"),
                         str(source), "-L", str(library), f"-Wl,-rpath,{library}",
                         "-lllama-common", "-o", str(executable)], check=True)
-        for kind, schema in (("boolean", CONDITION_SCHEMA), ("count", COUNT_SCHEMA), ("description", DESCRIPTION_SCHEMA)):
+        for kind, schema in (("boolean", CONDITION_SCHEMA), ("count", COUNT_SCHEMA), ("description", DESCRIPTION_SCHEMA), ("pixel_box", PIXEL_BOX_SCHEMA)):
             encoded = json.dumps(schema, sort_keys=True, separators=(",", ":"))
             grammar = subprocess.run([str(executable)], input=json.dumps(schema),
                                      text=True, capture_output=True, check=True).stdout
