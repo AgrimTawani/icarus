@@ -226,7 +226,7 @@ DESCRIPTIONS = {
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
-    'goto': 'Choose destination.type explicitly. Visible objects use visual_query, view_heading_deg, and object_position=standoff or above; registered objects use target_id. Coordinates require coordinate_frame, north/east, altitude; local_ned also requires origin_id. Named waypoints are looked up, never guessed. Object direction is a view heading, not a range. Above positions use measured target height and footprint.',
+    'goto': 'Choose destination.type explicitly. Visible objects use visual_query, view_heading_deg, and object_position=standoff; above-object travel uses overfly_target; registered objects use target_id. Coordinates require coordinate_frame, north/east, altitude; local_ned also requires origin_id. Named waypoints are looked up, never guessed. Object direction is a view heading, not a range. Above positions use measured target height and footprint.',
     'arm': 'Enable motors without takeoff. Detection works disarmed: satisfy pre-arming conditions first. takeoff already arms if needed.',
     'takeoff': 'Arm if needed and climb from LANDED. When airborne change height with goto or move_relative up_m.',
     'return_home': 'Return to measured autopilot home and land by default. land_at_home=false returns and holds. Return flight may change yaw.',
@@ -241,7 +241,7 @@ DESCRIPTIONS = {
     'localize_target': 'Associate a visible object with measured LiDAR/depth. Returns surface range, footprint quality and reusable target_id; another viewpoint may be needed. Reuse the query to accumulate views.',
     'approach_target': 'Choose a new measured horizontal surface-standoff point using native routing; this does not resolve a previously designated waypoint. Recede only if already closer. Supply target_id or visual_query. Refresh static-object geometry before each leg and after arrival; not continuous moving-target tracking.',
     'orbit_target': 'Circle a measured object with nose facing it. Supply target_id or visual_query. standoff_m is minimum distance from its observed hull, not center radius or global obstacle clearance; wall distance varies for non-round shapes. Partial geometry may require two measured side views first. Select camera for visual intent.',
-    'overfly_target': 'Climb above measured target top, then fly over footprint center. Supply target_id or visual_query. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
+    'overfly_target': 'Fly ABOVE a physical object: climb above its measured top, then move over its footprint center. destination selects visible_object with visual_query and view_heading_deg, or registered_target with target_id. An observation waypoint is not above the object. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
     'get_context': 'Refresh state/health/perception; include_geometry adds obstacle bounds. Normally refreshed automatically.',
     'read_action_result': 'Read retained history by executed_actions index. Omit path to discover receipt fields. Optional path lists exact returned keys/array indices, starting at action/arguments/result; follow retained_details paths or returned fields. An absent path returns path_found=false and valid paths, never the missing data. offset/limit page large data. Read-only: historical data never establishes a current condition.',
     'ask_user': 'Resolve missing choices or named waypoint locations with one concise question before related travel. Seeing an object does not define a previously named waypoint. The answer resumes this mission without repeating completed work.',
@@ -319,20 +319,28 @@ def decision_tools(context, angular_scans=None, area_scans=None):
     catalog = []
     for tool in bind_limits(TOOLS):
         function = tool['function']
-        if function['name'] in TARGET_FLIGHT:
-            # The agent selects destination kind through goto/orbit. Keep the
-            # legacy controllers callable by Python without overlapping names.
+        if function['name'] in TARGET_FLIGHT and function['name'] != 'overfly_target':
+            # Approach/orbit select references through goto/orbit. Overflight
+            # exposes its own spatial goal; Python retains all controllers.
             continue
-        if function['name'] in ('goto', 'orbit'):
-            from python.dcm.destinations import destination_schema
-            function['parameters'] = bind_limits(destination_schema(function['name'], SCHEMAS[function['name']]))
+        if function['name'] in ('goto', 'orbit', 'overfly_target'):
+            from python.dcm.destinations import destination_schema, overflight_schema
+            function['parameters'] = bind_limits(overflight_schema(SCHEMAS['overfly_target']) if function['name'] == 'overfly_target'
+                else destination_schema(function['name'], SCHEMAS[function['name']]))
+            if function['name'] == 'goto':
+                function['parameters']['properties']['object_position']['enum'] = ['standoff']
+                function['parameters']['properties'].pop('clearance_above_m', None)
             variants = function['parameters']['properties']['destination']['oneOf']
             waypoints = context.get('registered_waypoints', {}).get('entries', [])
             waypoint_names = sorted({p['name'] for p in waypoints if isinstance(p, dict)
-                                     and isinstance(p.get('name'), str) and p['name']})
-            for branch in variants:
-                if branch['properties']['type']['const'] == 'named_waypoint' and waypoint_names:
-                    branch['properties']['waypoint_name']['enum'] = waypoint_names
+                                     and isinstance(p.get('name'), str) and p['name']
+                                     and (function['name'] != 'orbit' or p.get('role') == 'orbit_center')})
+            for branch in list(variants):
+                if branch['properties']['type']['const'] == 'named_waypoint':
+                    if function['name'] == 'orbit' and not waypoint_names:
+                        variants.remove(branch)
+                    elif waypoint_names:
+                        branch['properties']['waypoint_name']['enum'] = waypoint_names
             for branch in list(variants):
                 if branch['properties']['type']['const'] == 'registered_target':
                     if target_ids:
@@ -385,11 +393,11 @@ def validate_call(name, arguments, *, tools=None):
     if not isinstance(name, str) or name not in SCHEMAS:
         raise ValueError(f"Unknown tool {name!r}; use a listed tool")
     schema = SCHEMAS[name]
-    reference_call = (name in ('goto', 'orbit') and isinstance(arguments, dict)
+    reference_call = (name in ('goto', 'orbit', 'overfly_target') and isinstance(arguments, dict)
                       and 'destination' in arguments)
     if reference_call:
-        from python.dcm.destinations import destination_schema
-        schema = destination_schema(name, schema)
+        from python.dcm.destinations import destination_schema, overflight_schema
+        schema = overflight_schema(schema) if name == 'overfly_target' else destination_schema(name, schema)
     if tools is not None:
         schema = next((tool['function']['parameters'] for tool in tools
                        if tool['function']['name'] == name), None)
@@ -426,8 +434,10 @@ def validate_call(name, arguments, *, tools=None):
         raise ValueError(format_schema_error(name, error))
     if reference_call:
         from python.dcm.destinations import unpack_destination, validate_destination
-        validate_destination(name, unpack_destination(name, arguments))
-    if tools is not None and name in TARGET_FLIGHT:
+        operation = 'goto' if name == 'overfly_target' else name
+        bound = dict(arguments, object_position='above') if name == 'overfly_target' else arguments
+        validate_destination(operation, unpack_destination(operation, bound))
+    if tools is not None and name in TARGET_FLIGHT and not reference_call:
         references = [key for key in ('target_id', 'description', 'visual_query') if key in arguments]
         if len(references) != 1:
             raise ValueError(f"{name}: supply exactly one of target_id or description; received {references}")
@@ -501,9 +511,11 @@ class ToolExecutor:
                 "message": "Operator interrupted the mission.",
             }
         try:
-            if name in ('goto', 'orbit') and 'destination' in arguments:
+            if name in ('goto', 'orbit', 'overfly_target') and 'destination' in arguments:
                 from python.dcm.destinations import execute_destination
-                result = execute_destination(self, name, arguments)
+                operation = 'goto' if name == 'overfly_target' else name
+                bound = dict(arguments, object_position='above') if name == 'overfly_target' else arguments
+                result = execute_destination(self, operation, bound)
             elif name == "execute_sequence":
                 results = []
                 for item in arguments["actions"]:
@@ -668,6 +680,12 @@ class ToolExecutor:
         if hasattr(client, "ensure_action_settled"):
             client.ensure_action_settled()
         state = message_dict(client.state())
+        if name == 'land' and state.get('landed') is True and state.get('armed') is False:
+            age_ms = time.time() * 1000 - int(state.get('observed_at_unix_ms', 0))
+            if 0 <= age_ms <= 500:
+                return {'status': 'SUCCEEDED', 'message': 'Already landed and disarmed; no flight command sent.',
+                    'state': state, 'evidence': {'end_state_already_satisfied': True,
+                    'no_flight_command_sent': True, 'state_age_ms': round(age_ms, 1)}}
         orbit_evidence = None
         if name == 'face_heading':
             if state.get('landed') or not state.get('armed'):

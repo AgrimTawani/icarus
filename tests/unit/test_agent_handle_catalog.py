@@ -64,7 +64,8 @@ def test_workflow_handle_choices_are_separate_and_missing_ids_hide_dependent_too
         assert 'registered_target' not in [v['properties']['type']['const'] for v in variants]
         visible = next(v for v in variants if v['properties']['type']['const']=='visible_object')
         assert {'visual_query','view_heading_deg'} <= set(visible['required'])
-    assert not {'approach_target','orbit_target','overfly_target'}.intersection(names)
+    assert not {'approach_target','orbit_target'}.intersection(names)
+    assert 'overfly_target' in names
     assert {'localize_target', 'orbit', 'goto', 'face_heading', 'scan_area', 'scan_heading'} <= names
     assert 'enum' not in prop(TOOLS, 'resume_heading_scan', 'scan_id')
     assert 'enum' not in prop(TOOLS, 'orbit_target', 'target_id')

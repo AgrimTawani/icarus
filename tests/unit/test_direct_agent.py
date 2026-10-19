@@ -455,7 +455,9 @@ def test_new_operator_command_supersedes_recovery():
     interrupt.submit("/rtl")
     result = run(c, Runtime(), interrupt=interrupt)
     assert result["status"] == "cancelled"
-    assert c.sent[-1][0] == "Land"
+    assert c.vehicle.landed and not c.vehicle.armed
+    assert "land" in result["message"]
+    assert not any(name == "Arm" for name, _ in c.sent)
 
 
 def test_runtime_stop_latency_does_not_delay_operator_action():

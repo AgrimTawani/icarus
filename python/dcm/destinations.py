@@ -43,6 +43,22 @@ def destination_schema(operation, legacy):
     return schema
 
 
+def overflight_schema(legacy):
+    base = copy.deepcopy(legacy.get('oneOf', [legacy])[0])
+    for key in ('target_id', 'description', 'visual_query'):
+        base['properties'].pop(key, None)
+    base['required'] = [key for key in base.get('required', [])
+                        if key not in ('target_id', 'description', 'visual_query')]
+    base['properties']['altitude_agl_m'] = {'type': 'number'}
+    schema = destination_schema('goto', base)
+    props = schema['properties']
+    props['destination']['oneOf'] = [v for v in props['destination']['oneOf']
+        if v['properties']['type']['const'] in OBJECTS]
+    props.pop('object_position', None)
+    props.pop('standoff_m', None)
+    return schema
+
+
 def unpack_destination(operation, arguments):
     args = copy.deepcopy(arguments)
     reference = args.pop('destination')
@@ -110,9 +126,12 @@ def waypoint_catalogue():
             name = entry['name'].strip()
             if not name or name.casefold() in names:
                 raise ValueError('Waypoint names must be nonempty and unique')
-            point = {'name': name}
-            for key in ('north_m', 'east_m', 'altitude_agl_m', 'heading_deg'):
-                if key not in entry and key in ('altitude_agl_m', 'heading_deg'):
+            role = entry.get('role', 'navigation_pose')
+            if role not in ('navigation_pose', 'observation_pose', 'orbit_center'):
+                raise ValueError('Unknown waypoint role')
+            point = {'name': name, 'role': role}
+            for key in ('north_m', 'east_m', 'altitude_agl_m', 'heading_deg', 'target_altitude_agl_m'):
+                if key not in entry and key in ('altitude_agl_m', 'heading_deg', 'target_altitude_agl_m'):
                     continue
                 value = entry[key]
                 if type(value) not in (int, float) or not math.isfinite(value):
@@ -170,6 +189,13 @@ def execute_destination(executor, operation, arguments):
             return {'status': 'NEEDS_CLARIFICATION', 'requires_user_choice': True,
                     'question': question, 'message': 'No coordinates are registered for this waypoint; no movement executed.',
                     'evidence': {**evidence, 'waypoint_name': name, 'catalogue': catalogue}}
+        if operation == 'orbit' and point['role'] != 'orbit_center':
+            raise ValueError('This waypoint is a vehicle navigation/observation pose, not an orbit center. Localize the physical target instead.')
+        evidence.update(reference_role=point['role'],
+            established_relationship='arrived_at_navigation_pose' if operation == 'goto' else 'orbiting_declared_coordinate_center',
+            object_relative_position_established=False)
+        if operation == 'orbit' and 'target_altitude_agl_m' in point:
+            args.setdefault('target_altitude_agl_m', point['target_altitude_agl_m'])
         args.setdefault('altitude_agl_m', point.get('altitude_agl_m', state.get('relative_altitude_m')))
         if operation == 'goto':
             args.update(north_m=point['north_m'], east_m=point['east_m'])

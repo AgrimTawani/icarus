@@ -81,9 +81,9 @@ def test_exactly_one_reference_in_static_and_live_catalogs(name, extra):
         with pytest.raises(ValueError):
             validate_call(name, {**extra, **reference})
         assert not static_validator.is_valid({**extra, **reference})
-    operation='orbit' if name=='orbit_target' else 'goto'
+    operation='orbit' if name=='orbit_target' else 'overfly_target' if name=='overfly_target' else 'goto'
     args=({'camera':'none','standoff_m':3} if operation=='orbit' else
-          {'object_position':'above'} if name=='overfly_target' else
+          {} if name=='overfly_target' else
           {'object_position':'standoff','standoff_m':3})
     for context in ({},{'targets':[{'target_id':'known'}]}):
         catalog=decision_tools(context)

@@ -42,8 +42,9 @@ def test_visible_destination_orients_then_localizes_through_existing_controller(
 
 def test_above_object_uses_overflight_controller_not_altitude_only_goto():
     ex=Executor()
-    checked('goto',{'destination':{'type':'registered_target','target_id':'known'},
-                    'object_position':'above','clearance_above_m':2},ex)
+    args={'destination':{'type':'registered_target','target_id':'known'},'clearance_above_m':2}
+    validate_call('overfly_target',args,tools=decision_tools({'targets':[{'target_id':'known'}]}))
+    execute_destination(ex,'goto',{**args,'object_position':'above'})
     assert ex.calls==[('overfly_target',{'target_id':'known','clearance_above_m':2})]
 
 
@@ -132,3 +133,51 @@ def test_object_orbit_explicit_face_center_selects_tracking_controller():
     with pytest.raises(ValueError):
         checked('orbit',{'destination':{'type':'registered_target','target_id':'known'},
             'standoff_m':3,'camera':'forward_d435i','face_center':False},ex)
+
+
+def test_observation_pose_is_not_advertised_as_an_orbit_center(tmp_path,monkeypatch):
+    p=tmp_path/'points.json';p.write_text(json.dumps({'coordinate_frame':'home_relative_ned',
+        'entries':[{'name':'View A','north_m':2,'east_m':3,'role':'observation_pose'}]}))
+    monkeypatch.setenv('ICARUS_WAYPOINTS_FILE',str(p))
+    ctx={'registered_waypoints':waypoint_catalogue()}
+    args={'destination':{'type':'named_waypoint','waypoint_name':'View A'},'radius_m':4,
+          'altitude_agl_m':5,'camera':'none'}
+    with pytest.raises(ValueError):validate_call('orbit',args,tools=decision_tools(ctx))
+    ex=Executor()
+    with pytest.raises(ValueError,match='not an orbit center'):execute_destination(ex,'orbit',args)
+    assert not ex.calls
+    result=execute_destination(ex,'goto',{'destination':args['destination']})
+    receipt=result['evidence']['destination']
+    assert receipt['reference_role']=='observation_pose'
+    assert receipt['object_relative_position_established'] is False
+
+
+def test_native_overflight_dispatches_existing_measured_controller(monkeypatch):
+    from python.dcm.target_motion import TargetMotion
+    seen=[]
+    def overfly(self,**args):
+        seen.append(args);return {'status':'SUCCEEDED','evidence':{'measured_top':True}}
+    monkeypatch.setattr(TargetMotion,'overfly_target',overfly)
+    client=FakeClient()
+    result=ToolExecutor(client).execute('overfly_target',
+        {'destination':{'type':'registered_target','target_id':'known'},'clearance_above_m':2})
+    assert result['status']=='SUCCEEDED' and seen==[{'target_id':'known','clearance_above_m':2}]
+
+
+def test_landing_after_landed_return_home_never_rearms_or_sends_another_command():
+    client=FakeClient();ex=ToolExecutor(client)
+    assert ex.execute('return_home',{})['status']=='SUCCEEDED'
+    sent=len(client.sent)
+    result=ex.execute('land',{})
+    assert result['status']=='SUCCEEDED' and result['evidence']['end_state_already_satisfied']
+    assert len(client.sent)==sent and not client.vehicle.armed
+
+
+@pytest.mark.parametrize('condition',['stale','armed','airborne'])
+def test_landing_cannot_infer_an_already_satisfied_end_state(condition):
+    client=FakeClient()
+    if condition=='stale':client.vehicle.observed_at_unix_ms=1
+    if condition=='armed':client.vehicle.armed=True
+    if condition=='airborne':client.vehicle.landed=False
+    ToolExecutor(client).execute('land',{})
+    assert [n for n,_ in client.sent]==['Land']

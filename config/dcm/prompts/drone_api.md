@@ -1,7 +1,7 @@
 # DRONE_API.md
 Native tool schemas define calls and arguments; return a tool call, never prose code. Units: metres, m/s, seconds, degrees. Coordinate destinations declare home_relative_ned or local_ned (with origin_id); altitude_agl_m is above HOME, not terrain. face_heading is absolute compass yaw; yaw is a relative signed turn. Body-relative forward/right follows current heading.
 
-Use user-supplied/measured coordinates or registered geometry. Missing named waypoints need clarification; camera pose is not object position. goto/orbit require a typed destination. Visible objects supply appearance and view_heading_deg; the controller faces that direction and localizes before object-relative movement. Object goto selects standoff or above; object orbit uses surface standoff. Coordinate flight and named waypoints remain distinct. Preserve explicit values; unspecified operating values use context.defaults.
+Use user-supplied/measured coordinates or registered geometry. Missing named waypoints need clarification; camera pose is not object position. goto/orbit require a typed destination. Visible objects supply appearance and view_heading_deg; the controller faces that direction and localizes before object-relative movement. Object goto selects standoff; overfly_target measures and flies above a visible/registered object; object orbit uses surface standoff. Coordinate flight and named waypoints remain distinct. Preserve explicit values; unspecified operating values use context.defaults.
 
 The adapter supplies identity, lease, timestamps and origin, dispatches ActionService (proto/icarus/v1/drone_api.proto), and waits for a terminal result. ACCEPTED is not success. Short execute_sequence groups stop at failure and cannot cross observations/decisions. Routes/patterns delegate geometry and flight to ArduPilot.
 
@@ -12,3 +12,5 @@ Scans own turn/path–settle–observe cycles. Select exit_policy: finish_at_mat
 Older or large observation details stay in retained action results. Follow their action index/path with read_action_result when needed; lookup success is not flight success or fresh observation.
 
 Catalogue entries are supplied in context.registered_waypoints. Optional named waypoints come from ICARUS_WAYPOINTS_FILE: a JSON catalogue with coordinate_frame="home_relative_ned" and entries containing name, north_m, east_m, and optional altitude_agl_m and heading_deg. Unknown names require coordinates; camera poses do not create waypoints.
+
+Catalogue role identifies navigation_pose (default), observation_pose, or explicitly supplied orbit_center. Navigation/observation poses do not identify physical object centers or overhead positions. Orbit centers may include target_altitude_agl_m for camera geometry. A confirmed fresh landed-and-disarmed state already satisfies land; never arm to repair an already completed landing.

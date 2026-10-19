@@ -396,7 +396,7 @@ def fly_mission(
             session.detector_feedback.observe(name, args, result)
             if (result.get('status') == 'SUCCEEDED' and
                     (name == 'localize_target' or
-                     name in ('goto', 'orbit') and args.get('destination', {}).get('type')
+                     name in ('goto', 'orbit', 'overfly_target') and args.get('destination', {}).get('type')
                      in ('visible_object', 'registered_target'))):
                 vocabulary = getattr(client, 'camera_detector_classes', lambda: [])()
                 if vocabulary:
@@ -590,6 +590,8 @@ def action_verification_scope(name, arguments=None):
     """Describe receipt semantics without interpreting the operator's mission."""
     if name in ('goto', 'orbit') and (arguments or {}).get('destination', {}).get('type') in ('visible_object', 'registered_target'):
         return 'Measured object workflow; only relationships explicitly measured in its evidence.'
+    if name == 'goto' and (arguments or {}).get('destination', {}).get('type') == 'named_waypoint':
+        return 'Arrival at a saved vehicle navigation/observation pose only; not above an object or at its center.'
     if name in {'goto', 'move_relative', 'takeoff', 'yaw', 'face_heading'}:
         return 'Requested vehicle motion only; no proof of object-relative goal, named waypoint or visual condition.'
     if name in {'inspect_scene', 'detect'}:

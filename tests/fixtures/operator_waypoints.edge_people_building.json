@@ -10,7 +10,8 @@
       "name": "north building observation point",
       "north_m": 8.895760655403137,
       "east_m": -8.274464070796967,
-      "heading_deg": 45.83784689734621
+      "heading_deg": 45.83784689734621,
+      "role": "observation_pose"
     }
   ]
 }
