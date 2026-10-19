@@ -14,6 +14,42 @@ def _module():
     return module
 
 
+def test_native_full_vocabulary_request_reaches_fixed_detector_and_returns_complete_counts(monkeypatch):
+    import time
+    from icarus.v1 import state_pb2
+    from python.dcm.agent_tools import validate_call
+    from python.perception.classes import YOLO_CLASSES
+    from python.perception import edge_vision
+    module=_module()
+    client=module.MissionClient.__new__(module.MissionClient)
+    client.vision_profile='edge-vision'
+    client.simulation_session={'simulator':'gazebo'}
+    client.episode=SimpleNamespace(session={'simulator':'gazebo'},record=lambda *args:None)
+    client.edge_detection_limiter=SimpleNamespace(admit=lambda:None)
+    client.edge_trackers={}
+    client.state=lambda:state_pb2.DroneState(landed=True)
+    client._edge_manifest=lambda:None
+    client._edge_detector=lambda:None
+    captures=[]
+    def capture(output,**kwargs):
+        output.write_bytes(b'P6\n1 1\n255\n\0\0\0');captures.append(output);return 'test_capture'
+    client._capture_rgb=capture
+    calls=[]
+    def infer(*args,**kwargs):
+        calls.append(args)
+        return {'schema':'icarus.edge.yolo.v1','classes':sorted(YOLO_CLASSES),
+            'observed_at_unix_ms':int(time.time()*1000),'confidence_threshold':0.25,
+            'detections':[{'class':'person','confidence':0.9}]}
+    monkeypatch.setattr(edge_vision,'detect_edge_image',infer)
+    classes=client.camera_detector_classes()
+    validate_call('detect',{'classes':classes,'camera':'forward_d435i'})
+    result=client.detect(classes,camera='forward_d435i')
+    assert set(result['counts'])==YOLO_CLASSES
+    assert result['counts']['person']==1
+    assert len(captures)==len(calls)==1
+    assert all(value==0 for name,value in result['counts'].items() if name!='person')
+
+
 def test_realistic_airsim_count_is_inconclusive_without_reviewed_truth():
     module = _module()
     client = module.MissionClient.__new__(module.MissionClient)

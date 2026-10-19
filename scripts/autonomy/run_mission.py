@@ -569,7 +569,10 @@ class MissionClient:
         from python.perception.classes import YOLO_CLASSES
         from python.perception.vision import detect_image, normalize_classes
 
-        classes = normalize_classes(classes)
+        # A fixed-vocabulary detector computes all configured classes in one
+        # pass. The open-vocabulary backend's text-query limit does not apply.
+        classes = normalize_classes(classes, maximum_classes=(
+            len(self.camera_detector_classes()) if self.vision_profile == 'edge-vision' else 16))
         if self.vision_profile == "edge-vision":
             unsupported = sorted(set(classes) - YOLO_CLASSES)
             if unsupported:

@@ -13,8 +13,10 @@ from collections import Counter
 from pathlib import Path
 
 
-def normalize_classes(values):
+def normalize_classes(values, *, maximum_classes=16):
     """Return a stable, bounded, duplicate-free detector vocabulary."""
+    if type(maximum_classes) is not int or maximum_classes < 1:
+        raise ValueError('maximum_classes must be a positive integer')
     if not isinstance(values, (list, tuple)) or not values:
         raise ValueError("at least one detection class is required")
     normalized = []
@@ -26,8 +28,8 @@ def normalize_classes(values):
             raise ValueError("detection class must contain 1..64 characters")
         if item not in normalized:
             normalized.append(item)
-    if len(normalized) > 16:
-        raise ValueError("at most 16 detection classes may be requested")
+    if len(normalized) > maximum_classes:
+        raise ValueError(f"at most {maximum_classes} detection classes may be requested")
     return normalized
 
 

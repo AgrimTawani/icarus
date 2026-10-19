@@ -18,6 +18,13 @@ class VisionContractTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 normalize_classes(values)
 
+    def test_fixed_detector_can_request_its_entire_configured_vocabulary(self):
+        from python.perception.classes import YOLO_CLASSES
+        classes=sorted(YOLO_CLASSES)
+        self.assertEqual(normalize_classes(classes,maximum_classes=len(classes)),classes)
+        with self.assertRaises(ValueError):
+            normalize_classes(classes)
+
     def test_result_has_complete_counts_and_only_requested_classes(self):
         with tempfile.TemporaryDirectory() as temporary:
             image = Path(temporary) / "frame.ppm"
