@@ -29,13 +29,29 @@ def read_action_result(actions, action_index, path=(), offset=0, limit=8):
     if value is None:
         raise ValueError('No retained action result has that index')
     receipt = value
+    prefix = []
     for key in path:
         if isinstance(value, dict) and isinstance(key, str) and key in value:
             value = value[key]
         elif isinstance(value, list) and type(key) is int and 0 <= key < len(value):
             value = value[key]
         else:
-            raise ValueError('Path does not identify retained receipt data')
+            # An addressable receipt with a bad subpath is a discovery query,
+            # not a failed flight. Return only its actual structure; never
+            # infer the missing key or silently substitute another value.
+            result = {'action_index': action_index, 'requested_path': list(path),
+                'path': prefix, 'path_found': False, 'historical_action': receipt['action'],
+                'historical_status': receipt['result'].get('status'), 'current_evidence': False,
+                'message': 'Requested path is absent. Follow one of these actual paths or omit path to inspect the receipt.'}
+            if isinstance(value, dict):
+                result['fields'] = [{'key': k, 'type': type(v).__name__, 'path': [*prefix, k]}
+                                    for k, v in list(value.items())[:16]]
+            elif isinstance(value, list):
+                result.update(total_items=len(value), next_path=[*prefix, 0] if value else None)
+            else:
+                result['value_type'] = type(value).__name__
+            return result
+        prefix.append(key)
     result = {'action_index': action_index, 'path': list(path),
               'historical_action': receipt['action'],
               'historical_status': receipt['result'].get('status'), 'current_evidence': False}

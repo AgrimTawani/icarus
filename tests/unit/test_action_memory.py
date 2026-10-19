@@ -36,7 +36,7 @@ def test_lookup_indices_match_flattened_execution_ledger():
     assert read_action_result(receipts(), 1, ['action'])['data'] == 'arm'
 
 
-@pytest.mark.parametrize('index,path', [(0, []), (99, []), (3, ['missing']), (3, ['result','evidence','samples',-1])])
+@pytest.mark.parametrize('index,path', [(0, []), (99, [])])
 def test_bad_lookup_cannot_read_other_data(index, path):
     with pytest.raises(ValueError):read_action_result(receipts(), index, path)
 
@@ -77,3 +77,16 @@ def test_large_current_scan_exposes_the_actual_latest_station_for_bounded_lookup
     assert latest['data']['station'] == 799
     assert latest['data']['evidence']['counts']['person'] == 3
     assert latest['current_evidence'] is False
+
+
+def test_invalid_receipt_path_returns_actual_structure_without_claiming_data():
+    actions=receipts();original=copy.deepcopy(actions)
+    result=read_action_result(actions,3,['result','observation','counts'])
+    assert result['path_found'] is False and result['path']==['result']
+    evidence=next(f for f in result['fields'] if f['key']=='evidence')
+    assert evidence['path']==['result','evidence']
+    assert 'data' not in result and result['current_evidence'] is False
+    answer=read_action_result(actions,3,[*evidence['path'],'answer'])
+    assert answer['data']=='grey structure' and actions==original
+    bad_index=read_action_result(actions,3,['result','evidence','samples',-1])
+    assert bad_index['path_found'] is False and bad_index['next_path']==['result','evidence','samples',0]
