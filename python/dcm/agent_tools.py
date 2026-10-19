@@ -2,6 +2,7 @@
 
 import copy
 import math
+import time
 import uuid
 
 from jsonschema import Draft202012Validator
@@ -498,6 +499,29 @@ class ToolExecutor:
                     if arm["status"] != "SUCCEEDED":
                         return arm
                 result = self._flight(name, arguments)
+                if (launch is not None
+                        and result.get('status') in ('FAILED', 'REJECTED')
+                        and result.get('reason_code') in (
+                            'REASON_CODE_AUTOPILOT_REJECTED', 'REASON_CODE_NOT_ARMED')
+                        and not self.interrupted()):
+                    # A ground arm can expire during a model decision. Its
+                    # heartbeat may arrive after the explicit command reject.
+                    # Re-arm only after confirming disarmed + landed, once;
+                    # never retry a timeout or bypass a live preflight check.
+                    disarmed = self._confirm_disarmed_ground()
+                    if disarmed is not None:
+                        failed = {k: result[k] for k in
+                                  ('status', 'reason_code', 'message', 'action_id') if k in result}
+                        arm = self.execute('arm', {})
+                        if self.interrupted():
+                            result = {'status': 'CANCELLED',
+                                      'message': 'Operator interrupted takeoff recovery.'}
+                        else:
+                            result = self._flight(name, arguments) if arm['status'] == 'SUCCEEDED' else arm
+                        result['takeoff_recovery'] = {
+                            'trigger': 'confirmed_disarmed_ground_after_explicit_rejection',
+                            'failed_attempt': failed, 'rearm_status': arm['status']}
+                        launch = disarmed
                 if launch is not None and (result['status'] == 'SUCCEEDED'
                         or result.get('state', {}).get('landed') is False):
                     # Preserve the actual launch across subsequent airborne
@@ -597,6 +621,19 @@ class ToolExecutor:
         if complete and result["status"] == "SUCCEEDED" and result.get("workflow_complete", True) and not self.interrupted():
             result["mission_complete"] = True
         return result
+
+    def _confirm_disarmed_ground(self, timeout_s=2.5):
+        deadline = time.monotonic() + timeout_s
+        while not self.interrupted():
+            state = message_dict(self.client.state())
+            if state.get('manual_override_active') or not state.get('landed'):
+                return None
+            if not state.get('armed'):
+                return copy.deepcopy(state)
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.05)
+        return None
 
     def _flight(self, name, args, runtime_target=False, acceptance_radius_m=None, expected_origin_id=None):
         client, pb = self.client, self.pb
@@ -799,6 +836,10 @@ class ToolExecutor:
             self.interrupt.track(receipt, since)
         try:
             terminal = client.wait_action(receipt, timeout, return_failure=True)
+            # Accessing an absent proto message manufactures an all-default
+            # DroneState (including landed=false). Absence is not telemetry.
+            terminal_state = (message_dict(terminal.terminal_state)
+                              if terminal.HasField('terminal_state') else None)
             status = terminal.state
             if isinstance(status, int):
                 status = pb.ActionState.Name(status)
@@ -810,8 +851,8 @@ class ToolExecutor:
                 "message": terminal.message,
                 "reason_code": pb.ReasonCode.Name(terminal.reason_code),
                 "action_id": receipt.action_id,
-                "state": message_dict(terminal.terminal_state),
-                **({'motion': movement_feedback(state, args, message_dict(terminal.terminal_state))}
+                **({'state': terminal_state} if terminal_state is not None else {}),
+                **({'motion': movement_feedback(state, args, terminal_state)}
                    if motion is not None else {}),
                 **({'evidence': orbit_evidence} if orbit_evidence is not None else {}),
             }

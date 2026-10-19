@@ -1266,6 +1266,77 @@ def test_terminal_failure_preserves_api_reason_without_parsing_message(monkeypat
     assert result['reason_code']=='REASON_CODE_STATE_STALE'
 
 
+def test_absent_terminal_state_cannot_become_fabricated_airborne_state(monkeypatch):
+    client=FakeClient();client.vehicle.armed=True
+    monkeypatch.setattr(client,'wait_action',lambda *args,**kwargs:pb.ActionStatus(
+        action_id='1',state=pb.ACTION_STATE_FAILED,reason_code=pb.REASON_CODE_INTERNAL_ERROR,
+        message='No terminal telemetry supplied.'))
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':4})
+    assert result['status']=='FAILED'
+    assert 'state' not in result
+    assert not hasattr(client,'_takeoff_reference')
+
+
+@pytest.mark.parametrize('second_succeeds',[True,False])
+def test_takeoff_recovers_once_only_after_confirmed_disarmed_ground(monkeypatch,second_succeeds):
+    client=FakeClient();client.vehicle.armed=True
+    ordinary_wait=client.wait_action
+    attempts=0
+    def wait(receipt,*args,**kwargs):
+        nonlocal attempts
+        name=client.sent[int(receipt.action_id)-1][0]
+        if name=='Takeoff':
+            attempts+=1
+            if attempts==1 or not second_succeeds:
+                client.vehicle.armed=False
+                return pb.ActionStatus(action_id=receipt.action_id,state=pb.ACTION_STATE_FAILED,
+                    reason_code=pb.REASON_CODE_AUTOPILOT_REJECTED,message='Rejected while disarmed.')
+        return ordinary_wait(receipt,*args,**kwargs)
+    monkeypatch.setattr(client,'wait_action',wait)
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':4})
+    assert result['status']==('SUCCEEDED' if second_succeeds else 'FAILED')
+    assert [name for name,_ in client.sent]==['Takeoff','Arm','Takeoff']
+    assert result['takeoff_recovery']['failed_attempt']['reason_code']=='REASON_CODE_AUTOPILOT_REJECTED'
+    assert hasattr(client,'_takeoff_reference')==second_succeeds
+
+
+def test_interrupt_after_rearming_prevents_the_recovery_takeoff(monkeypatch):
+    client=FakeClient();client.vehicle.armed=True
+    executor=ToolExecutor(client)
+    stopped=False;sent=[]
+    def flight(name,args,**kwargs):
+        nonlocal stopped
+        sent.append(name)
+        if name=='arm':
+            stopped=True
+            return {'status':'SUCCEEDED'}
+        return {'status':'FAILED','reason_code':'REASON_CODE_AUTOPILOT_REJECTED'}
+    monkeypatch.setattr(executor,'_flight',flight)
+    monkeypatch.setattr(executor,'_confirm_disarmed_ground',lambda:{'landed':True,'armed':False})
+    monkeypatch.setattr(executor,'interrupted',lambda:stopped)
+    result=executor.execute('takeoff',{'target_altitude_agl_m':4})
+    assert result['status']=='CANCELLED'
+    assert sent==['takeoff','arm']
+
+
+@pytest.mark.parametrize('reason,manual,landed',[
+    (pb.REASON_CODE_AUTOPILOT_TIMEOUT,False,True),
+    (pb.REASON_CODE_AUTOPILOT_REJECTED,True,True),
+    (pb.REASON_CODE_AUTOPILOT_REJECTED,False,False)])
+def test_takeoff_recovery_never_rearms_after_timeout_manual_control_or_airborne_state(monkeypatch,reason,manual,landed):
+    client=FakeClient();client.vehicle.armed=True
+    def wait(receipt,*args,**kwargs):
+        client.vehicle.armed=False
+        client.vehicle.manual_override_active=manual
+        client.vehicle.landed=landed
+        return pb.ActionStatus(action_id=receipt.action_id,state=pb.ACTION_STATE_FAILED,
+            reason_code=reason,message='Stopped.')
+    monkeypatch.setattr(client,'wait_action',wait)
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':4})
+    assert result['status']=='FAILED'
+    assert [name for name,_ in client.sent]==['Takeoff']
+
+
 @pytest.mark.parametrize('detector_fails',[False,True])
 def test_scene_inspection_keeps_detector_receipt_separate_and_never_flies(tmp_path,monkeypatch,detector_fails):
     client=FakeClient()
