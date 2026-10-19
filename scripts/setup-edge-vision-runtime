@@ -8,9 +8,11 @@ ACTOR_CACHE="${EDGE_DIR}/gazebo_fuel_cache"
 ACTOR_DIR="${ACTOR_CACHE}/fuel.gazebosim.org/mingfei/models/actor/1"
 MANIFEST="${EDGE_DIR}/MANIFEST.json"; VENV="${ROOT}/.venv"
 VISION_MANIFEST="${VISION_MANIFEST:-$HOME/models/vision/MANIFEST.json}"
-# Re-provision the installed flight selection by default; explicit source/role wins.
+# Match the flight console's canonical primary; explicit source/role wins.
 if [[ -z "${FLIGHT_MANIFEST:-}" ]]; then
-  if [[ -f "${MANIFEST}" ]]; then
+  if [[ -f "${ROOT}/config/dcm/agent-runtime.json" ]]; then
+    FLIGHT_MANIFEST="${ROOT}/config/dcm/agent-runtime.json"
+  elif [[ -f "${MANIFEST}" ]]; then
     FLIGHT_MANIFEST="${MANIFEST}"
   else
     FLIGHT_MANIFEST="$HOME/models/qwen/MANIFEST.json"
@@ -27,18 +29,8 @@ fi
 if ! "${VENV}/bin/python" -c 'import ultralytics' >/dev/null 2>&1; then
   "${VENV}/bin/pip" install --requirement "${ROOT}/requirements/ml.txt"
 fi
-if ! "${VENV}/bin/python" - "${VISION_MANIFEST}" <<'PY'
-import json, sys
-from pathlib import Path
-path = Path(sys.argv[1])
-manifest = json.loads(path.read_text()) if path.is_file() else {}
-artifact = next((a for a in manifest.get("artifacts", [])
-                 if a.get("role") == "vlm" and a.get("family") == "qwen2-vl"), None)
-raise SystemExit(0 if artifact and Path(artifact["path"]).is_file()
-                 and Path(artifact["mmproj_path"]).is_file() else 1)
-PY
-then
-  "${ROOT}/scripts/setup-vlm-runtime"
+if [[ ! -f "${VISION_MANIFEST}" ]]; then
+  VISION_MANIFEST="${VISION_MANIFEST}" "${ROOT}/scripts/setup-vlm-runtime"
 fi
 "${VENV}/bin/python" - "${ROOT}" "${YOLO_DIR}" "${ACTOR_DIR}" "${MANIFEST}" "${VISION_MANIFEST}" "${FLIGHT_MANIFEST}" "${FLIGHT_ROLE}" <<'PY'
 import hashlib, json, os, sys
@@ -48,6 +40,14 @@ root, yolo_dir, actor_dir, manifest_path, vision_manifest, flight_manifest = map
 flight_role = sys.argv[7] or None
 sys.path.insert(0, str(root))
 from python.dcm.edge_provisioning import flight_artifact
+from python.perception.vlm import load_vlm
+# Validate the selected weights/projector with the same reader used at runtime.
+# Preserve explicit model selection and grounding metadata across re-provisioning.
+# A broken existing selection must be reported, never silently replaced.
+vision = json.loads(vision_manifest.read_text())
+if sum(a.get("role") == "vlm" for a in vision.get("artifacts", [])) != 1:
+    raise SystemExit("vision manifest must select exactly one vlm artifact")
+vlm = load_vlm(vision_manifest)
 if not flight_manifest.is_file(): raise SystemExit("flight manifest missing; set FLIGHT_MANIFEST and optional FLIGHT_ROLE")
 flight_source = json.loads(flight_manifest.read_text())
 if flight_role is None:
@@ -85,19 +85,13 @@ if not yolo.is_file():
     finally:
         os.chdir(previous_cwd)
 import ultralytics
-vision = json.loads(vision_manifest.read_text())
-vlm = next((a for a in vision.get("artifacts", [])
-            if a.get("role") == "vlm" and a.get("family") == "qwen2-vl"), None)
-if not vlm: raise SystemExit("Qwen2-VL artifact missing; run ./scripts/setup-vlm-runtime")
-if not Path(vlm["path"]).is_file() or not Path(vlm["mmproj_path"]).is_file():
-    raise SystemExit("Qwen2-VL model or projector file is missing")
 actor_meshes = {str(p.relative_to(actor_dir)): sha(p) for p in sorted(actor_dir.rglob("*")) if p.is_file()}
 if not (actor_dir / "meshes/walk.dae").is_file() or not (actor_dir / "meshes/stand.dae").is_file():
     raise SystemExit("Gazebo actor asset is incomplete")
 artifacts = [
  flight,
  {"role":"yolo","family":"yolo","model_id":yolo_id,"repository":"ultralytics/yolo11","revision":"ultralytics=="+ultralytics.__version__,"path":str(yolo),"sha256":sha(yolo),"runtime":"ultralytics","quantization":"fp16-or-runtime-default","model_role":"continuous_detector"},
- {**vlm,"model_role":"bounded_qualitative_inspection","execution":"cpu_offload_to_preserve_flight_llm_vram"},
+ {**vlm,"model_role":"bounded_qualitative_inspection","execution":"load-infer-release"},
  {"role":"gazebo_actor","family":"gazebo_fuel","repository":"https://fuel.gazebosim.org/1.0/Mingfei/models/actor","revision":"1","path":str(actor_dir),"sha256":sha(actor_dir / "model.sdf"),"file_sha256":actor_meshes,"runtime":"gazebo_harmonic","quantization":"n/a","model_role":"detector-visible_simulation_target"},
 ]
 manifest = {"schema":"icarus.edge.runtime.v1","profile":"edge-vision","simulation_only":True,"recorded_at":datetime.now(timezone.utc).isoformat(),"context_length":flight.get("context_length",8192),"llama_cpp_revision":flight_source.get("llama_cpp_revision"),"artifacts":artifacts,"policy":{"yolo_image_size":640,"yolo_max_fps":5,"vlm_interval_s":5,"vlm_gpu_layers":0,"vlm_load_mode":"load-infer-release","raw_pixels_in_episode_logs":False}}

@@ -21,7 +21,7 @@ from python.dcm.operator_control import OperatorInterrupt
 
 
 def call(name, **arguments):
-    # Scripted policy fixtures supply the live conversation's required memory.
+    # Exercise compatibility with optional legacy diagnostic metadata.
     arguments.setdefault('mission_progress', 'Unit policy fixture; see requested action.')
     return {
         "role": "assistant",
@@ -1774,7 +1774,7 @@ def test_visual_answer_retains_no_flight_authority_in_compacted_model_context():
     assert evidence['image'] == {'sha256': 'frame-hash'}
 
 
-def test_agent_working_note_survives_packing_without_entering_controller_arguments():
+def test_legacy_working_note_is_recorded_but_not_replayed_or_sent_to_controller():
     from python.dcm.fly import decision_messages
     client = FakeClient()
     session = AgentSession('Climb, observe, then land')
@@ -1790,8 +1790,8 @@ def test_agent_working_note_survives_packing_without_entering_controller_argumen
     assert session.mission_progress.startswith('Camera selection unresolved')
     for lean in (False, True):
         messages = decision_messages(session, context(client), lean=lean)
-        assert session.mission_progress in messages[-1]['content']
-        assert 'model_written_note_not_operator_instruction_or_verified_evidence' in messages[-1]['content']
+        assert session.mission_progress not in json.dumps(messages)
+        assert 'agent_working_memory' not in messages[-1]['content']
         assert messages[1]['content'].startswith(session.mission)
 
 

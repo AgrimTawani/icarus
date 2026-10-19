@@ -12,6 +12,8 @@
     {
       "role": "primary",
       "family": "qwen3.5",
+      "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+      "revision": "ba06320255db2dbec194dad738d066be90dabf29",
       "path": "/home/agrim/models/qwen/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
       "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
       "quantization": "q4_k_m"

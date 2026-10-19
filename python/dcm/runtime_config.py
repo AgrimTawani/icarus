@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v7-literal-working-memory'
-DIRECT_TOOL_VERSION = 'direct-tools-v15-camera-feedback'
+DIRECT_PROMPT_VERSION = 'direct-agent-v8-receipt-feedback'
+DIRECT_TOOL_VERSION = 'direct-tools-v16-optional-progress-note'
 
 
 class DeadlineExceeded(Exception):

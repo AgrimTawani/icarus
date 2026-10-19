@@ -406,7 +406,8 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             function['description'] = function['description'].replace('description', 'visual_query')
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
-        # Its meaning is defined once in SYSTEM.md, not repeated per tool.
+        # Optional legacy diagnostic only; the live agent does not require it
+        # or feed self-authored plans back as decision instructions.
         function['parameters']['properties'] = {
             'mission_progress': {'type': 'string', 'minLength': 1, 'maxLength': 600},
             **function['parameters']['properties']}

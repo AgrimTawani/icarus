@@ -230,7 +230,7 @@ def fly_mission(
             context['optional_tools'] = dict(OPTIONAL_TOOL_SUMMARIES)
             context['loaded_tools'] = sorted(session.loaded_tools)
             tools = decision_tools(context, session.angular_scans, session.area_scans,
-                                   loaded_tools=session.loaded_tools, require_progress=True)
+                                   loaded_tools=session.loaded_tools)
             messages = decision_messages(session, context)
             if show_prompts:
                 echo(json.dumps({"messages": messages, "tools": tools}, indent=2))
@@ -626,9 +626,10 @@ def action_verification_scope(name, arguments=None):
 def decision_messages(session, context, lean=False):
     """Attach feedback to the tool result, never impersonate a new user request."""
     context = copy.deepcopy(context)
-    context['agent_working_memory'] = {
-        'note': session.mission_progress,
-        'authority': 'model_written_note_not_operator_instruction_or_verified_evidence'}
+    # A model-written future plan is neither an operator instruction nor a
+    # measured outcome. Feeding it back can anchor later decisions to an
+    # unsupported maneuver. Keep optional legacy notes only in raw records.
+    context.pop('agent_working_memory', None)
     context['position_evidence'] = {
         'altitude_reference': 'above_home_not_above_object',
         'registered_target_available': any(isinstance(t, dict) and t.get('target_id')
@@ -785,22 +786,30 @@ def decision_messages(session, context, lean=False):
                           else 'optional_next_station_after_agent_branch_decision')}
         for ident, saved in getattr(session, 'angular_scans', {}).items() if not saved['completed']
     ]
-    messages = conversation_tail(session.messages, exchanges=1 if lean else 4)
+    # Paging large payloads must not discard the causal sequence of recent
+    # calls: one latest successful orientation can otherwise hide the failed
+    # observation that preceded it. Compact telemetry, not actual tool turns.
+    messages = conversation_tail(session.messages, exchanges=4)
     # Evidence appears exactly once in indexed observations. Repeating each
     # cumulative scan in recent tool messages exhausted small-model context.
     for message in messages:
+        if message.get('role') == 'assistant':
+            for call in message.get('tool_calls', []):
+                function = call.get('function', {})
+                arguments = function.get('arguments')
+                try:
+                    parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(parsed, dict) and 'mission_progress' in parsed:
+                    parsed.pop('mission_progress')
+                    function['arguments'] = json.dumps(parsed) if isinstance(arguments, str) else parsed
         if message.get('role') != 'tool':
             continue
         try:
             item = json.loads(message.get('content', ''))
         except (TypeError, ValueError):
             continue
-        if isinstance(item, dict) and 'evidence' in item:
-            from python.dcm.action_memory import receipt_outcome_facts
-            item['outcome_facts'] = receipt_outcome_facts(item)
-            item.pop('evidence')
-            item['evidence_reference'] = 'indexed observations in live feedback'
-            message['content'] = json.dumps(item, separators=(',', ':'))
         if isinstance(item, dict) and isinstance(item.get('context'), dict):
             details = item['context'].get('perception', {})
             if 'nearby_obstacles' in details:
@@ -809,7 +818,9 @@ def decision_messages(session, context, lean=False):
                     'nearby_obstacles': compact_result(details['nearby_obstacles'])}
             item.pop('context')
             item['context_reference'] = 'fresh live context below'
-            message['content'] = json.dumps(item, separators=(',', ':'))
+        if isinstance(item, dict):
+            from python.dcm.action_memory import conversation_receipt
+            message['content'] = json.dumps(conversation_receipt(item), separators=(',', ':'))
     from python.dcm.action_memory import observation_memory_view
     context.update(observation_memory_view(context['observations'],
         **({'history_bytes': 0, 'keep_recent': 0} if lean else {})))

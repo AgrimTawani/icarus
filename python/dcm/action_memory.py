@@ -5,6 +5,35 @@ import json
 MAX_REPLY_BYTES = 2000
 
 
+def conversation_receipt(result):
+    """Trim repeated telemetry, preserving real tool-turn causality.
+
+    Current state is supplied once in live feedback; the complete historical
+    receipt stays in action memory. Keep the measured completion pose inline,
+    including for each executed child of a short sequence. Explicit receipt
+    lookups are not traversed or reinterpreted.
+    """
+    projected = copy.deepcopy(result)
+    if not isinstance(projected, dict):
+        return projected
+    state = projected.get('state')
+    if isinstance(state, dict):
+        projected.pop('state')
+        projected['completion_state'] = {key: copy.deepcopy(state[key]) for key in (
+            'observed_at_unix_ms', 'landed', 'armed', 'relative_altitude_m',
+            'heading_deg', 'local_position_ned', 'position', 'attitude') if key in state}
+        projected['state_reference'] = 'Full historical state is retained in the indexed action receipt; live context supplies current state.'
+    if isinstance(projected.get('evidence'), dict):
+        projected['outcome_facts'] = receipt_outcome_facts(projected)
+        projected.pop('evidence')
+        projected['evidence_reference'] = 'Indexed observations and retained action receipt'
+    if isinstance(projected.get('actions'), list):
+        for child in projected['actions']:
+            if isinstance(child, dict) and isinstance(child.get('result'), dict):
+                child['result'] = conversation_receipt(child['result'])
+    return projected
+
+
 def receipt_outcome_facts(result, *, latest=True):
     """Keep small factual outcomes inline even when large evidence is paged.
 
