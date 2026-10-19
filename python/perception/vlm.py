@@ -344,6 +344,13 @@ class _GroundingServer:
                         "-c", "2048", "-np", "1", "--host", "127.0.0.1",
                         "--port", str(self.port), "--no-webui", "--offline",
                         "--log-disable"]
+        from python.perception.visual_coordinates import grounding_image_policy
+        policy = grounding_image_policy(artifact)
+        if policy:
+            self.command.extend(['--image-min-tokens', str(policy['minimum_tokens']),
+                                 '--image-max-tokens', str(policy['maximum_tokens'])])
+            self.command[self.command.index('-c') + 1] = str(
+                ((policy['maximum_tokens'] + 512 + 255) // 256) * 256)
         self.process = None
         self.marker = None
 
@@ -449,7 +456,8 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
         raise ValueError("VLM timeout must be positive")
     if type(gpu_layers) is not int or not 0 <= gpu_layers <= 999:
         raise ValueError("VLM gpu_layers must be an integer in 0..999")
-    image_b64 = base64.b64encode(image_path.read_bytes()).decode()
+    from python.perception.visual_coordinates import prepare_grounding_image, source_pixel_box
+    image_b64, input_transform = prepare_grounding_image(image_path, artifact)
     # Keep navigation metadata in the receipt for the pilot/geometry layer.
     # The visual referent task needs pixels and the target expression only:
     # the small VLM mistakes long heading instructions for visual constraints.
@@ -474,9 +482,11 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
             from PIL import Image
             with Image.open(image_path) as image:
                 width, height = image.size
+            if input_transform:
+                width, height = input_transform['model_width'], input_transform['model_height']
             raw = server.complete(image_b64,
                 f'Locate the physical object referred to as: {description}. '
-                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] in original image pixels '
+                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] in the supplied image pixel coordinates '
                 f'({width} wide, {height} high). Use bbox=null if the object is not visible.',
                 '', 96, grammar=measurement_grammar('pixel_box'))
             pixel_box, normalized = decode_pixel_box(raw, width, height)
@@ -498,7 +508,9 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
         "presence_answer": presence[:MAX_ANSWER_CHARS],
         "grounding_text": None if grounding is None else grounding[:MAX_ANSWER_CHARS],
         "grounding_format": grounding_format,
-        "pixel_box_xyxy": pixel_box,
+        "pixel_box_xyxy": source_pixel_box(pixel_box, input_transform),
+        "model_pixel_box_xyxy": pixel_box,
+        "image_coordinate_transform": input_transform,
         "view_context": view_context,
         "latency_ms": round((finished - started) * 1000, 3),
         "model_load_ms": round((loaded - started) * 1000, 3),

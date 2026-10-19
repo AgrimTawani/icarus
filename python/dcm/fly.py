@@ -230,7 +230,7 @@ def fly_mission(
             context['optional_tools'] = dict(OPTIONAL_TOOL_SUMMARIES)
             context['loaded_tools'] = sorted(session.loaded_tools)
             tools = decision_tools(context, session.angular_scans, session.area_scans,
-                                   loaded_tools=session.loaded_tools)
+                                   loaded_tools=session.loaded_tools, require_progress=True)
             messages = decision_messages(session, context)
             if show_prompts:
                 echo(json.dumps({"messages": messages, "tools": tools}, indent=2))

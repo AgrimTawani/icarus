@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v5-tool-discovery'
-DIRECT_TOOL_VERSION = 'direct-tools-v13-progressive-workflows'
+DIRECT_PROMPT_VERSION = 'direct-agent-v6-required-working-memory'
+DIRECT_TOOL_VERSION = 'direct-tools-v14-core-object-actions'
 
 
 class DeadlineExceeded(Exception):

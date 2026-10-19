@@ -162,8 +162,6 @@ SEQUENCE_FLIGHT = {name: schema for name, schema in FLIGHT.items()
                    if name != 'execute_route'}
 OPTIONAL_TOOL_SUMMARIES = {
     'goto': 'Fly to supplied coordinates, home/launch or a saved navigation pose.',
-    'approach_target': 'Measure a visible object and reach a surface standoff.',
-    'overfly_target': 'Measure an object and fly above its footprint and top.',
     'orbit': 'Circle an object or coordinate center; supports target-facing camera intent.',
     'localize_target': 'Acquire/update object geometry from camera, depth and LiDAR.',
     'scan_heading': 'Turn-settle-observe cycles, conditional stopping and resumable scans.',
@@ -280,7 +278,7 @@ TOOLS = [
 ]
 
 
-def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=None):
+def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=None, require_progress=False):
     """Bind opaque handles to exact currently known values, without rewriting calls.
 
     Geometry validity and workflow ownership remain backend responsibilities.
@@ -409,8 +407,11 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
         # Its meaning is defined once in SYSTEM.md, not repeated per tool.
-        function['parameters']['properties']['mission_progress'] = {
-            'type': 'string', 'maxLength': 600}
+        function['parameters']['properties'] = {
+            'mission_progress': {'type': 'string', 'minLength': 1, 'maxLength': 600},
+            **function['parameters']['properties']}
+        if require_progress:
+            function['parameters']['required'].append('mission_progress')
         if function['name'] in ('scan_heading', 'scan_area'):
             # Legacy scheduling aliases remain available to Python callers;
             # the agent makes one explicit lifecycle choice instead.

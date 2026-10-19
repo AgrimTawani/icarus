@@ -14,7 +14,7 @@ def test_default_catalogue_is_smaller_and_keeps_all_core_actions():
     full = decision_tools({})
     core = decision_tools({}, loaded_tools=set())
     assert names(full) - names(core) == set(OPTIONAL_TOOLS)
-    assert {'inspect_scene', 'detect', 'takeoff', 'face_heading', 'return_home', 'land'} <= names(core)
+    assert {'inspect_scene', 'detect', 'takeoff', 'face_heading', 'return_home', 'land', 'overfly_target', 'approach_target'} <= names(core)
     assert len(json.dumps(core)) < len(json.dumps(full)) * .55
     assert decision_tools({}) == full  # no mutation across sessions
 
@@ -55,15 +55,28 @@ def test_fly_loop_discloses_loaded_tool_on_next_decision_without_flight():
     class Runtime:
         def decide(self, messages, tools):
             catalogs.append(names(tools))
-            return (call('load_tools', names=['overfly_target']) if len(catalogs)==1
+            return (call('load_tools', names=['localize_target']) if len(catalogs)==1
                     else call('finish', outcome='incomplete', message='Discovery test only.'))
     client = FakeClient()
     session = AgentSession('Read-only discovery test.')
     result = fly_mission(client, Runtime(), session.mission, session=session,
                          context_provider=context, echo=lambda *args: None)
     assert result['status']=='incomplete'
-    assert 'overfly_target' not in catalogs[0]
-    assert 'overfly_target' in catalogs[1]
+    assert 'localize_target' not in catalogs[0]
+    assert 'localize_target' in catalogs[1]
     assert 'orbit' not in catalogs[1]
     assert not client.sent
     assert session.actions[0]['action']=='load_tools'
+
+
+def test_live_decisions_require_nonempty_working_memory_without_a_mission_parser():
+    tools = decision_tools({}, loaded_tools=set(), require_progress=True)
+    for name, args in [('takeoff', {'target_altitude_agl_m':3}),
+                       ('finish', {'outcome':'incomplete','message':'No action.'})]:
+        with pytest.raises(ValueError, match='mission_progress'):
+            validate_call(name, args, tools=tools)
+        with pytest.raises(ValueError):
+            validate_call(name, {**args,'mission_progress':''}, tools=tools)
+        validate_call(name, {**args,'mission_progress':'Preserve unresolved operator requirements.'}, tools=tools)
+    for tool in tools:
+        assert next(iter(tool['function']['parameters']['properties']))=='mission_progress'
