@@ -933,7 +933,20 @@ class MissionClient:
         return result
 
     def target_feedback(self):
-        return self._targets().summaries()
+        return self._targets().summaries(MessageToDict(self.state(), preserving_proto_field_name=True))
+
+    def target_anchor(self, target_id):
+        observation = self.refresh_target(target_id)
+        # Missing visibility does not erase a stationary spatial reference.
+        # Invalid sensor frames/transport still cannot authorize navigation.
+        if observation.get('reason') in ('vehicle_pose_unavailable', 'target_origin_changed',
+                'lidar_perception_unavailable', 'lidar_perception_stale', 'perception_origin_mismatch'):
+            return {**observation, 'reference_available': False}
+        reference = self._targets().anchor(target_id,
+            MessageToDict(self.state(), preserving_proto_field_name=True))
+        if self.episode is not None:
+            self.episode.record('target_anchor', reference)
+        return reference
 
     def perception_with_obstacles(self):
         """PerceptionSummary with the live LiDAR clusters, as a dict."""

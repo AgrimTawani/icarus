@@ -321,7 +321,71 @@ class TargetRegistry:
         result["geometry"]["orbit_usable"] &= result.get("found", False)
         return result
 
+    def _remember_reference(self, item):
+        """Keep measured static map geometry independently of scan freshness."""
+        if item['_geometry_timestamp'] <= 0 or self._age(item['_geometry_timestamp']) < -100:
+            return
+        previous = item.get('_static_reference', {})
+        reference = {'geometry': deepcopy(item['geometry']),
+                     'footprint': deepcopy(item['footprint']),
+                     'observed_at_unix_ms': item['_geometry_timestamp']}
+        top = item['footprint'].get('top_down_m')
+        measured_top = (_number(top) and item['footprint'].get('height_clipped') is False)
+        old_top = previous.get('top_down_m')
+        if measured_top and (not _number(old_top) or top < old_top):
+            reference.update(top_down_m=top, height_observed_at_unix_ms=item.get('_height_timestamp'))
+        elif _number(old_top):
+            reference.update(top_down_m=old_top,
+                             height_observed_at_unix_ms=previous.get('height_observed_at_unix_ms'))
+        item['_static_reference'] = reference
+
+    def anchor(self, target_id, state):
+        """Resolve an existing stationary map reference in the current origin.
+
+        This is not a fresh detection or surface-range measurement. Sensor
+        ages remain historical; live collision sensing is still required by
+        the flight controller. Home changes rebase height from local NED.
+        """
+        item = self._targets.get(target_id)
+        if item is None:
+            return {'target_id': target_id, 'reference_available': False, 'reason': 'unknown_target_id'}
+        try:
+            current = vehicle_pose(state)
+        except (ValueError, TypeError):
+            return {'target_id': target_id, 'reference_available': False, 'reason': 'vehicle_pose_unavailable'}
+        if current['origin_id'] != item['origin_id'] or item.get('_reference_invalid_reason'):
+            return {'target_id': target_id, 'reference_available': False,
+                    'reason': item.get('_reference_invalid_reason', 'target_origin_changed')}
+        reference = item.get('_static_reference')
+        if not reference:
+            return {'target_id': target_id, 'reference_available': False, 'reason': 'measured_reference_unavailable'}
+        result = self._public(item)
+        result.update(reference_available=True, reference_kind='measured_static_geometry',
+                      reference_observed_at_unix_ms=reference['observed_at_unix_ms'],
+                      reference_age_ms=self._age(reference['observed_at_unix_ms']),
+                      current_observation_available=result.get('found', False),
+                      continuous_target_identity_tracking=False)
+        result['geometry'] = deepcopy(reference['geometry'])
+        result['footprint'] = deepcopy(reference['footprint'])
+        top = reference.get('top_down_m')
+        height = current['terrain_down_m'] - top if _number(top) else None
+        for container in (result['geometry'], result['footprint']):
+            container.update(height_m=height, height_clipped=height is None,
+                             top_down_m=top, home_down_m=current['terrain_down_m'],
+                             height_status='measured_static_reference' if height is not None else 'unavailable',
+                             height_reference='current_home_from_local_ned',
+                             height_evidence_age_ms=(self._age(reference['height_observed_at_unix_ms'])
+                                if reference.get('height_observed_at_unix_ms') is not None else None))
+        # An old observed range must never masquerade as a current measurement.
+        if not result['current_observation_available']:
+            result.pop('surface_range_m', None)
+            result.pop('surface_point', None)
+            result['surface_range_kind'] = 'current_surface_range_unavailable'
+        return result
+
     def _fail(self, item, reason, status="lost"):
+        if reason == 'target_origin_changed':
+            item['_reference_invalid_reason'] = reason
         item["found"] = False
         item["reason"] = reason
         item["tracking"].update(status=status, reason=reason)
@@ -345,6 +409,8 @@ class TargetRegistry:
         candidates = []
         if not new_target:
             for key, item in self._targets.items():
+                if item.get('_reference_invalid_reason'):
+                    continue
                 if item["origin_id"] == origin:
                     score = _association(hull, item["_hull"])
                     if score <= self.association_tolerance_m:
@@ -367,6 +433,8 @@ class TargetRegistry:
                                      and not estimate.get("footprint", {}).get("assumed_outline"))
                                     or bool(previous and previous["_depth_observed"]))
         item["_viewpoints"] = deepcopy(previous.get("_viewpoints", [])) if previous else []
+        if previous and previous.get('_static_reference'):
+            item['_static_reference'] = deepcopy(previous['_static_reference'])
         self._record_view(item, estimate.get("vehicle_at_capture"))
         footprint = item.get("footprint", {})
         valid_height = _number(footprint.get("height_m")) and not footprint.get("height_clipped", True)
@@ -377,6 +445,7 @@ class TargetRegistry:
         item["_height_timestamp"] = height_timestamp if valid_height else None
         item["_height_status"] = "measured" if valid_height else "unavailable"
         self._geometry(item)
+        self._remember_reference(item)
         self._targets[key] = item
         return self._public(item)
 
@@ -388,11 +457,14 @@ class TargetRegistry:
                     "tracking": {"status": "unknown", "reason": "unknown_target_id"}}
         return self._public(item)
 
-    def summaries(self):
+    def summaries(self, state=None):
         """Current copy of target evidence for the agent feedback context."""
         summaries = []
         for item in list(self._targets.values())[-8:]:
-            public = self._public(item)
+            public = self.anchor(item['target_id'], state) if state is not None else self._public(item)
+            if not public.get('reference_available', True):
+                summaries.append(public)
+                continue
             summaries.append({key: public[key] for key in (
                 "target_id", "description", "found", "reason",
                 "surface_range_m", "surface_range_kind", "origin_id") if key in public} | {
@@ -405,6 +477,12 @@ class TargetRegistry:
                     "measured_view_count", "measured_view_separation_deg", "minimum_view_separation_deg",
                     "view_baseline_scope")
                     if key in public["geometry"]}})
+            if state is not None:
+                summary = summaries[-1]
+                summary.pop('found', None)
+                summary.update({key: public[key] for key in (
+                    'reference_available', 'reference_kind', 'reference_observed_at_unix_ms',
+                    'reference_age_ms', 'current_observation_available', 'continuous_target_identity_tracking')})
         return summaries
 
     def refresh(self, target_id, perception, state):
@@ -506,4 +584,5 @@ class TargetRegistry:
         # The accumulated measured hull is in geometry. Never add assumed
         # back-face vertices while updating the fresh vertical measurements.
         self._geometry(item)
+        self._remember_reference(item)
         return self._public(item)

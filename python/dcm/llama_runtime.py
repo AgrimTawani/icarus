@@ -341,7 +341,12 @@ class LlamaCppRuntime:
         native = "messages" in prompt
         if native:
             request_body.update(messages=prompt["messages"], tools=prompt["tools"],
-                                tool_choice="required", parallel_tool_calls=False,
+                                # Accept complete native proposals from the
+                                # parser. The agent executes only the first,
+                                # then obtains fresh feedback; no flight tools
+                                # run in parallel. Strict single-call parsing
+                                # otherwise turns extra proposals into HTTP500.
+                                tool_choice="required", parallel_tool_calls=True,
                                 chat_template_kwargs={"enable_thinking": bool(self.descriptor.reasoning_budget) and not prompt.get("concise")})
         timeout_s = self.descriptor.deadline_ms / 1000
         outcome = {}

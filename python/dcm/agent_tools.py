@@ -18,6 +18,9 @@ from python.dcm.actions import (
 from python.dcm.validation_diagnostics import format_schema_error
 from python.dcm.viewing import VIEW_SCHEMA, canonical_view_arguments, resolve_view
 
+# Native ActionExecutor heading/attitude contracts, independent of mission text.
+HEADING_TOLERANCE_DEG = 5.0
+ATTITUDE_MAX_AGE_MS = 1000
 
 def obj(properties=None, required=()):
     return {
@@ -287,6 +290,7 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
     targets = context.get('targets', [])
     target_ids = sorted({item['target_id'] for item in targets
                          if isinstance(item, dict) and isinstance(item.get('target_id'), str)
+                         and item.get('reference_available', True) is not False
                          and item['target_id']}) if isinstance(targets, list) else []
     def resumable_ids(registry):
         return sorted(key for key, saved in (registry or {}).items()
@@ -332,6 +336,13 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             properties['standoff_m']['description'] = (
                 'Minimum distance from selected target surface. Preserve an explicit user value; '
                 'otherwise use the configured default.')
+        clearance = context.get('defaults', {}).get('overflight_clearance_m')
+        if ('clearance_above_m' in properties and type(clearance) in (int,float)
+                and math.isfinite(clearance) and clearance > 0):
+            properties['clearance_above_m']['default'] = clearance
+            properties['clearance_above_m']['description'] = (
+                'Vertical clearance above the measured target top. Preserve an explicit user value; '
+                'otherwise omit this argument to use the configured default.')
         if properties.get('camera', {}).get('enum') == ORBIT_CAMERA['enum']:
             # The model must express visual intent, including an explicit
             # "none" for geometric flight. This applies inside batches too.
@@ -573,7 +584,7 @@ class ToolExecutor:
                     yaw = state.get('attitude',{}).get('yaw_rad')
                     if type(yaw) not in (int,float) or not math.isfinite(yaw):
                         raise ValueError('Measured heading is required before directional observation')
-                    if abs(math.remainder(heading-math.degrees(yaw),360)) > 5:
+                    if abs(math.remainder(heading-math.degrees(yaw),360)) > HEADING_TOLERANCE_DEG:
                         if state.get('landed') or not state.get('armed'):
                             return {'status':'NEEDS_CLARIFICATION','requires_user_choice':True,
                                 'question':'The requested view needs the aircraft to turn, but it is landed. Should the view or flight requirement change?',
@@ -806,17 +817,27 @@ class ToolExecutor:
                     'state': state, 'evidence': {'end_state_already_satisfied': True,
                     'no_flight_command_sent': True, 'state_age_ms': round(age_ms, 1)}}
         orbit_evidence = None
+        absolute_heading = None
         if name == 'face_heading':
+            yaw = state.get('attitude', {}).get('yaw_rad')
+            stamp = int(state.get('attitude_received_at_unix_ms', 0))
+            age = time.time() * 1000 - stamp
+            if type(yaw) not in (int, float) or not math.isfinite(yaw) or stamp <= 0 or not 0 <= age <= ATTITUDE_MAX_AGE_MS:
+                raise ValueError('Facing a heading requires fresh finite measured attitude.')
+            absolute_heading = args['heading_deg'] % 360
+            delta = math.remainder(absolute_heading - math.degrees(yaw), 360)
+            if abs(delta) <= HEADING_TOLERANCE_DEG:
+                return {'status': 'SUCCEEDED', 'message': 'Already facing the requested heading; no flight command sent.',
+                        'state': state, 'evidence': {'requested_heading_deg': absolute_heading,
+                        'measured_heading_deg': math.degrees(yaw) % 360,
+                        'absolute_heading_error_deg': abs(delta), 'heading_tolerance_deg': HEADING_TOLERANCE_DEG,
+                        'end_state_already_satisfied': True, 'no_flight_command_sent': True}}
             if state.get('landed') or not state.get('armed'):
                 raise ValueError('Facing a heading requires an airborne aircraft; landed aircraft cannot rotate.')
-            pose = state.get('local_position_ned', {})
-            values = [pose.get('north_m'), pose.get('east_m'), state.get('relative_altitude_m')]
-            if not pose.get('origin_id') or any(
-                    not isinstance(value, (int, float)) or not math.isfinite(value)
-                    for value in values):
-                raise ValueError('Facing a heading requires measured local position, altitude and coordinate origin.')
-            args = dict(args, north_m=values[0], east_m=values[1], altitude_agl_m=values[2])
-            name = 'goto'
+            # Preserve the existing hold target. A new waypoint invents a
+            # position-arrival task (and 10cm tolerance) for a heading request.
+            args = {'angle_deg': delta, **({'rate_deg_s': args['rate_deg_s']} if 'rate_deg_s' in args else {})}
+            name = 'yaw'
         if name == 'orbit':
             from python.dcm.camera_geometry import resolve_reference, orbit_camera_feasibility
             args = dict(args)
@@ -1011,15 +1032,29 @@ class ToolExecutor:
             status = status.removeprefix("ACTION_STATE_")
             if name == "cancel" and status == "CANCELLED":
                 status = "SUCCEEDED"
+            heading_evidence = None
+            if absolute_heading is not None:
+                measured = (terminal_state or {}).get('attitude', {}).get('yaw_rad')
+                error = (abs(math.remainder(math.degrees(measured)-absolute_heading,360))
+                         if type(measured) in (int,float) and math.isfinite(measured) else None)
+                heading_evidence = {'requested_heading_deg': absolute_heading,
+                    'measured_heading_deg': math.degrees(measured) % 360 if error is not None else None,
+                    'absolute_heading_error_deg': error, 'heading_tolerance_deg': HEADING_TOLERANCE_DEG,
+                    'controller': 'native_yaw_preserving_position_target'}
+                if status == 'SUCCEEDED' and (error is None or error > HEADING_TOLERANCE_DEG):
+                    status = 'FAILED'
             return {
                 "status": status,
-                "message": terminal.message,
+                "message": ('Requested absolute heading was not verified in terminal telemetry.'
+                            if absolute_heading is not None and terminal.state == pb.ACTION_STATE_SUCCEEDED and status == 'FAILED'
+                            else terminal.message),
                 "reason_code": pb.ReasonCode.Name(terminal.reason_code),
                 "action_id": receipt.action_id,
                 **({'state': terminal_state} if terminal_state is not None else {}),
                 **({'motion': movement_feedback(state, args, terminal_state)}
                    if motion is not None else {}),
                 **({'evidence': orbit_evidence} if orbit_evidence is not None else {}),
+                **({'evidence': heading_evidence} if heading_evidence is not None else {}),
             }
         finally:
             if self.interrupt:

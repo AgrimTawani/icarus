@@ -72,6 +72,8 @@ def test_localize_target_measures_with_lidar_and_records_evidence():
     assert estimate["position_basis"] == "center_of_observed_lidar_extent"
     assert "assumed_outline" not in estimate["footprint"]
     assert estimate["footprint"]["height_m"] == 5.93
+    assert math.isclose(estimate['footprint']['home_down_m'] - estimate['footprint']['top_down_m'],
+                        estimate['footprint']['height_m'])
     assert estimate["quality"]["lidar_returns"] == 362
     assert estimate["quality"]["lidar_refreshed_after_vlm"] is True
     assert estimate["vlm"]["presence_answer"] == "Yes."
@@ -127,3 +129,26 @@ def test_localization_retains_sensor_to_model_coordinate_provenance():
         estimate = client.localize_target('visible structure')
     for key, value in coordinate_evidence.items():
         assert estimate['vlm'][key] == value
+
+
+def test_target_anchor_is_read_only_and_keeps_live_sensor_failures_separate():
+    from test_target_registry import static_reference_fixture, state, perception
+    registry, target_id, now = static_reference_fixture()
+    now[0] = 30
+    module = _module()
+    client = module.MissionClient.__new__(module.MissionClient)
+    client.target_registry = registry
+    client.episode = None
+    client.state = MagicMock()
+    client.action_api = MagicMock(side_effect=AssertionError('reference lookup cannot fly'))
+    client._perception_with_obstacles = MagicMock(return_value=perception(stamp=30000))
+    with patch.object(module, 'MessageToDict', return_value=state()):
+        reference = client.target_anchor(target_id)
+        assert reference['reference_available'] and not reference['current_observation_available']
+        assert reference['footprint']['height_m'] == 6
+        assert 'surface_range_m' not in reference
+        assert client.target_feedback()[0]['reference_available']
+        client._perception_with_obstacles.return_value = perception(stamp=10000)
+        assert client.target_anchor(target_id)['reference_available'] is False
+    client.action_api.assert_not_called()
+    assert registry.anchor(target_id, state())['reference_available']

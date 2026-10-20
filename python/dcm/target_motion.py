@@ -6,6 +6,12 @@ sensor geometry and dispatch ordinary Drone API actions with runtime provenance.
 import math
 import threading
 import time
+import json
+from pathlib import Path
+
+
+def operating_defaults():
+    return json.loads((Path(__file__).resolve().parents[2] / 'config/dcm/default_policy.json').read_text())
 
 # ActionExecutor::ExecuteContinuousOrbit permits this radial deviation before its
 # tracking-loss timeout. Keep trajectory reserve distinct from clearance floor.
@@ -97,7 +103,13 @@ class TargetMotion:
     def __init__(self, client, flight, interrupted=lambda: False):
         self.client, self.flight, self.interrupted = client, flight, interrupted
 
-    def _target(self, target_id):
+    def _target(self, target_id, *, static_reference=False):
+        anchor = getattr(self.client, 'target_anchor', None)
+        if static_reference and callable(anchor):
+            target = anchor(target_id)
+            if not target.get('reference_available'):
+                raise TargetMeasurementError(target)
+            return target
         target = self.client.refresh_target(target_id)
         if not target.get('found'):
             raise TargetMeasurementError(target)
@@ -277,7 +289,7 @@ class TargetMotion:
                      maximum_ground_speed_mps=1.0, camera=None):
         if self.interrupted():
             return self._stop('Operator interrupted target orbit.')
-        target = self._target(target_id)
+        target = self._target(target_id, static_reference=True)
         target, acquisition, failure = self._acquire_target_geometry(target_id, target, standoff_m, maximum_ground_speed_mps)
         if failure is not None:
             return failure
@@ -328,23 +340,29 @@ class TargetMotion:
                         circle_radius_m=radius, minimum_requested_surface_clearance_m=standoff_m,
                         clearance_tolerance_m=0.25,
                         geometry_basis='observed target hull; unseen surfaces remain unknown',
+                        reference_kind=target.get('reference_kind', 'measured_static_geometry'),
+                        target_observation_available_before_maneuver=target.get('current_observation_available', target.get('found', False)),
                         constant_surface_clearance=False, sampling_errors=len(errors))
         # Geometric coverage is measured, never inferred from action acceptance.
         if result['status'] == 'SUCCEEDED' and (metrics.samples < 2 or
                 evidence['angular_coverage_deg'] < revolutions*360 - 8):
             result = {**result, 'status': 'FAILED', 'message': 'Orbit ended without measured requested angular coverage.'}
+        elif result['status'] == 'SUCCEEDED':
+            result = {**result, 'message': 'Completed the measured static-reference orbit. ' + result.get('message', '')}
         return {**result, 'evidence': evidence}
 
-    def overfly_target(self, target_id, clearance_above_m=3.0, maximum_ground_speed_mps=1.0):
-        target = self._target(target_id)
+    def overfly_target(self, target_id, clearance_above_m=None, maximum_ground_speed_mps=1.0):
+        defaults = operating_defaults()
+        if clearance_above_m is None:
+            clearance_above_m = defaults['overflight_clearance_m']
+        if type(clearance_above_m) not in (int,float) or not math.isfinite(clearance_above_m) or clearance_above_m <= 0:
+            raise ValueError('Overflight clearance must be a positive finite distance.')
+        target = self._target(target_id, static_reference=True)
         acquisition = []
         if (not target['geometry'].get('orbit_usable') or target['footprint'].get('height_m') is None
                 or target['footprint'].get('height_clipped')):
-            import json
-            from pathlib import Path
-            policy = json.loads((Path(__file__).resolve().parents[2] / 'config/dcm/default_policy.json').read_text())
             target, acquisition, failure = self._acquire_target_geometry(
-                target_id, target, policy['object_standoff_m'], maximum_ground_speed_mps, require_height=True)
+                target_id, target, defaults['object_standoff_m'], maximum_ground_speed_mps, require_height=True)
             if failure is not None:
                 return failure
         footprint, geometry = target['footprint'], target['geometry']
@@ -368,15 +386,34 @@ class TargetMotion:
             'altitude_agl_m': altitude, 'maximum_ground_speed_mps': maximum_ground_speed_mps},
             runtime_target=True, acceptance_radius_m=0.2, expected_origin_id=target["origin_id"])
         observed_state, _, _ = pose(self.client.state())
+        completion, completed_n, completed_e = pose(result.get('state') or observed_state)
+        top_down = footprint.get('top_down_m')
+        completed_local = completion['local_position_ned']
+        clearance = (float(top_down) - completed_local['down_m']
+                     if isinstance(top_down, (int, float)) and 'down_m' in completed_local
+                     else completion['relative_altitude_m'] - float(height))
+        horizontal_error = math.hypot(completed_n-center['north_m'], completed_e-center['east_m'])
+        reached = result['status'] == 'SUCCEEDED'
+        if result['status'] == 'SUCCEEDED':
+            result = {**result, 'message': 'Reached the overhead waypoint at the measured target center; camera inspection is separate.'}
         local = observed_state['local_position_ned']
         camera_views = {}
         if 'down_m' in local:
             from python.dcm.camera_geometry import project_point
             top = {**center, 'origin_id': target['origin_id'],
-                   'down_m': local['down_m'] + observed_state['relative_altitude_m'] - float(height)}
+                   'down_m': (float(top_down) if isinstance(top_down, (int, float))
+                              else local['down_m'] + observed_state['relative_altitude_m'] - float(height))}
             camera_views = {camera: project_point(observed_state, top, camera)
                             for camera in ('forward_d435i', 'downward_brio')}
         return {**result, 'evidence': {'target_id': target_id, 'measured_top_above_home_m': height,
+                'relationship': 'above_measured_static_target_center', 'overhead_waypoint_reached': reached,
+                'requested_clearance_above_m': clearance_above_m,
+                'clearance_above_measured_top_m': clearance,
+                'clearance_basis': 'vehicle pose and retained static geometry; not a new range capture',
+                'horizontal_error_to_measured_center_m': horizontal_error,
+                'arrival_tolerance_m': 0.2,
+                'reference_kind': target.get('reference_kind', 'measured_static_geometry'),
+                'target_observation_available_before_maneuver': target.get('current_observation_available', target.get('found', False)),
                 'geometry_acquisition': acquisition, 'camera_view_geometry': camera_views,
                 'commanded_altitude_above_home_m': altitude, 'landing_assessed': False,
                 'geometry_basis': 'static target snapshot measured before climb',

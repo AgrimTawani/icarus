@@ -72,6 +72,7 @@ class FakeClient:
             armed=False,
             relative_altitude_m=0,
             observed_at_unix_ms=int(time.time() * 1000),
+            attitude_received_at_unix_ms=int(time.time() * 1000),
             local_position_ned=sp.LocalPositionNed(origin_id="ekf-origin"),
             attitude=sp.Attitude(yaw_rad=0),
         )
@@ -131,6 +132,7 @@ class FakeClient:
         if name in ("Land", "ReturnHome"):
             self.vehicle.landed = True
             self.vehicle.armed = False
+        self.vehicle.attitude_received_at_unix_ms = int(time.time() * 1000)
         return pb.ActionStatus(
             action_id=receipt.action_id,
             state=pb.ACTION_STATE_SUCCEEDED,
@@ -231,7 +233,7 @@ def test_sequence_resolves_each_relative_move_from_measured_heading():
 
 
 @pytest.mark.parametrize('heading', [0, 90, 180, 270, 359.5])
-def test_face_heading_holds_measured_pose_and_sets_absolute_heading(heading):
+def test_face_heading_uses_native_yaw_without_replacing_the_position_target(heading):
     c = FakeClient()
     c.vehicle.armed = True
     c.vehicle.landed = False
@@ -241,24 +243,26 @@ def test_face_heading_holds_measured_pose_and_sets_absolute_heading(heading):
     c.vehicle.attitude.yaw_rad = math.radians(45.754)
     result = ToolExecutor(c).execute('face_heading', {'heading_deg': heading})
     assert result['status'] == 'SUCCEEDED'
-    assert [name for name, _ in c.sent] == ['Goto']
+    assert [name for name, _ in c.sent] == ['Yaw']
     request = c.sent[0][1]
-    assert request.destination.local_ned.north_m == 12.3
-    assert request.destination.local_ned.east_m == -8.4
-    assert request.destination.local_ned.altitude_above_home_m == 4.2
-    assert request.heading.mode == pb.HEADING_MODE_ABSOLUTE
-    assert request.heading.heading_deg == heading
+    assert request.relative_angle_deg == pytest.approx(math.remainder(heading-45.754,360))
+    assert c.vehicle.local_position_ned.north_m == 12.3
+    assert c.vehicle.local_position_ned.east_m == -8.4
+    assert c.vehicle.relative_altitude_m == 4.2
+    assert result['evidence']['absolute_heading_error_deg'] == pytest.approx(0)
 
 
-@pytest.mark.parametrize('fault', ['landed', 'unarmed', 'origin', 'nonfinite'])
-def test_face_heading_requires_real_airborne_pose(fault):
+@pytest.mark.parametrize('fault', ['landed', 'unarmed', 'missing_stamp', 'nonfinite', 'stale'])
+def test_face_heading_requires_fresh_attitude_and_airborne_control_for_a_turn(fault):
     c = FakeClient()
     c.vehicle.armed = True
     c.vehicle.landed = False
+    c.vehicle.attitude.yaw_rad = math.radians(90)
     if fault == 'landed': c.vehicle.landed = True
     if fault == 'unarmed': c.vehicle.armed = False
-    if fault == 'origin': c.vehicle.local_position_ned.origin_id = ''
-    if fault == 'nonfinite': c.vehicle.local_position_ned.north_m = float('nan')
+    if fault == 'missing_stamp': c.vehicle.attitude_received_at_unix_ms = 0
+    if fault == 'nonfinite': c.vehicle.attitude.yaw_rad = float('nan')
+    if fault == 'stale': c.vehicle.attitude_received_at_unix_ms -= 2000
     result = ToolExecutor(c).execute('face_heading', {'heading_deg': 0})
     assert result['status'] == 'FAILED' and not c.sent
 
@@ -267,11 +271,11 @@ def test_face_heading_can_be_batched_without_replacing_relative_yaw():
     c = FakeClient()
     result = ToolExecutor(c).execute('execute_sequence', {'actions': [
         {'name': 'takeoff', 'arguments': {'target_altitude_agl_m': 3}},
-        {'name': 'face_heading', 'arguments': {'heading_deg': 0}},
+        {'name': 'face_heading', 'arguments': {'heading_deg': 90}},
         {'name': 'yaw', 'arguments': {'angle_deg': 270}},
     ]})
     assert result['status'] == 'SUCCEEDED'
-    assert [name for name, _ in c.sent] == ['Arm', 'Takeoff', 'Goto', 'Yaw']
+    assert [name for name, _ in c.sent] == ['Arm', 'Takeoff', 'Yaw', 'Yaw']
     assert c.sent[-1][1].relative_angle_deg == 270
 
 
@@ -591,7 +595,7 @@ def test_pattern_start_tolerance_is_not_tightened_by_altitude_settling_noise():
     assert c.sent[-1][1].points[0].acceptance_radius_m == 0.25
 
 
-def test_native_protocol_requests_one_tool_and_keeps_full_mission_context():
+def test_native_protocol_preserves_proposals_and_full_mission_context():
     from unittest.mock import MagicMock, patch
 
     from python.dcm.contract import RuntimeDescriptor
@@ -622,7 +626,8 @@ def test_native_protocol_requests_one_tool_and_keeps_full_mission_context():
         result = runtime.decide(messages, [])
     body = json.loads(post.call_args.args[0].data)
     assert body["messages"] == messages
-    assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is False
+    # Backend may parse several proposals; the agent serializes actual execution.
+    assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is True
     assert result["tool_calls"][0]["function"]["name"] == "land"
 
 
@@ -1822,3 +1827,77 @@ def test_localization_starts_real_camera_feedback_without_another_model_call():
     assert [a['action'] for a in session.actions]==['localize_target','detect']
     assert session.actions[1]['source']=='perception_feedback'
     assert session.actions[1]['result']['evidence']['counts']=={'person':2}
+
+
+@pytest.mark.parametrize('yaw_deg,heading', [(359,1),(1,359),(90,90)])
+def test_face_heading_already_aligned_is_fresh_non_actuating_even_while_landed(yaw_deg,heading):
+    client=FakeClient()
+    client.vehicle.attitude.yaw_rad=math.radians(yaw_deg)
+    result=ToolExecutor(client).execute('face_heading',{'heading_deg':heading})
+    assert result['status']=='SUCCEEDED'
+    assert result['evidence']['no_flight_command_sent'] is True
+    assert not client.sent
+
+
+def test_face_heading_needs_no_new_navigation_coordinate_reference():
+    client=FakeClient()
+    client.vehicle.armed=True;client.vehicle.landed=False
+    client.vehicle.local_position_ned.origin_id=''
+    result=ToolExecutor(client).execute('face_heading',{'heading_deg':90})
+    assert result['status']=='SUCCEEDED'
+    assert [name for name,_ in client.sent]==['Yaw']
+
+
+def test_face_heading_does_not_accept_a_yaw_receipt_without_actual_heading():
+    client=FakeClient();client.vehicle.armed=True;client.vehicle.landed=False
+    def unverified(receipt,timeout,return_failure=False):
+        return pb.ActionStatus(action_id=receipt.action_id,state=pb.ACTION_STATE_SUCCEEDED)
+    client.wait_action=unverified
+    result=ToolExecutor(client).execute('face_heading',{'heading_deg':90})
+    assert result['status']=='FAILED'
+    assert result['evidence']['absolute_heading_error_deg'] is None
+
+
+def test_multiple_proposals_execute_only_first_then_decide_from_observation():
+    client=FakeClient()
+    client.detect=lambda **kwargs:{'count':0,'fresh':True}
+    first=call('detect',classes=['person'])
+    first['tool_calls'].extend(call('takeoff',target_altitude_agl_m=8)['tool_calls'])
+    runtime=Runtime(first,call('finish',outcome='completed',message='No people detected; stayed grounded.'))
+    result=run(client,runtime,mission='Look for people before flying; stay grounded if none are detected.')
+    assert result['status']=='completed'
+    assert not client.sent
+    assert [entry['action'] for entry in result['executed']]==['detect']
+    assert len(first['tool_calls'])==2  # Raw proposal remains auditable.
+    history=[c['function']['name'] for m in runtime.inputs[-1] for c in m.get('tool_calls',[])]
+    assert history==['detect']
+    assert '"person":0' in runtime.inputs[-1][-1]['content'] or '"count":0' in runtime.inputs[-1][-1]['content']
+
+
+def test_multiple_flight_proposals_never_queue_a_later_action():
+    client=FakeClient()
+    first=call('arm')
+    first['tool_calls'].extend(call('takeoff',target_altitude_agl_m=8)['tool_calls'])
+    runtime=Runtime(first,call('ask_user',question='Continue with flight?'))
+    result=run(client,runtime)
+    assert result['status']=='awaiting_user'
+    assert [name for name,_ in client.sent]==['Arm']
+
+
+def test_final_result_cannot_hide_additional_unexecuted_calls_and_is_bounded():
+    client=FakeClient()
+    bad=call('finish',outcome='completed',message='Done')
+    bad['tool_calls'].extend(call('land')['tool_calls'])
+    result=run(client,Runtime(bad,bad,bad))
+    assert result['status']=='incomplete' and result['decisions']==3
+    assert not client.sent
+
+
+def test_unresolved_completion_repairs_do_not_spin_until_the_global_decision_limit():
+    client=FakeClient();client.fail='Goto'
+    runtime=Runtime(call('move_relative',forward_m=2),
+                    call('finish',outcome='completed',message='Done'),
+                    call('finish',outcome='completed',message='Done'))
+    result=run(client,runtime)
+    assert result['status']=='incomplete' and result['decisions']==3
+    assert len(client.sent)==1

@@ -294,19 +294,23 @@ def fly_mission(
                 session.awaiting_user = True
                 return session.result("awaiting_user", text)
             if len(calls) != 1:
-                session.messages.append(
-                    {
-                        "role": "user",
-                        "content": "No action executed. Return exactly one tool call; use execute_sequence for a short unconditional group.",
-                    }
-                )
-                failures += 1
-                if failures >= 3:
-                    return session.result(
-                        "incomplete",
-                        "The model repeatedly returned conflicting tool calls. No further action was taken.",
-                    )
-                continue
+                record(client, 'agent_tool_serialization', {
+                    'selected_call_id': calls[0].get('id'),
+                    'unexecuted_call_ids': [item.get('id') for item in calls[1:]],
+                    'message': 'Only the first proposal is selected; trailing proposals are discarded, not queued.'})
+                # Do not replay trailing self-authored plans as instructions.
+                # The model sees the selected call's result before deciding
+                # again. Explicit execute_sequence remains the batching API.
+                calls = [calls[0]]
+                if calls[0].get('function', {}).get('name') == 'finish':
+                    session.messages.extend([
+                        {'role': 'assistant', 'tool_calls': calls},
+                        {'role': 'tool', 'tool_call_id': calls[0].get('id', ''),
+                         'content': 'No action executed. A final result cannot accompany additional unexecuted tool proposals. Choose the next action or a final result.'}])
+                    failures += 1
+                    if failures >= 3:
+                        return session.result('incomplete', 'Repeated final results included unexecuted tool proposals; no further action was taken.')
+                    continue
             call = calls[0]
             name = call.get("function", {}).get("name")
             args = None
@@ -361,6 +365,10 @@ def fly_mission(
                     session.messages.append({'role': 'tool', 'tool_call_id': call_id,
                                              'content': json.dumps(feedback)})
                     record(client, 'agent_completion_consistency', feedback)
+                    failures += 1
+                    if failures >= 3:
+                        return session.result('incomplete',
+                            'Completion remains unverified after repeated final reports with unresolved tool failures.')
                     continue
                 session.messages.append(
                     {
@@ -633,6 +641,7 @@ def decision_messages(session, context, lean=False):
     context['position_evidence'] = {
         'altitude_reference': 'above_home_not_above_object',
         'registered_target_available': any(isinstance(t, dict) and t.get('target_id')
+                                         and t.get('reference_available', True) is not False
                                          for t in context.get('targets', [])),
         'scope': 'Vehicle coordinates alone do not establish position relative to an object or a named waypoint.'}
     if session.rejected_validation_attempts:

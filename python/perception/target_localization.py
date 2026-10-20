@@ -525,8 +525,9 @@ class TargetLocalizer:
         spread = max((math.hypot(a["centre"][0] - b["centre"][0],
                                  a["centre"][1] - b["centre"][1])
                       for a in consensus for b in consensus), default=0.0)
-        measured_tops = [item["top_height_m"] for item in consensus if not item["top_clipped"]]
-        height = max(measured_tops) if measured_tops else None
+        measured_top_down = min((item['top_down_m'] for item in consensus
+                                 if not item['top_clipped']), default=None)
+        height = pose['terrain_down_m'] - measured_top_down if measured_top_down is not None else None
         centre = fused["centre"]
         absolute = math.degrees(math.atan2(centre[1] - pose["east_m"],
                                            centre[0] - pose["north_m"])) % 360.0
@@ -555,6 +556,8 @@ class TargetLocalizer:
                 "visible_width_m": _round(fused["visible_width_m"]),
                 "visible_depth_m": _round(fused["visible_depth_m"]),
                 "height_m": _round(height),
+                "top_down_m": _round(measured_top_down),
+                "home_down_m": _round(pose['terrain_down_m']),
                 "height_reference": "home_arming_altitude",
                 "height_clipped": height is None,
                 "height_lower_bound_m": _round(max(item["top_height_m"] for item in consensus)),

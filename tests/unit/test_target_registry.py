@@ -39,6 +39,81 @@ def perception(*objects, stamp=10000):
             "nearby_obstacles": list(objects)}
 
 
+def static_reference_fixture():
+    now = [10.0]
+    registry = TargetRegistry(clock=lambda: now[0])
+    source = estimate()
+    source['vehicle_at_capture'] = {'north_m': 0, 'east_m': 0}
+    target_id = registry.register(source)['target_id']
+    registry.refresh(target_id, perception(obstacle()), state(n=12, e=8))
+    assert registry.get(target_id)['geometry']['orbit_usable']
+    return registry, target_id, now
+
+
+def test_static_anchor_survives_language_latency_and_loss_of_view_without_fresh_range():
+    registry, target_id, now = static_reference_fixture()
+    now[0] = 30
+    live = registry.refresh(target_id, perception(stamp=30000), state())
+    assert live['found'] is False and live['reason'] == 'target_not_observed'
+    assert live['geometry']['height_m'] is None
+    anchor = registry.anchor(target_id, state(n=11))
+    assert anchor['reference_available'] is True
+    assert anchor['current_observation_available'] is False
+    assert anchor['geometry']['orbit_usable'] is True
+    assert anchor['footprint']['height_m'] == 6
+    assert anchor['reference_age_ms'] == 20000
+    assert anchor['geometry']['height_evidence_age_ms'] == 20000
+    assert 'surface_range_m' not in anchor
+    summary = registry.summaries(state())[0]
+    assert summary['reference_available'] and summary['geometry']['orbit_usable']
+    assert 'found' not in summary and 'surface_range_m' not in summary
+    assert registry.maximum_age_ms == 1500
+
+
+def test_static_height_uses_local_top_and_rebases_when_home_changes():
+    registry, target_id, now = static_reference_fixture()
+    now[0] = 45
+    current = state()
+    current['local_position_ned']['down_m'] = -9
+    current['relative_altitude_m'] = 11  # Home is two metres below the local origin.
+    anchor = registry.anchor(target_id, current)
+    assert anchor['footprint']['height_m'] == 8
+    assert anchor['geometry']['height_reference'] == 'current_home_from_local_ned'
+    assert current['relative_altitude_m'] - anchor['footprint']['height_m'] == 3
+
+
+def test_clipped_refresh_does_not_erase_a_previously_measured_static_top():
+    registry, target_id, now = static_reference_fixture()
+    now[0] = 11
+    clipped = obstacle(stamp=11000)
+    clipped.update(top_clipped=True, top_down_m=-3)
+    registry.refresh(target_id, perception(clipped, stamp=11000), state())
+    anchor = registry.anchor(target_id, state())
+    assert anchor['footprint']['height_m'] == 6
+    assert anchor['geometry']['height_evidence_age_ms'] == 1000
+
+
+def test_static_reference_does_not_survive_an_origin_change_or_transfer_sessions():
+    registry, target_id, now = static_reference_fixture()
+    assert registry.anchor(target_id, state(origin='other'))['reference_available'] is False
+    registry.refresh(target_id, perception(obstacle()), state(origin='other'))
+    assert registry.anchor(target_id, state())['reference_available'] is False
+    assert TargetRegistry().anchor(target_id, state())['reason'] == 'unknown_target_id'
+    replacement = registry.register(estimate())['target_id']
+    assert replacement != target_id
+
+
+def test_unknown_or_future_height_is_not_invented_for_a_static_reference():
+    now = [10.0]
+    registry = TargetRegistry(clock=lambda: now[0])
+    source = estimate()
+    reference = registry.register(source)['target_id']
+    assert registry.anchor(reference, state())['footprint']['height_m'] is None
+    source['observed_at_unix_ms'] = 20000
+    reference = registry.register(source, new_target=True)['target_id']
+    assert registry.anchor(reference, state())['reference_available'] is False
+
+
 class TargetRegistryTests(unittest.TestCase):
     def setUp(self):
         self.now = 10

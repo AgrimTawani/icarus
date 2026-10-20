@@ -60,6 +60,61 @@ def test_lost_target_holds_without_moving():
     assert [x[0] for x in c.calls] == ['hold']
 
 
+class AnchorClient(Client):
+    def __init__(self):
+        super().__init__()
+        self.reference = self.refresh_target('a')
+        self.reference.update(reference_available=True, found=False,
+                              current_observation_available=False)
+        self.lost = True
+
+    def target_anchor(self, target_id):
+        return deepcopy(self.reference)
+
+
+def test_overflight_can_use_stationary_map_geometry_outside_the_current_sensor_view():
+    c = AnchorClient()
+    result = TargetMotion(c, c.flight).execute('overfly_target', {'target_id': 'a'})
+    assert result['status'] == 'SUCCEEDED'
+    assert [name for name, _, _ in c.calls] == ['goto', 'goto']
+    assert c.north == 12 and c.alt == 9
+    assert result['evidence']['overhead_waypoint_reached'] is True
+    assert result['evidence']['clearance_above_measured_top_m'] == 3
+    assert result['evidence']['target_observation_available_before_maneuver'] is False
+    assert 'camera inspection is separate' in result['message']
+
+
+def test_orbit_can_dispatch_from_a_retained_anchor_but_never_fakes_coverage():
+    c = AnchorClient()
+    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
+    assert any(name == 'orbit' for name, _, _ in c.calls)
+    # A mock that never flies cannot prove a completed circle.
+    assert result['status'] != 'SUCCEEDED'
+    assert result['evidence']['camera_visibility_verified'] is False
+
+
+def test_approach_still_requires_live_surface_distance_even_with_a_static_anchor():
+    c = AnchorClient()
+    result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 3})
+    assert result['status'] == 'FAILED'
+    assert [name for name, _, _ in c.calls] == ['hold']
+
+
+def test_overflight_default_is_published_and_shared_with_controller_policy(monkeypatch):
+    from python.dcm.agent_tools import decision_tools
+    defaults={'overflight_clearance_m':4.5,'object_standoff_m':7}
+    monkeypatch.setattr('python.dcm.target_motion.operating_defaults',lambda:defaults)
+    tool=next(t['function'] for t in decision_tools({'defaults':defaults})
+              if t['function']['name']=='overfly_target')
+    assert tool['parameters']['properties']['clearance_above_m']['default']==4.5
+    c=AnchorClient()
+    result=TargetMotion(c,c.flight).execute('overfly_target',{'target_id':'a'})
+    assert result['status']=='SUCCEEDED' and c.alt==10.5
+    c=AnchorClient()
+    result=TargetMotion(c,c.flight).execute('overfly_target',{'target_id':'a','clearance_above_m':1})
+    assert result['status']=='SUCCEEDED' and c.alt==7  # Explicit operator value is retained.
+
+
 def test_operator_stop_does_not_override_recovery():
     c = Client()
     result = TargetMotion(c, c.flight, lambda: True).execute('approach_target', {'target_id': 'a', 'standoff_m': 3})

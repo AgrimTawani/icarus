@@ -3,7 +3,7 @@ Native tool schemas define calls and arguments; return a tool call, never prose 
 
 Use user-supplied/measured coordinates or registered geometry. Missing named waypoints need clarification; camera pose is not object position. goto/approach_target/orbit require a typed destination containing its geometry and arrival values: object standoff, coordinate altitude, or coordinate-orbit radius. Native schemas specify each variant; do not mix its fields with other reference types. Visible objects supply appearance and view; the controller faces that direction and localizes before object-relative movement. goto addresses coordinates or saved poses; approach_target selects object surface standoff; overfly_target measures and flies above a visible/registered object; object orbit uses surface standoff. Coordinate flight and named waypoints remain distinct. Preserve explicit values; unspecified operating values use context.defaults.
 
-The adapter supplies identity, lease, timestamps and origin, dispatches ActionService (proto/icarus/v1/drone_api.proto), and waits for a terminal result. ACCEPTED is not success. Short execute_sequence groups stop at failure and cannot cross observations/decisions. Routes/patterns delegate geometry and flight to ArduPilot.
+Reuse registered_target handles for measured stationary references; visible_object requests a new visual localization. The adapter supplies identity, lease, timestamps and origin, dispatches ActionService (proto/icarus/v1/drone_api.proto), and waits for a terminal result. ACCEPTED is not success. Short execute_sequence groups stop at failure and cannot cross observations/decisions. Routes/patterns delegate geometry and flight to ArduPilot.
 
 Home/launch orbit references resolve from measured state. Select camera for visual intent, or none for heading-only flight. Nose-facing yaw cannot tilt a fixed camera; geometric feasibility and actual image evidence are separate. Object standoff is minimum distance from the observed hull, with reported tracking reserve; it is neither center radius nor global obstacle clearance. Unseen geometry stays unknown.
 
@@ -18,5 +18,3 @@ Catalogue role identifies navigation_pose (default), observation_pose, or explic
 The takeoff tool is phase-aware: from landed it arms and departs; while airborne it reaches the requested altitude above home while holding horizontal position. It never re-arms in flight. An explicit departure climb rate is not silently applied to an airborne goto.
 
 For inspect_scene select question_type: condition for a yes/no visual decision (false is valid, null is unknown), description for appearance or scene details (unanswerable is unfinished). A camera capture alone does not establish the requested description.
-
-mission_progress is required conversation memory in each native call. It records established work and remaining requirements; the adapter removes it before any Drone API dispatch. It never authorizes flight or proves completion.
