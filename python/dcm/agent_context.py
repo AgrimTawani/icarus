@@ -41,7 +41,7 @@ def advertised_motion_limits(capabilities):
     return limits
 
 
-def capture_context(client, include_geometry=False, include_waypoints=True):
+def capture_context(client, include_geometry=False, include_waypoints=False):
     from python.dcm._paths import ensure_generated_proto_on_path
 
     ensure_generated_proto_on_path()

@@ -65,7 +65,10 @@ def destination_schema(operation, legacy):
         ref('registered_target',{'target_id':text},['target_id'])]
     if operation != 'goto':
         variants += object_variants
-    props['destination']={'oneOf':variants}
+    props['destination']={'oneOf':variants, 'description':
+        'Select the reference matching the requested subject: physical objects use '
+        'visible_object or registered_target; coordinates/home/launch identify numeric '
+        'points. A camera or observation pose is not an object center.'}
     schema['required']=['destination']+(['camera'] if operation=='orbit' else [])
     return schema
 
@@ -215,6 +218,7 @@ def catalogue_context(include_entries=False):
         'source': 'operator_configured_catalogue' if os.environ.get('ICARUS_WAYPOINTS_FILE') else catalogue['source'],
         'entries': [], 'loaded': False, 'count': len(catalogue['entries']),
         'kind': 'saved_vehicle_navigation_poses',
+        'scope': 'Optional operator-supplied navigation poses; not environmental objects or mission targets.',
         'load_with': {'tool':'get_context','arguments':{'include_waypoints':True}}}
 
 

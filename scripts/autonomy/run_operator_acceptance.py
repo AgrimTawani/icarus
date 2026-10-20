@@ -192,6 +192,8 @@ def main():
     parser.add_argument('--case', action='append', default=[])
     parser.add_argument('--clarification-answer', action='append', default=[])
     parser.add_argument('--max-decisions', type=int, default=32)
+    parser.add_argument('--shared-simulator', action='store_true',
+                        help='Run selected missions serially in one owned simulator, with separate clients and episodes')
     args = parser.parse_args()
     args.output = args.output.resolve()
     args.cases = args.cases.resolve()
@@ -212,7 +214,7 @@ def main():
         session = json.loads(active.read_text())
         if process_identity(session.get('launcher_pid', -1)):
             parser.error('A simulator is already active; stop it before starting this owned acceptance stack.')
-    if len(selected) > 1:
+    if len(selected) > 1 and not args.shared_simulator:
         return run_isolated_cases(args, selected)
     args.output.mkdir(parents=True, exist_ok=True)
     processes = {}; tracked = {}

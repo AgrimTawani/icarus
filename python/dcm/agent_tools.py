@@ -235,11 +235,11 @@ SCHEMAS.update(
         ),
     }
 )
-for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
+for name in SCHEMAS:
     for branch in SCHEMAS[name].get("oneOf", [SCHEMAS[name]]):
         branch["properties"]["mission_complete"] = {
             "type": "boolean",
-            "description": "True only if this finishes ALL requested work.",
+            "description": "Optional completion hint, never a mission verdict.",
         }
 DESCRIPTIONS = {
     'load_tools': 'Load optional navigation/observation tool schemas for subsequent decisions. Read-only; performs no flight or observation. Names and purposes are listed in context.optional_tools.',
@@ -286,6 +286,43 @@ TOOLS = [
     }
     for name, schema in SCHEMAS.items()
 ]
+
+
+def directional_yaw_schema(schema):
+    schema = copy.deepcopy(schema)
+    schema['properties']['angle_deg'] = {
+        'type': 'number', 'minimum': 0,
+        'description': 'Magnitude of the relative turn in degrees.'}
+    schema['properties']['direction'] = {
+        'enum': ['clockwise', 'counterclockwise'],
+        'description': 'Clockwise turns right; counterclockwise turns left.'}
+    schema['required'] = list(dict.fromkeys([*schema.get('required', []), 'direction']))
+    return schema
+
+
+def turn_arguments(name, arguments, *, native=False):
+    """Translate explicit turn intent at the API boundary, retaining legacy callers."""
+    args = copy.deepcopy(arguments)
+    if not isinstance(args, dict):
+        return args
+    if name == 'execute_sequence' and isinstance(args.get('actions'), list):
+        for child in args['actions']:
+            if isinstance(child, dict) and isinstance(child.get('arguments'), dict):
+                child['arguments'] = turn_arguments(
+                    child.get('name'), child['arguments'], native=native)
+    if name != 'yaw':
+        return args
+    angle = args.get('angle_deg')
+    if native and 'direction' not in args and type(angle) in (int, float) and math.isfinite(angle):
+        args.update(angle_deg=abs(angle), direction='clockwise' if angle >= 0 else 'counterclockwise')
+    elif not native and 'direction' in args:
+        direction = args.pop('direction')
+        if direction not in ('clockwise', 'counterclockwise'):
+            raise ValueError('Yaw direction must be clockwise or counterclockwise')
+        if type(angle) not in (int, float) or not math.isfinite(angle) or angle < 0:
+            raise ValueError('Directional yaw needs a finite nonnegative angle magnitude')
+        args['angle_deg'] = angle if direction == 'clockwise' else -angle
+    return args
 
 
 def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=None, require_progress=False):
@@ -400,10 +437,22 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
                         variants.remove(branch)
         if function['name'] == 'inspect_scene':
             function['parameters']['required'].append('question_type')
+        if function['name'] == 'yaw':
+            function['parameters'] = directional_yaw_schema(function['parameters'])
+            function['description'] = ('Turn by the angle magnitude in the explicit direction. '
+                                       'This is relative, not an absolute compass heading.')
+        if function['name'] == 'fly_pattern':
+            function['parameters']['properties'].pop('altitude_agl_m', None)
+            function['description'] += (' This horizontal pattern retains current altitude; '
+                'use takeoff first for an explicitly requested altitude change.')
         if function['name'] == 'execute_sequence':
             variants = function['parameters']['properties']['actions']['items']['oneOf']
             function['parameters']['properties']['actions']['items']['oneOf'] = [
                 branch for branch in variants if branch['properties']['name']['const'] not in ('goto', 'orbit')]
+            for branch in function['parameters']['properties']['actions']['items']['oneOf']:
+                if branch['properties']['name']['const'] == 'yaw':
+                    branch['properties']['arguments'] = directional_yaw_schema(
+                        branch['properties']['arguments'])
         if function['name'] == 'read_action_result':
             count = context.get('retained_action_result_count', 0)
             if type(count) is not int or count < 1:
@@ -468,6 +517,7 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
     arguments = canonical_view_arguments(name, copy.deepcopy(arguments))
+    arguments = turn_arguments(name, arguments, native=tools is not None)
     if 'mission_progress' not in schema.get('properties', {}):
         # Read old saved/native turns without forwarding diagnostic text to a
         # physical controller or advertising it to current model decisions.
@@ -579,7 +629,7 @@ class ToolExecutor:
             if callable(getter):
                 vocabulary = getter()
         validate_call(name, arguments, detector_classes=vocabulary)
-        arguments = copy.deepcopy(arguments)
+        arguments = turn_arguments(name, arguments)
         if name in (*TARGET_FLIGHT, 'localize_target') and 'visual_query' in arguments:
             arguments['description'] = arguments.pop('visual_query')
         complete = arguments.pop("mission_complete", False)

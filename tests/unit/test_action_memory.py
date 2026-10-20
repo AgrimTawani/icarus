@@ -108,8 +108,35 @@ def test_execution_history_bounds_repeated_geometry_without_deleting_action_iden
     assert len(json.dumps(packed)) < 13000
     assert len(json.dumps(packed)) < len(json.dumps(entries)) / 20
     assert packed[-1]['outcome_facts'] == {'found': False, 'count': 0, 'range_m': None}
+    assert all(entry['outcome_facts'] == {'found': False, 'count': 0, 'range_m': None}
+               for entry in packed)
     assert packed[-1]['retained_details']['paths'] == [['result', 'evidence']]
     assert packed[0]['details_paged'] is True and entries == original
+
+
+def test_history_keeps_observations_at_their_original_stages_after_landing():
+    from python.dcm.action_memory import execution_memory_view
+    entries = [
+        {'index': 1, 'action': 'detect', 'source': 'model_tool_call',
+         'arguments': {'classes': ['person']}, 'status': 'SUCCEEDED',
+         'outcome_facts': {'counts': {'person': 3}, 'captured_at_unix_ms': 1000}},
+        *[{'index': i, 'action': 'goto', 'status': 'SUCCEEDED',
+           'arguments': {'route_details': 'x' * 500},
+           'message': 'x' * 500} for i in range(2, 16)],
+        {'index': 16, 'action': 'land', 'status': 'SUCCEEDED'},
+        {'index': 17, 'action': 'detect', 'source': 'perception_feedback',
+         'status': 'SUCCEEDED',
+         'outcome_facts': {'counts': {'person': 0}, 'captured_at_unix_ms': 9000}},
+    ]
+    original = copy.deepcopy(entries)
+    packed = execution_memory_view(entries, history_bytes=300)
+    assert packed[0]['outcome_facts'] == {
+        'counts': {'person': 3}, 'captured_at_unix_ms': 1000}
+    assert packed[-1]['outcome_facts'] == {
+        'counts': {'person': 0}, 'captured_at_unix_ms': 9000}
+    assert packed[0]['source'] == 'model_tool_call'
+    assert packed[-1]['source'] == 'perception_feedback'
+    assert entries == original
 
 
 def test_execution_projection_preserves_small_condition_facts_and_real_lookup_path():

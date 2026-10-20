@@ -112,7 +112,7 @@ def test_live_catalogue_does_not_advertise_self_written_plan_notes():
                   tools=decision_tools({}, loaded_tools=set()))
 
 
-def test_initial_live_context_discloses_small_waypoint_handles_without_coordinate_recipes(tmp_path,monkeypatch):
+def test_initial_context_indexes_optional_poses_and_loads_handles_on_request(tmp_path,monkeypatch):
     import json
     from python.dcm._paths import ensure_generated_proto_on_path
     ensure_generated_proto_on_path()
@@ -126,6 +126,12 @@ def test_initial_live_context_discloses_small_waypoint_handles_without_coordinat
         state_api=SimpleNamespace(GetHealth=lambda *a,**k:{}))
     monkeypatch.setattr(rpc,'PerceptionServiceStub',lambda _:SimpleNamespace(GetPerception=lambda *a,**k:{}))
     context=capture_context(client)
+    index=context['registered_waypoints']
+    assert index['entries']==[] and index['count']==1 and index['loaded'] is False
+    assert index['load_with']=={'tool':'get_context','arguments':{'include_waypoints':True}}
+    assert 'Camera dock' not in json.dumps(context)
+    assert 'goto' not in names(decision_tools(context,loaded_tools=set()))
+    context=capture_context(client,include_waypoints=True)
     point,=context['registered_waypoints']['entries']
     assert point['name']=='Camera dock' and point['role']=='observation_pose'
     assert point['destination']=={'type':'named_waypoint','waypoint_name':'Camera dock'}

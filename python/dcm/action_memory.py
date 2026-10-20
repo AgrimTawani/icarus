@@ -258,7 +258,10 @@ def execution_memory_view(entries, *, history_bytes=4000, keep_recent=2):
     for entry in projected[:split]:
         if _size(projected[:split]) <= history_bytes:
             break
-        for key in ('arguments', 'motion', 'message', 'outcome_facts'):
+        # The per-receipt budget above already bounds outcome facts. Keep
+        # those facts attached to their original stage: paging them here can
+        # replace an earlier observation with an unrelated latest camera view.
+        for key in ('arguments', 'motion', 'message'):
             entry.pop(key, None)
         entry.pop('retained_details', None)
         entry['details_paged'] = True
