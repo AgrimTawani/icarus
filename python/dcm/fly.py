@@ -6,6 +6,7 @@ import threading
 import time
 
 from python.dcm.active_detection_feedback import ActiveDetectionFeedback
+from python.dcm.active_visual_feedback import ActiveVisualFeedback
 from python.dcm.agent_context import capture_context, context_message, system_prompt
 from python.dcm.agent_tools import ToolExecutor, decision_tools, message_dict, validate_call
 from python.dcm.operator_control import (
@@ -70,6 +71,7 @@ class AgentSession:
         self.area_scans = {}
         self.observation_feedback_counts = {}
         self.detector_feedback = ActiveDetectionFeedback()
+        self.visual_feedback = ActiveVisualFeedback()
         self.tool_failure_counts = {}
         self.unresolved_tool_failures = {}
         self.mission_progress = ""
@@ -181,6 +183,16 @@ def fly_mission(
         while session.decisions < max_decisions:
             if interrupt.sequence():
                 raise InterruptedError("Operator stopped the mission")
+            visual_entry = interrupted_call(
+                lambda: session.visual_feedback.refresh(executor), interrupt)
+            if visual_entry is not None:
+                session.actions.append(visual_entry)
+                session.remember_tool_result('inspect_scene', visual_entry['arguments'], visual_entry['result'])
+                session.detector_feedback.observe('inspect_scene', visual_entry['arguments'], visual_entry['result'])
+                record(client, 'agent_visual_refresh', visual_entry)
+                from python.dcm.observation_feedback import observation_feedback
+                for line in observation_feedback('inspect_scene', visual_entry['result'], visual_entry['arguments']):
+                    echo('  Visual feedback: ' + line)
             # Refresh only an already requested detector after physical action.
             # This is sampled perception, not another model decision or a mission
             # interpretation. Capture state afterward so sensor latency cannot
@@ -210,6 +222,9 @@ def fly_mission(
                             session.detector_feedback.interest):
                         echo('  Camera feedback: ' + line)
             context = context_provider(client)
+            visual_feedback = session.visual_feedback.snapshot()
+            if visual_feedback is not None:
+                context['current_visual_condition'] = visual_feedback
             if session.include_waypoints:
                 from python.dcm.destinations import catalogue_context
                 context['registered_waypoints'] = catalogue_context(True)
@@ -426,6 +441,7 @@ def fly_mission(
             if name == 'get_context' and result.get('status') == 'SUCCEEDED' and 'include_waypoints' in args:
                 session.include_waypoints = args['include_waypoints']
             session.detector_feedback.observe(name, args, result)
+            session.visual_feedback.observe(name, args, result)
             if (result.get('status') == 'SUCCEEDED' and
                     (name == 'localize_target' or
                      name in ('goto', 'orbit', 'overfly_target','approach_target') and args.get('destination', {}).get('type')
@@ -442,6 +458,11 @@ def fly_mission(
             for line in observation_feedback(name, result, args,
                                              previous_observation_count=previous_count):
                 echo('  ' + line)
+            if result.get('status') != 'SUCCEEDED' and name not in {
+                    'detect', 'inspect_scene', 'localize_target', 'scan_heading',
+                    'resume_heading_scan', 'scan_area', 'resume_scan'}:
+                echo('  Tool result: ' + str(result.get('status', 'unknown')) +
+                     ' — ' + result.get('message', 'No successful result was recorded.'))
             if isinstance(scan_id, str) and isinstance(evidence.get('observations'), list):
                 session.observation_feedback_counts[scan_id] = len(evidence['observations'])
             if result.get('mission_complete') and name != 'cancel':

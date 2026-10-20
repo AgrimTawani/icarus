@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v13-stage-preserving-feedback'
-DIRECT_TOOL_VERSION = 'direct-tools-v22-aligned-detector-contract'
+DIRECT_PROMPT_VERSION = 'direct-agent-v14-visual-condition-continuity'
+DIRECT_TOOL_VERSION = 'direct-tools-v23-unresolved-visual-approach'
 
 
 class DeadlineExceeded(Exception):

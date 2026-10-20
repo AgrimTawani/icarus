@@ -644,6 +644,12 @@ class ToolExecutor:
                 "status": "CANCELLED",
                 "message": "Operator interrupted the mission.",
             }
+        visual_feedback = getattr(self.session, 'visual_feedback', None)
+        if visual_feedback and visual_feedback.unresolved_approach(name, arguments):
+            return {'status': 'OBSERVATION_UNAVAILABLE', 'no_action_executed': True,
+                    'message': 'The current visual question is unanswered. Obtain a valid inspection or measured '
+                               'localize_target result before approaching a visible object. No movement sent.',
+                    'evidence': {'visual_condition': visual_feedback.snapshot()}}
         orientation = None
         requested_view = None
         heading = None

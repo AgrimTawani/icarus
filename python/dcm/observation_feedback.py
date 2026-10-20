@@ -41,6 +41,10 @@ def _evidence(tool, evidence, camera=None):
         return prefix + 'accepted detections ' + ', '.join(values) + omitted + ' (not a guaranteed total)'
     if tool == 'inspect_scene':
         answer = _text(evidence.get('answer'))
+        if (evidence.get('question_type') == 'condition'
+                and evidence.get('validity') == 'valid' and type(evidence.get('found')) is bool):
+            return prefix + 'VLM condition: ' + str(evidence['found']).lower() + (
+                ' — ' + answer if answer and answer != 'null' else '')
         return prefix + ('VLM answer (uncertain): ' + answer if answer else 'VLM answer unavailable')
     target = _text(evidence.get('target_id'), 80)
     prefix = 'Target' + (f' {target}' if target else '') + ': '

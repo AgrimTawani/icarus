@@ -6,6 +6,19 @@ def ok(evidence):
     return {'status': 'SUCCEEDED', 'evidence': evidence}
 
 
+@pytest.mark.parametrize('found', [True, False])
+def test_valid_structured_condition_does_not_display_as_uncertain(found):
+    lines = observation_feedback('inspect_scene', ok({'camera': 'forward_d435i',
+        'question_type': 'condition', 'validity': 'valid', 'found': found, 'answer': 'null'}))
+    assert lines == ['forward_d435i: VLM condition: ' + str(found).lower()]
+
+
+def test_unknown_condition_never_displays_as_true():
+    lines = observation_feedback('inspect_scene', ok({'question_type': 'condition',
+        'validity': 'unknown', 'found': None, 'answer': 'Maybe.'}))
+    assert 'VLM condition: true' not in lines[0]
+
+
 def test_detection_reports_actual_accepted_counts_and_camera():
     lines = observation_feedback('detect', ok({'counts': {'person': 5, 'car': 0}, 'camera': 'forward_d435i'}))
     assert lines == ['forward_d435i: accepted detections person=5, car=0 (not a guaranteed total)']
