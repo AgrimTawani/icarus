@@ -105,7 +105,7 @@ def test_setup_model_manifest_producer_is_consumable_without_losing_identity(tmp
     model=tmp_path/'primary.gguf';model.write_bytes(b'producer weights')
     sha=hashlib.sha256(model.read_bytes()).hexdigest()
     values={'HF_REPO':'publisher/any-model','MODEL_REV':'a'*40,'LLAMA_REV':'b'*40,
-            'LLAMA_DIR':'/runtime','CUDA_ARCH':'89','WEIGHTS_DIR':str(tmp_path),
+            'PATCH_SHA':'c'*64,'LLAMA_DIR':'/runtime','CUDA_ARCH':'89','WEIGHTS_DIR':str(tmp_path),
             'PRIMARY':'primary.gguf','SECONDARY':'other.gguf','SHA_PRIMARY':sha,'SHA_SECONDARY':'0'*64,
             'MODEL_FAMILY':'qwen','PRIMARY_QUANT':'iq3_xxs','SECONDARY_QUANT':'iq3_xxs',
             'CONTEXT_LENGTH':'8192','DEADLINE_MS':'90000','REASONING_MODE':'on',

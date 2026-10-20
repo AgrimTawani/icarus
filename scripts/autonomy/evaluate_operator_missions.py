@@ -89,6 +89,11 @@ def main():
              ROOT / 'python/perception/vlm_grammars.json',
              *sorted((ROOT / 'config/perception').glob('*.json')),
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
+    # Pin the actual serving executable and native parser library as well as
+    # the upstream revision; a tracked backend patch changes the latter.
+    paths.append(runtime.binary.resolve())
+    paths.extend(sorted((runtime.binary.parent).glob('libllama-common.so.*'))[:1])
+    paths.extend(sorted((ROOT / 'config/dependencies/patches').glob('*.patch')))
     if os.environ.get('ICARUS_WAYPOINTS_FILE'):
         paths.append(Path(os.environ['ICARUS_WAYPOINTS_FILE']).resolve())
     # Camera artifacts may be provisioned outside the checkout or supplied as

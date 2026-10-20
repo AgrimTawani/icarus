@@ -113,6 +113,10 @@ class LlamaCppRuntime:
             raise FileNotFoundError(
                 f"llama-server missing at {self.binary}; "
                 "run ./scripts/setup-model-runtime")
+        if self.binary.resolve() == Path(DEFAULT_BINARY).resolve():
+            from python.dcm.runtime_patches import verify_runtime_build
+            verify_runtime_build(self.binary, self.descriptor.runtime_revision,
+                Path(__file__).resolve().parents[2] / 'config/dependencies/patches/llama-tagged-argument-order.patch')
         if self.verify_artifact:
             # Fail before loading rather than after a whole evaluation run.
             self.descriptor.verify_artifact()

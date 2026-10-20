@@ -1,0 +1,178 @@
+diff --git a/common/chat-auto-parser-generator.cpp b/common/chat-auto-parser-generator.cpp
+index b78789d..93ecdb1 100644
+--- a/common/chat-auto-parser-generator.cpp
++++ b/common/chat-auto-parser-generator.cpp
+@@ -391,23 +391,18 @@ common_peg_parser analyze_tools::build_tool_parser_tag_tagged(parser_build_conte
+             }
+         });
+ 
+-        // Build required arg sequence in definition order
+-        common_peg_parser args_seq = p.eps();
+-        for (size_t i = 0; i < required_parsers.size(); i++) {
+-            if (i > 0) {
+-                args_seq = args_seq + p.space();
+-            }
+-            args_seq = args_seq + required_parsers[i];
+-        }
+-
+-        // Build optional args with flexible ordering
++        // Named arguments have object semantics. Optional fields may occur
++        // before/between mandatory fields; mandatory fields may be reordered.
++        // permute still requires each mandatory field exactly once.
++        auto optional_sequence = p.eps();
+         if (!optional_parsers.empty()) {
+-            common_peg_parser any_opt = p.choice();
+-            for (const auto & opt : optional_parsers) {
+-                any_opt |= opt;
+-            }
+-            args_seq = args_seq + p.repeat(p.space() + any_opt, 0, -1);
++            optional_sequence = p.repeat(p.choice(optional_parsers) + p.space(), 0, -1);
++        }
++        std::vector<common_peg_parser> required_with_optional_prefix;
++        for (const auto & required : required_parsers) {
++            required_with_optional_prefix.push_back(optional_sequence + required + p.space());
+         }
++        auto args_seq = p.permute("tool-" + name + "-args", required_with_optional_prefix) + optional_sequence;
+ 
+         if (!arguments.start.empty()) {
+             args_seq = p.literal(arguments.start) + args_seq;
+diff --git a/common/parsers/qwen3-coder.cpp b/common/parsers/qwen3-coder.cpp
+index 208f551..99db7af 100644
+--- a/common/parsers/qwen3-coder.cpp
++++ b/common/parsers/qwen3-coder.cpp
+@@ -139,12 +139,14 @@ common_chat_params common_chat_params_init_qwen3_coder(const common_chat_templat
+                     (param.required ? required_args : optional_args).push_back(arg_rule);
+                 });
+ 
+-                // Accept required arguments in any order, as Qwen does not always adhere to the
+-                // order provided.
+-                auto args = p.permute("tool-" + name + "-args", required_args);
+-                if (!optional_args.empty()) {
+-                    args = args + p.zero_or_more(p.choice(optional_args));
++                // Named optional fields can precede or separate required
++                // fields. Preserve mandatory presence/uniqueness via permute.
++                auto optional_sequence = optional_args.empty() ? p.eps() : p.zero_or_more(p.choice(optional_args));
++                std::vector<common_peg_parser> required_with_optional_prefix;
++                for (const auto & required : required_args) {
++                    required_with_optional_prefix.push_back(optional_sequence + required);
+                 }
++                auto args = p.permute("tool-" + name + "-args", required_with_optional_prefix) + optional_sequence;
+ 
+                 auto func = p.tool(p.tool_open("<function=" + p.tool_name(p.literal(name)) + ">\n") +
+                                    p.tool_args(args) +
+diff --git a/tests/test-chat-auto-parser.cpp b/tests/test-chat-auto-parser.cpp
+index 5aa9482..de1c261 100644
+--- a/tests/test-chat-auto-parser.cpp
++++ b/tests/test-chat-auto-parser.cpp
+@@ -6,6 +6,7 @@
+ #include "jinja/runtime.h"
+ #include "log.h"
+ #include "peg-parser.h"
++#include "parsers/parsers.h"
+ #include "testing.h"
+ 
+ #include <cstdlib>
+@@ -512,6 +513,95 @@ static int debug_single_template(const debug_options & opts) {
+     return 0;
+ }
+ 
++// Tagged parameters are a JSON object, not an ordered positional argument list.
++static void test_tagged_args_arbitrary_order(testing & t) {
++    generation_params inputs;
++    json parameters = json::object();
++    parameters["type"] = "object";
++    parameters["properties"] = json::object();
++    for (const auto & key : {"first", "second", "optional"}) {
++        parameters["properties"][key] = json::object({{"type", "string"}});
++    }
++    parameters["required"] = json::array({"first", "second"});
++    json tool = json::object();
++    tool["type"] = "function";
++    tool["function"] = json::object({{"name", "sample"}, {"parameters", parameters}});
++    inputs.tools = json::array({tool});
++    inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
++    inputs.parallel_tool_calls = true;
++    analyze_tools tools;
++    tools.format.mode = tool_format::TAG_WITH_TAGGED;
++    tools.format.per_call_start = "<tool_call>";
++    tools.format.per_call_end = "</tool_call>";
++    tools.function.name_prefix = "<function=";
++    tools.function.name_suffix = ">";
++    tools.function.close = "</function>";
++    tools.arguments.name_prefix = "<parameter=";
++    tools.arguments.name_suffix = ">";
++    tools.arguments.value_suffix = "</parameter>";
++    auto parser = build_chat_peg_parser([&](common_chat_peg_builder & p) {
++        parser_build_context ctx(p, inputs);
++        return tools.build_parser(ctx);
++    });
++    auto call = [](const std::vector<std::string> & keys) {
++        std::string output = "<tool_call>\n<function=sample>\n";
++        for (const auto & key : keys) {
++            output += "<parameter=" + key + ">\n" + key + "-value\n</parameter>\n";
++        }
++        return output + "</function>\n</tool_call>";
++    };
++    std::vector<std::string> keys = {"first", "optional", "second"};
++    do {
++        common_peg_parse_context ctx(call(keys));
++        auto result = parser.parse(ctx);
++        if (t.assert_true("all argument permutations parse", result.success())) {
++            common_chat_msg msg;
++            common_chat_peg_mapper(msg).from_ast(ctx.ast, result);
++            t.assert_equal("one parsed call", size_t(1), msg.tool_calls.size());
++            if (!msg.tool_calls.empty()) {
++                auto args = json::parse(msg.tool_calls[0].arguments);
++                t.assert_true("both mandatory arguments retained", args.contains("first") && args.contains("second"));
++                t.assert_true("optional argument retained", args.contains("optional"));
++            }
++        }
++    } while (std::next_permutation(keys.begin(), keys.end()));
++    for (const auto & keys : std::vector<std::vector<std::string>>{
++            {"first", "second"}, {"second", "first"}}) {
++        common_peg_parse_context ctx(call(keys));
++        t.assert_true("optional argument may be omitted", parser.parse(ctx).success());
++    }
++    for (const auto & keys : std::vector<std::vector<std::string>>{
++            {"first"}, {"second"}, {"first", "unknown", "second"},
++            {"first", "second", "first"}}) {
++        common_peg_parse_context ctx(call(keys));
++        t.assert_true("missing, unknown or repeated required fields rejected", !parser.parse(ctx).success());
++    }
++    common_peg_parse_context ctx(call({"optional", "second", "first"}) + "\n" + call({"second", "first"}));
++    auto result = parser.parse(ctx);
++    if (t.assert_true("multiple complete proposals parse", result.success())) {
++        common_chat_msg msg;
++        common_chat_peg_mapper(msg).from_ast(ctx.ast, result);
++        t.assert_equal("both proposals retained", size_t(2), msg.tool_calls.size());
++    }
++    // Qwen3.5 uses the specialized tagged parser, not the auto-generator.
++    common_chat_template tmpl(read_file("models/templates/Qwen3.5-4B.jinja"), "", "");
++    inputs.messages = json::array({{{"role", "user"}, {"content", "Call the sample tool."}}});
++    inputs.reasoning_format = COMMON_REASONING_FORMAT_NONE;
++    auto data = common_chat_params_init_qwen3_coder(tmpl, inputs);
++    common_peg_arena specialized;
++    specialized.load(data.parser);
++    keys = {"first", "optional", "second"};
++    do {
++        common_peg_parse_context input("<|im_start|>assistant\n" + call(keys));
++        t.assert_true("Qwen3.5 accepts every named-argument order", specialized.parse(input).success());
++    } while (std::next_permutation(keys.begin(), keys.end()));
++    for (const auto & missing : std::vector<std::vector<std::string>>{{"first"}, {"second"}}) {
++        common_peg_parse_context input("<|im_start|>assistant\n" + call(missing));
++        t.assert_true("Qwen3.5 still rejects missing mandatory fields", !specialized.parse(input).success());
++    }
++
++}
++
+ int main(int argc, char * argv[]) {
+     if (argc > 1) {
+         std::string arg = argv[1];
+@@ -562,6 +652,7 @@ int main(int argc, char * argv[]) {
+     t.test("standard_json_tools", test_standard_json_tools_formats);
+     t.test("normalize_quotes_to_json", test_normalize_quotes_to_json);
+     t.test("tagged_args_embedded_quotes", test_tagged_args_with_embedded_quotes);
++    t.test("tagged_args_arbitrary_order", test_tagged_args_arbitrary_order);
+     t.test("bailing_v3", test_bailing_v3_tool_format);
+     t.test("role_markers_all_templates", test_role_markers_all_templates);
+ 

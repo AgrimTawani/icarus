@@ -14,8 +14,19 @@
 
 set -uo pipefail
 
+RUNTIME_ONLY=0
+if [[ "$#" -gt 0 ]]; then
+  if [[ "$#" -eq 1 && "$1" == "--runtime-only" ]]; then
+    RUNTIME_ONLY=1
+  else
+    printf 'Usage: %s [--runtime-only]\n' "$0" >&2
+    exit 2
+  fi
+fi
+
 PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCK_FILE="${PROJECT_ROOT}/config/dependencies/third_party.lock.json"
+RUNTIME_PATCH="${PROJECT_ROOT}/config/dependencies/patches/llama-tagged-argument-order.patch"
 LLAMA_DIR="${PROJECT_ROOT}/third_party/llama.cpp"
 VENV="${PROJECT_ROOT}/.venv"
 LOG_DIR="${PROJECT_ROOT}/logs/model-runtime"
@@ -39,6 +50,7 @@ GPU_LAYERS="${GPU_LAYERS:-auto}"
 GPU_MEMORY_MARGIN_MIB="${GPU_MEMORY_MARGIN_MIB:-512}"
 
 TOTAL_STEPS=8
+(( RUNTIME_ONLY == 0 )) || TOTAL_STEPS=6
 STEP=0
 declare -a RESULTS=()
 START_ALL=$(date +%s)
@@ -97,14 +109,19 @@ printf '%sweights: %s%s\n' "${C_DIM}" "${WEIGHTS_DIR}" "${C_RESET}"
 begin_step "Preflight checks"
 command -v nvidia-smi >/dev/null || fail "nvidia-smi not found; NVIDIA driver required"
 [[ -f "${LOCK_FILE}" ]] || fail "missing ${LOCK_FILE}"
-[[ -x "${VENV}/bin/hf" ]] || fail "hf CLI missing; run ./scripts/bootstrap --profile ml"
+[[ -x "${VENV}/bin/python" ]] || fail "Python environment missing; run ./scripts/bootstrap --profile ml"
+if (( RUNTIME_ONLY == 0 )); then
+  [[ -x "${VENV}/bin/hf" ]] || fail "hf CLI missing; run ./scripts/bootstrap --profile ml"
+fi
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
 VRAM_FREE=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
 DISK_FREE_GB=$(df -BG --output=avail "${WEIGHTS_DIR}" | tail -1 | tr -dc '0-9')
 note "GPU: ${GPU_NAME}"
 note "VRAM free: ${VRAM_FREE} MiB"
 note "Disk free: ${DISK_FREE_GB} GiB"
-(( DISK_FREE_GB >= 20 )) || fail "need >=20 GiB free, found ${DISK_FREE_GB} GiB"
+if (( RUNTIME_ONLY == 0 )); then
+  (( DISK_FREE_GB >= 20 )) || fail "need >=20 GiB free, found ${DISK_FREE_GB} GiB"
+fi
 (( VRAM_FREE >= 4200 )) || note "WARNING: <4.2 GiB VRAM free; close GPU apps before the smoke test"
 ok "environment suitable"
 
@@ -156,9 +173,12 @@ LLAMA_URL="$(lock_value llama_cpp url)"   || fail "llama_cpp missing from lock f
 LLAMA_REV="$(lock_value llama_cpp revision)" || fail "llama_cpp revision missing"
 note "pinned to ${LLAMA_REV:0:12} from third_party.lock.json"
 if [[ -d "${LLAMA_DIR}/.git" ]]; then
-  # Match bootstrap's contract: refuse to clobber a dirty external checkout.
-  git -C "${LLAMA_DIR}" diff --quiet && git -C "${LLAMA_DIR}" diff --cached --quiet \
-    || fail "third_party/llama.cpp has local changes; resolve them first"
+  # Preserve unrelated edits; accept only the exact tracked native fix.
+  if ! git -C "${LLAMA_DIR}" diff --quiet || ! git -C "${LLAMA_DIR}" diff --cached --quiet; then
+    PYTHONPATH="${PROJECT_ROOT}" "${VENV}/bin/python" -m python.dcm.runtime_patches \
+      --source "${LLAMA_DIR}" --patch "${RUNTIME_PATCH}" --revision "${LLAMA_REV}" --check-only \
+      >>"${LOG_FILE}" 2>&1 || fail "third_party/llama.cpp has unrecognized local changes; left unchanged"
+  fi
   [[ "$(git -C "${LLAMA_DIR}" remote get-url origin)" == "${LLAMA_URL}" ]] \
     || fail "unexpected origin in third_party/llama.cpp"
 else
@@ -177,12 +197,19 @@ else
   ok "checked out ${LLAMA_REV:0:12}"
 fi
 
+PATCH_SHA=$(PYTHONPATH="${PROJECT_ROOT}" "${VENV}/bin/python" -m python.dcm.runtime_patches \
+  --source "${LLAMA_DIR}" --patch "${RUNTIME_PATCH}" --revision "${LLAMA_REV}") \
+  || fail "native runtime patch failed; external changes left intact"
+BUILD_ID="${LLAMA_REV}+patch-${PATCH_SHA}"
+note "native tagged-argument fix ${PATCH_SHA:0:12}"
+
 # --------------------------------------------------------- 5. build llama.cpp
 begin_step "Build llama.cpp with CUDA (several minutes)"
 BUILT_REV_FILE="${LLAMA_DIR}/build/.icarus-built-revision"
 if [[ -x "${LLAMA_DIR}/build/bin/llama-cli" ]] \
-   && [[ "$(cat "${BUILT_REV_FILE}" 2>/dev/null)" == "${LLAMA_REV}" ]]; then
-  skipped "already built at pinned revision"
+   && [[ -x "${LLAMA_DIR}/build/bin/llama-server" ]] \
+   && [[ "$(cat "${BUILT_REV_FILE}" 2>/dev/null)" == "${BUILD_ID}" ]]; then
+  skipped "already built at pinned revision and patch"
 else
   note "configuring for sm_${CUDA_ARCH}"
   cmake -S "${LLAMA_DIR}" -B "${LLAMA_DIR}/build" \
@@ -196,7 +223,7 @@ else
     --target llama-cli llama-server >>"${LOG_FILE}" 2>&1 \
     || fail "build failed; see ${LOG_FILE}"
   [[ -x "${LLAMA_DIR}/build/bin/llama-cli" ]] || fail "llama-cli missing after build"
-  printf '%s\n' "${LLAMA_REV}" >"${BUILT_REV_FILE}"
+  printf '%s\n' "${BUILD_ID}" >"${BUILT_REV_FILE}"
   ok "built llama-cli and llama-server"
 fi
 
@@ -209,6 +236,12 @@ if grep -qi cuda <<<"${DEVICES}"; then
   ok "CUDA device visible to llama.cpp"
 else
   fail "llama.cpp built without a usable CUDA device; inspect ${LOG_FILE}"
+fi
+
+if (( RUNTIME_ONLY == 1 )); then
+  summary
+  printf '\nNative runtime updated; existing model files and manifests were preserved.\n'
+  exit 0
 fi
 
 # ------------------------------------------------------- 7. download weights
@@ -251,6 +284,7 @@ cat >"${MANIFEST}.pending" <<JSON
   "family": "${MODEL_FAMILY}",
   "revision": "${MODEL_REV}",
   "llama_cpp_revision": "${LLAMA_REV}",
+  "llama_cpp_patch_sha256": "${PATCH_SHA}",
   "llama_cpp_binary": "${LLAMA_DIR}/build/bin/llama-cli",
   "cuda_arch": "${CUDA_ARCH}",
   "context_length": ${CONTEXT_LENGTH},
