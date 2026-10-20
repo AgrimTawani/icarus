@@ -472,7 +472,7 @@ class TargetRegistry:
                              if key != "candidates"},
                 "geometry": {key: public["geometry"][key] for key in (
                     "center", "radius_m", "orbit_center", "orbit_radius_m", "orbit_usable", "requires_more_views",
-                    "height_m", "height_clipped", "height_status", "height_evidence_age_ms",
+                    "height_m", "height_clipped", "height_status", "height_evidence_age_ms", "top_down_m",
                     "whole_shape_observed", "observed_extent", "measurement_view_candidates",
                     "measured_view_count", "measured_view_separation_deg", "minimum_view_separation_deg",
                     "view_baseline_scope")

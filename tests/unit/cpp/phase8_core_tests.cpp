@@ -19,6 +19,7 @@
 #include "guardrails/guardrails.hpp"
 #include "mission_executor/action_store.hpp"
 #include "mission_executor/action_executor.hpp"
+#include "local_planner/local_planner.hpp"
 #include "perception/perception_engine.hpp"
 #include "safety_supervisor/safety_supervisor.hpp"
 #include "state_engine/state_engine.hpp"
@@ -1668,6 +1669,95 @@ icarus::v1::ActionStatus RunClearanceScenario(Motion motion,
   return status;
 }
 
+void TestDetourCornerWaitsForRest() {
+  FakeClock clock;
+  const auto policy = icarus::guardrails::SafetyPolicy::Load(
+      std::filesystem::path(ICARUS_SOURCE_DIR) / "config/safety/v1.yaml");
+  icarus::guardrails::Guardrails guardrails(policy);
+  icarus::state_engine::StateEngine states(clock);
+  auto state = AirborneState(clock, 0.0, 0.0);
+  states.Publish(state);
+  icarus::perception::PerceptionEngine perception(clock, states, policy.maximum_perception_age_ms);
+  icarus::perception::RangeScan scan;
+  scan.sensor_id = "detour-test";
+  scan.captured_at_unix_ms = clock.NowUnixMs();
+  scan.frame = icarus::perception::SensorFrame::kLocalNed;
+  scan.points.push_back({6.0, 0.0, -5.0, 1.0});
+  perception.Ingest(scan);
+  icarus::local_planner::LocalPlanner planner(0.5, 2.5, 8.0);
+  icarus::drone_api::AuthorityManager authority(clock);
+  const auto lease = AcquireLease(authority);
+  icarus::mission_executor::ActionStore actions(clock);
+  TeleportGateway gateway(states, state);
+  gateway.simulate_moving_arrival = true;
+  icarus::mission_executor::ActionExecutor executor(clock, actions, states, authority, guardrails, gateway, &perception, &planner);
+  executor.Start();
+  icarus::v1::ActionCommand command;
+  auto* go = command.mutable_goto_();
+  *go->mutable_context() = Context(clock, lease);
+  *go->mutable_destination() = Local(12.0, 0.0);
+  go->set_acceptance_radius_m(1.0);
+  go->mutable_limits()->set_execution_timeout_ms(5000);
+  const auto receipt = executor.Submit(command);
+  Require(receipt.disposition() == icarus::v1::ACTION_STATE_ACCEPTED, "detour accepted");
+  for (int i=0; i<100 && gateway.Targets().size()<2; ++i)
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  std::this_thread::sleep_for(std::chrono::milliseconds(150));
+  const auto while_moving = gateway.Targets().size();
+  Require(while_moving == 2, "moving arrival at first detour corner must not advance to next target");
+  gateway.SetArrivalMotion(0.0);
+  for (int i=0; i<100 && gateway.Targets().size()==while_moving; ++i)
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  Require(gateway.Targets().size()>while_moving, "settled corner must release the next segment");
+  executor.Stop();
+}
+
+void TestPlannerRetreatUsesExecutorClearanceContract() {
+  icarus::local_planner::LocalPlanner planner(0.5, 2.5, 8.0);
+  const auto position = [](double north, double east) {
+    icarus::v1::LocalPositionNed result;
+    result.set_north_m(north); result.set_east_m(east);
+    result.set_down_m(-5); result.set_origin_id("measured-map");
+    return result;
+  };
+  const auto start = position(-0.6, 0);
+  const auto goal = position(5, 8);
+  std::vector<icarus::perception::Point3> wall;
+  for (double east = -3; east <= 3; east += 0.25) {
+    wall.push_back({0, east, -5, 1});
+  }
+  const double floor = icarus::mission_executor::EnforcedClearanceM(2.0, 0.6);
+  Require(!planner.Plan(start, goal, wall, 2.5, 2.0).success,
+          "fixed admission floor cannot represent an existing clearance violation");
+  const auto result = planner.Plan(start, goal, wall, 2.5, floor);
+  Require(result.success && !result.waypoints.empty(),
+          "planner must support the executor's monotonic-retreat contract");
+  icarus::local_planner::LocalPlanner departure_probe(0.5, floor, 8.0);
+  auto previous = start;
+  for (std::size_t index = 0; index < result.waypoints.size(); ++index) {
+    const auto& next = result.waypoints[index];
+    const auto& probe = index == 0 ? departure_probe : planner;
+    Require(probe.SegmentClear(previous, next, wall, index == 0 ? floor : 2.5),
+            "departure respects existing live floor; later legs regain full planning margin");
+    if (index == 0) {
+      for (const auto& point : wall) {
+        const double initial = std::hypot(start.north_m()-point.x_m, start.east_m()-point.y_m);
+        if (initial >= 2.5) continue;
+        for (int sample = 1; sample <= 100; ++sample) {
+          const double ratio = sample / 100.0;
+          const double north = start.north_m() + ratio * (next.north_m()-start.north_m());
+          const double east = start.east_m() + ratio * (next.east_m()-start.east_m());
+          Require(std::hypot(north-point.x_m,east-point.y_m) >= initial-1e-9,
+                  "initial departure never approaches any nearby obstacle return");
+        }
+      }
+    }
+    previous = next;
+  }
+  Require(!planner.Plan(start, position(-0.1, 0), wall, 2.5, floor).success,
+          "retreat permission cannot authorize an endpoint inside the obstacle envelope");
+}
+
 void TestHardMinimumClearance() {
   using icarus::v1::ACTION_STATE_ABORTED_BY_SAFETY;
   using icarus::v1::ACTION_STATE_SUCCEEDED;
@@ -1955,6 +2045,11 @@ int main(int argc, char** argv) {
       std::cout << "Capability policy parity tests passed\n";
       return 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "--clearance-planner-only") {
+      TestPlannerRetreatUsesExecutorClearanceContract();
+      std::cout << "Clearance planner recovery tests passed\n";
+      return 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "--yaw-only") {
       TestLandedYawFailsBeforeModeOrMovement();
       TestRelativeYawLifecycle();
@@ -1979,6 +2074,7 @@ int main(int argc, char** argv) {
     TestOrbitDirection();
     TestTargetRelativeGuardrails();
     TestGroundSpeedAppliedResetAndRejected();
+    TestDetourCornerWaitsForRest();
     TestKeepCurrentHeadingSurvivesNavigationTargets();
     TestFacePointGeometry();
     TestOrbitViewpointLayout();
@@ -1988,6 +2084,7 @@ int main(int argc, char** argv) {
     TestContinuousOrbitStreamsAndMeasuresCompletion();
     TestContinuousOrbitCannotSucceedWithoutMotion();
     TestHardMinimumClearance();
+    TestPlannerRetreatUsesExecutorClearanceContract();
     TestPerceptionLossRecovery();
     TestVerticalLandingSurvivesLateralPerceptionLoss();
     TestControllerHeartbeatLossRecovery();

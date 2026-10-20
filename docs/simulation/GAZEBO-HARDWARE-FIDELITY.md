@@ -260,3 +260,16 @@ evidence and hashes, not camera pixels.
 
 These are bounded simulation acceptance cases, not hardware certification,
 GPS-denied qualification, or proof that every wind/terrain condition is safe.
+
+
+### Local detour tracking
+
+The local planner verifies straight segments against measured obstacle returns.
+Intermediate detour corners must therefore be reached closely and at settled
+velocity before the next segment is commanded. Merely entering the normal
+destination acceptance radius at transit speed can cut across the protected
+corner. This does not change the streamed position/velocity orbit controller.
+
+An experimental Guided waypoint/BendyRuler configuration was rejected after
+a headless controller test still breached clearance. It is not enabled in the
+simulator profile. Parameter readback alone did not prove motion performance.

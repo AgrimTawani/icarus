@@ -16,3 +16,5 @@ Registered targets are measured stationary map references, bound to the coordina
 Choose question_type=condition for yes/no decisions: found=true/false is a usable answer; null is unknown. Choose question_type=description for appearance or scene descriptions. Visual answers separate answerability from condition truth. answerable=false/null means the requested question remains unanswered; a successful capture is insufficient. An answerable negative presence result is usable evidence for the negative branch, not a failed observation.
 
 Inline outcome_facts retain brief result semantics through compaction. successful_tool_call_counts records completed calls; use the outcome facts to determine what occurred.
+
+Known waypoint handles are listed directly; tools resolve their coordinates. Target relative_reference offsets are recomputed from the current vehicle pose: forward/right follow heading, up is positive above the vehicle. They use retained map geometry, not a current surface range. camera_reference_projection concerns that reference point only; it is not image evidence or an occlusion check.

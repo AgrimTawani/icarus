@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v10-bounded-execution-feedback'
-DIRECT_TOOL_VERSION = 'direct-tools-v18-catalogue-navigation'
+DIRECT_PROMPT_VERSION = 'direct-agent-v11-relative-target-feedback'
+DIRECT_TOOL_VERSION = 'direct-tools-v19-settled-detour-feedback'
 
 
 class DeadlineExceeded(Exception):

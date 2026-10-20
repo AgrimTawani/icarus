@@ -41,7 +41,7 @@ def advertised_motion_limits(capabilities):
     return limits
 
 
-def capture_context(client, include_geometry=False, include_waypoints=False):
+def capture_context(client, include_geometry=False, include_waypoints=True):
     from python.dcm._paths import ensure_generated_proto_on_path
 
     ensure_generated_proto_on_path()
@@ -184,6 +184,8 @@ def capture_context(client, include_geometry=False, include_waypoints=False):
         'direction': 'forward level' if name == 'forward_d435i' else 'downward',
         'simulation_only': True,
     } for name in context['cameras'] if camera_calibration(name).get('available')]
+    from python.dcm.camera_geometry import target_reference_feedback
+    context['targets'] = target_reference_feedback(context['state'], context.get('targets', []), context['cameras'])
     context['references'] = {'home': resolve_reference(context['state']),
         'launch': resolve_reference(context['state'], 'launch', getattr(client, '_takeoff_reference', None))}
     from python.dcm.destinations import catalogue_context

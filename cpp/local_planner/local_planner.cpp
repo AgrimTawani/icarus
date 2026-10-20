@@ -178,6 +178,29 @@ PlanResult LocalPlanner::Plan(
   const int goal_cell = index(gx, gy);
   cost[start_cell] = 0.0;
   open.push({0.0, start_cell});
+  // An existing clearance violation can occupy several grid cells. A
+  // one-cell departure cannot reach the ordinary free-space graph. Seed
+  // bounded free cells using the same exact, monotonic departure predicate;
+  // all subsequent edges still require the full planning envelope.
+  if (departure_clearance_floor_m > 0.0 &&
+      departure_clearance_floor_m <= clearance_m &&
+      !SegmentClear(start, start, obstacles, clearance_m)) {
+    const int radius = static_cast<int>(std::min(
+        static_cast<double>(std::max(width, height)),
+        std::ceil(clearance_m / resolution_m_) + 1.0));
+    for (int y = std::max(0, sy-radius); y <= std::min(height-1, sy+radius); ++y) {
+      for (int x = std::max(0, sx-radius); x <= std::min(width-1, sx+radius); ++x) {
+        const int cell = index(x, y);
+        if (cell == start_cell || occupied[cell]) continue;
+        const auto endpoint = position(cell);
+        if (!departure_clear(endpoint)) continue;
+        cost[cell] = std::hypot(endpoint.north_m()-start.north_m(),
+                                endpoint.east_m()-start.east_m()) / resolution_m_;
+        parent[cell] = start_cell;
+        open.push({cost[cell] + std::hypot(gx-x, gy-y), cell});
+      }
+    }
+  }
   constexpr std::array<std::pair<int, int>, 8> moves{{
       {-1, -1}, {0, -1}, {1, -1}, {-1, 0},
       {1, 0}, {-1, 1}, {0, 1}, {1, 1}}};

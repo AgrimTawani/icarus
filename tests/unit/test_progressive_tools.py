@@ -99,3 +99,24 @@ def test_live_catalogue_does_not_advertise_self_written_plan_notes():
     # Old recorded diagnostic metadata is harmless and not a physical argument.
     validate_call('takeoff', {'target_altitude_agl_m': 3, 'mission_progress': 'Old note'},
                   tools=decision_tools({}, loaded_tools=set()))
+
+
+def test_initial_live_context_discloses_small_waypoint_handles_without_coordinate_recipes(tmp_path,monkeypatch):
+    import json
+    from python.dcm._paths import ensure_generated_proto_on_path
+    ensure_generated_proto_on_path()
+    from icarus.v1 import drone_api_pb2_grpc as rpc
+    from python.dcm.agent_context import capture_context
+    catalogue=tmp_path/'operator-poses.json'
+    catalogue.write_text(json.dumps({'coordinate_frame':'home_relative_ned','entries':[
+        {'name':'Camera dock','role':'observation_pose','north_m':3.4,'east_m':-2.7,'heading_deg':50}]}))
+    monkeypatch.setenv('ICARUS_WAYPOINTS_FILE',str(catalogue))
+    client=SimpleNamespace(state=lambda:{},session_id='test',channel=None,
+        state_api=SimpleNamespace(GetHealth=lambda *a,**k:{}))
+    monkeypatch.setattr(rpc,'PerceptionServiceStub',lambda _:SimpleNamespace(GetPerception=lambda *a,**k:{}))
+    context=capture_context(client)
+    point,=context['registered_waypoints']['entries']
+    assert point['name']=='Camera dock' and point['role']=='observation_pose'
+    assert point['destination']=={'type':'named_waypoint','waypoint_name':'Camera dock'}
+    assert not {'north_m','east_m','heading_deg','altitude_agl_m'} & point.keys()
+    assert 'goto' in names(decision_tools(context,loaded_tools=set()))

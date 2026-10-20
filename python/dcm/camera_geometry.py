@@ -190,3 +190,54 @@ def orbit_camera_feasibility(radius_m, altitude_agl_m, target_altitude_agl_m=0, 
                 'target_depression_deg': math.degrees(math.atan2(altitude-target_altitude, radius))}
     except (ValueError, TypeError) as error:
         return {'available': False, 'feasible': None, 'reason': str(error), 'image_proof': False}
+
+
+def target_reference_feedback(state, targets, cameras):
+    """Express retained map references at the current vehicle pose, read-only.
+
+    Offsets use the heading-aligned horizontal frame of move_relative. A
+    projected point is not a new object detection, surface range or clearance.
+    """
+    from copy import deepcopy
+    result = deepcopy(targets)
+    if not isinstance(result, list):
+        return result
+    for target in result:
+        if not isinstance(target, dict) or target.get('reference_available') is False:
+            continue
+        geometry = target.get('geometry', {})
+        center = geometry.get('center') if isinstance(geometry, dict) else None
+        if not isinstance(center, dict) or not center:
+            continue  # An identity-only reference supplies no coordinates to project.
+        try:
+            local = _local(state)
+            origin = center.get('origin_id', target.get('origin_id'))
+            if not origin or origin != local['origin_id']:
+                raise ValueError('Reference and vehicle pose must share a measured origin')
+            north = _number(center.get('north_m')) - local['north_m']
+            east = _number(center.get('east_m')) - local['east_m']
+            yaw = _number(state.get('attitude', {}).get('yaw_rad'))
+            top = geometry.get('top_down_m')
+            height_known = type(top) in (int, float) and math.isfinite(top)
+            target['relative_reference'] = {
+                'available': True, 'frame': 'heading_aligned_horizontal',
+                'reference_point': 'measured_footprint_center_at_retained_top_height',
+                'forward_m': round(north*math.cos(yaw) + east*math.sin(yaw), 3),
+                'right_m': round(-north*math.sin(yaw) + east*math.cos(yaw), 3),
+                'up_m': round(local['down_m'] - top, 3) if height_known else None,
+                'horizontal_center_distance_m': round(math.hypot(north, east), 3),
+                'current_surface_range_measurement': False}
+            point = {'north_m': center['north_m'], 'east_m': center['east_m'],
+                     'down_m': top, 'origin_id': origin}
+            projections = {}
+            for camera in cameras:
+                projection = (project_point(state, point, camera) if height_known else
+                    {'available': False, 'in_frame': None,
+                     'reason': 'Measured reference height unavailable; no vertical coordinate invented.'})
+                projections[camera] = {key: projection[key] for key in (
+                    'available', 'in_frame', 'yaw_alone_can_resolve', 'reason') if key in projection}
+                projections[camera]['image_proof'] = False
+            target['camera_reference_projection'] = projections
+        except (ValueError, TypeError, AttributeError) as error:
+            target['relative_reference'] = {'available': False, 'reason': str(error)}
+    return result

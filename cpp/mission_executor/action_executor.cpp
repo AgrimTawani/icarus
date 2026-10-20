@@ -1166,12 +1166,24 @@ bool ActionExecutor::ExecuteGoto(const std::string& action_id,
     const double planning_margin_m = std::max(
         0.0, policy.minimum_obstacle_clearance_m -
                  policy.hard_minimum_clearance_m);
+    const double required = std::max(policy.hard_minimum_clearance_m,
+                                     requested_clearance_m);
+    const double observed = perception_->Summary().nearest_obstacle_distance_m();
+    const double initial_clearance = observed < 0.0
+        ? std::numeric_limits<double>::infinity() : observed;
+    // Planning and live execution must agree when a vehicle starts inside a
+    // clearance envelope after braking or drift. This only authorizes a
+    // measured monotonic departure; it cannot make later legs less strict.
+    if (clearance_.active) {
+      clearance_.best_observed_m = std::max(clearance_.best_observed_m,
+                                           initial_clearance);
+    }
     const auto plan = planner_->Plan(
         state->local_position_ned(), destination.local_ned(),
         perception_->Obstacles(),
         requested_clearance_m > 0.0 ? requested_clearance_m + planning_margin_m
                                     : 0.0,
-        std::max(policy.hard_minimum_clearance_m, requested_clearance_m));
+        EnforcedClearanceM(required, initial_clearance));
     if (!plan.success) {
       store_.Transition(action_id, v1::ACTION_STATE_ABORTED_BY_SAFETY,
                         v1::REASON_CODE_SAFETY_INTERVENTION,
@@ -1195,14 +1207,19 @@ bool ActionExecutor::ExecuteGoto(const std::string& action_id,
       const bool last = index + 1 == plan.waypoints.size();
       if (!WaitUntil(
               action_id, context, timeout_ms,
-              [waypoint, acceptance_radius_m](const v1::DroneState& current) {
+              [waypoint, acceptance_radius_m, last](const v1::DroneState& current) {
                 if (!current.has_local_position_ned()) return false;
                 const auto& actual = current.local_position_ned();
+                // Planner clearance is proved along straight segments. Do not
+                // cut across a detour corner while still carrying momentum.
+                if (!last && (!current.has_velocity_ned_mps() ||
+                    current.ground_speed_mps() > 0.35 ||
+                    std::abs(current.velocity_ned_mps().z()) > 0.35)) return false;
                 return std::sqrt(
                            std::pow(waypoint.north_m() - actual.north_m(), 2) +
                            std::pow(waypoint.east_m() - actual.east_m(), 2) +
                            std::pow(waypoint.down_m() - actual.down_m(), 2)) <=
-                       acceptance_radius_m;
+                       (last ? acceptance_radius_m : std::min(0.25, acceptance_radius_m));
               },
               last && !plan.direct_path ? "destination reached via safe detour"
                                         : "destination reached",
