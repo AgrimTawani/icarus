@@ -30,6 +30,8 @@ struct SafetyPolicy {
   // aircraft. A per-action minimum_clearance_m can raise it, never lower it.
   double hard_minimum_clearance_m = 0.0;
   double emergency_stop_distance_m = 0.0;
+  double braking_deceleration_mps2 = 1.0;
+  double braking_reaction_s = 0.25;
   bool require_estimator_healthy = true;
   bool require_position_for_navigation = true;
   bool require_home_for_takeoff = true;

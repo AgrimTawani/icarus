@@ -9,6 +9,13 @@
 
 namespace icarus::local_planner {
 
+// Minimum horizontal distance to the measured constant-deceleration stopping
+// segment, including sensing/command latency. Independent of vehicle heading.
+[[nodiscard]] double StoppingPathClearance(
+    const v1::LocalPositionNed& start, double velocity_north_mps,
+    double velocity_east_mps, double reaction_s, double deceleration_mps2,
+    const std::vector<perception::Point3>& obstacles);
+
 struct PlanResult {
   bool success = false;
   bool direct_path = false;

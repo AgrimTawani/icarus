@@ -282,6 +282,10 @@ SafetyPolicy SafetyPolicy::Load(const std::filesystem::path& path) {
       root["perception"]["minimum_clearance_m"].as<double>();
   policy.emergency_stop_distance_m =
       root["perception"]["emergency_stop_distance_m"].as<double>();
+  if (root["motion"]["braking_deceleration_mps2"])
+    policy.braking_deceleration_mps2 = root["motion"]["braking_deceleration_mps2"].as<double>();
+  if (root["motion"]["braking_reaction_s"])
+    policy.braking_reaction_s = root["motion"]["braking_reaction_s"].as<double>();
   // Optional for the same reason; absent, the floor is the 2 m default capped
   // by the planner envelope.
   policy.hard_minimum_clearance_m =
@@ -305,6 +309,8 @@ SafetyPolicy SafetyPolicy::Load(const std::filesystem::path& path) {
       policy.maximum_runtime_target_distance_from_home_m >
           policy.maximum_distance_from_home_m ||
       policy.maximum_horizontal_speed_mps <= 0.0 ||
+      !std::isfinite(policy.braking_deceleration_mps2) || policy.braking_deceleration_mps2 <= 0.0 ||
+      !std::isfinite(policy.braking_reaction_s) || policy.braking_reaction_s < 0.0 ||
       policy.maximum_state_age_ms == 0 ||
       policy.control_lease_lost_rtl_delay_ms == 0 ||
       policy.maximum_perception_age_ms == 0 ||

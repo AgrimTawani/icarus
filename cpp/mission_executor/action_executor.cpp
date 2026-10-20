@@ -1501,7 +1501,25 @@ ActionExecutor::ClearanceViolation() {
   clearance_.best_observed_m = std::max(clearance_.best_observed_m, nearest);
   const double floor =
       EnforcedClearanceM(clearance_.required_m, clearance_.best_observed_m);
-  if (nearest >= floor) return std::nullopt;
+  if (nearest >= floor) {
+    const auto state = state_engine_.Snapshot();
+    if (!state || !state->has_local_position_ned() || !state->has_velocity_ned_mps())
+      return std::pair{v1::REASON_CODE_SAFETY_INTERVENTION,
+                       std::string("stopping clearance unverifiable: measured velocity unavailable; BRAKE commanded")};
+    const auto& policy = guardrails_.policy();
+    const double reaction = policy.braking_reaction_s +
+        static_cast<double>(summary.local_map_age_ms()) / 1000.0;
+    const double stopping_clearance = local_planner::StoppingPathClearance(
+        state->local_position_ned(), state->velocity_ned_mps().x(),
+        state->velocity_ned_mps().y(), reaction, policy.braking_deceleration_mps2,
+        perception_->Obstacles());
+    if (stopping_clearance >= floor) return std::nullopt;
+    char prediction[192];
+    std::snprintf(prediction, sizeof(prediction),
+        "stopping path would breach %.2f m clearance (predicted %.2f m, current %.2f m); BRAKE commanded",
+        floor, stopping_clearance, nearest);
+    return std::pair{v1::REASON_CODE_CLEARANCE_VIOLATION, std::string(prediction)};
+  }
   char message[192];
   std::snprintf(message, sizeof(message),
                 "minimum clearance violated: nearest obstacle %.2f m at "

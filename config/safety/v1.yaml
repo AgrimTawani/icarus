@@ -13,6 +13,10 @@ motion:
   max_climb_speed_m_s: 2.5
   max_descent_speed_m_s: 1.5
   max_tilt_deg: 30.0
+  # Conservative stopping-envelope assumptions. Sensor age is added live.
+  # These must be calibrated for a different aircraft/controller.
+  braking_deceleration_mps2: 1.0
+  braking_reaction_s: 0.25
 
 battery:
   minimum_takeoff_percent: 50.0

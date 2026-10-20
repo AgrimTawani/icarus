@@ -1606,13 +1606,15 @@ icarus::v1::ActionStatus RunClearanceScenario(Motion motion,
                                               double start_north,
                                               double moved_north,
                                               bool stale_perception,
-                                              std::uint32_t* last_mode) {
+                                              std::uint32_t* last_mode,
+                                              double velocity_north_mps = 0.0) {
   FakeClock clock;
   const auto policy = icarus::guardrails::SafetyPolicy::Load(
       std::filesystem::path(ICARUS_SOURCE_DIR) / "config/safety/v1.yaml");
   icarus::guardrails::Guardrails guardrails(policy);
   icarus::state_engine::StateEngine states(clock);
   auto state = AirborneState(clock, start_north, 0.0);
+  state.mutable_velocity_ned_mps()->set_x(velocity_north_mps);
   states.Publish(state);
   icarus::perception::PerceptionEngine perception(
       clock, states, policy.maximum_perception_age_ms);
@@ -1782,6 +1784,10 @@ void TestHardMinimumClearance() {
   status = RunClearanceScenario(Motion::kGoto, 0.0, 0.0, 3.5, false, &mode);
   Require(status.state() == ACTION_STATE_SUCCEEDED && mode == 4,
           "2.5 m of clearance satisfies the 2 m floor: " + status.message());
+  status = RunClearanceScenario(Motion::kGoto, 0.0, 0.0, 2.5, false, &mode, 2.0);
+  Require(status.state() == ACTION_STATE_ABORTED_BY_SAFETY && mode == 17 &&
+              status.message().find("stopping path") != std::string::npos,
+          "closing at speed must brake while current clearance is still 3.5 m: " + status.message());
   status = RunClearanceScenario(Motion::kGoto, 0.0, 4.5, 1.0, false, &mode);
   Require(status.state() == ACTION_STATE_SUCCEEDED,
           "an aircraft already inside the floor may retreat: " +

@@ -423,6 +423,32 @@ void TestAirSimPacketContract() {
 
 int main() {
   try {
+    {
+      using icarus::local_planner::StoppingPathClearance;
+      const auto start = Position(0, 0);
+      const std::vector<icarus::perception::Point3> side_wall{{0, 3, -5, 1}};
+      Require(StoppingPathClearance(start, 0, 2, 0.25, 1, side_wall) < 2,
+              "lateral closing motion must brake before the fixed floor is crossed");
+      Require(std::isinf(StoppingPathClearance(start, 0, -2, 0.25, 1, side_wall)),
+              "retreat must not be mistaken for closing motion");
+      Require(std::isinf(StoppingPathClearance(start, 2, 0, 0.25, 1, side_wall)),
+              "parallel motion must not be stopped by a side wall");
+      Require(StoppingPathClearance(start, 0, 0.5, 0.25, 1, side_wall) > 2,
+              "a slower approach retains sufficient stopping clearance");
+      Require(StoppingPathClearance(start, 0, 1, 1, 1, side_wall) <
+              StoppingPathClearance(start, 0, 1, 0, 1, side_wall),
+              "sensor and command latency consume stopping clearance");
+      Require(StoppingPathClearance(start, 0, 2, 0.25, 0.5, side_wall) <
+              StoppingPathClearance(start, 0, 2, 0.25, 2, side_wall),
+              "weaker braking must predict a longer stopping path");
+      Require(StoppingPathClearance(start, NAN, 0, 0.25, 1, side_wall) == 0,
+              "nonfinite motion cannot prove stopping safety");
+      Require(std::isinf(StoppingPathClearance(start, 0, 0, 0.25, 1, side_wall)),
+              "stationary aircraft has no predicted closing path");
+      const std::vector<icarus::perception::Point3> floor{{0, 3, 0, 1}};
+      Require(std::isinf(StoppingPathClearance(start, 0, 2, 0.25, 1, floor)),
+              "terrain below the collision slice must not block horizontal motion");
+    }
     TestFrameParityAndFreshness();
     TestCollisionFreePlanning();
     TestExactEdgesAndOffGridAttachments();

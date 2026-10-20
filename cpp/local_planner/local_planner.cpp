@@ -24,6 +24,35 @@ double PointSegmentDistance(double px, double py, double ax, double ay,
 
 }  // namespace
 
+double StoppingPathClearance(
+    const v1::LocalPositionNed& start, double vn, double ve,
+    double reaction_s, double deceleration_mps2,
+    const std::vector<perception::Point3>& obstacles) {
+  if (!std::isfinite(vn) || !std::isfinite(ve) ||
+      !std::isfinite(reaction_s) || reaction_s < 0.0 ||
+      !std::isfinite(deceleration_mps2) || deceleration_mps2 <= 0.0) {
+    return 0.0;  // Unknown motion cannot prove a safe stopping envelope.
+  }
+  const double speed = std::hypot(vn, ve);
+  if (speed == 0.0) return std::numeric_limits<double>::infinity();
+  const double time_factor = reaction_s + speed / (2.0 * deceleration_mps2);
+  const double end_n = start.north_m() + vn * time_factor;
+  const double end_e = start.east_m() + ve * time_factor;
+  double nearest = std::numeric_limits<double>::infinity();
+  for (const auto& point : obstacles) {
+    if (!std::isfinite(point.x_m) || !std::isfinite(point.y_m) ||
+        !std::isfinite(point.z_m) || std::abs(point.z_m - start.down_m()) > 2.0)
+      continue;
+    // Do not block retreat or motion parallel to an obstacle. The ordinary
+    // live floor still applies to the current distance independently.
+    if ((point.x_m - start.north_m()) * vn +
+        (point.y_m - start.east_m()) * ve <= 0.0) continue;
+    nearest = std::min(nearest, PointSegmentDistance(point.x_m, point.y_m,
+        start.north_m(), start.east_m(), end_n, end_e));
+  }
+  return nearest;
+}
+
 LocalPlanner::LocalPlanner(double resolution_m, double clearance_m,
                            double planning_margin_m,
                            std::uint32_t maximum_cells)
