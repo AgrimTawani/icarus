@@ -364,12 +364,14 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
         result = {key: bind_limits(value) for key, value in schema.items()}
         properties = result.get('properties', {})
         if 'classes' in properties:
-            # Advertise the vocabulary once as context data; retain strict
-            # membership validation before any sensor/flight dispatch.
-            properties['classes']['items'] = {'type':'string', 'minLength':1}
-            properties['classes']['description'] = 'Use supported labels from context.detector_classes.'
-            if context.get('detector_classes'):
-                properties['classes']['maxItems'] = len(context['detector_classes'])
+            # Native generation must see the same finite sensor vocabulary as
+            # dispatch validation. A prose context list cannot constrain the
+            # grammar and allowed repeated unsupported-class proposals.
+            labels = context.get('detector_classes') or DETECTION_CLASSES['items']['enum']
+            properties['classes']['items'] = {'type':'string', 'enum':list(labels)}
+            properties['classes']['description'] = (
+                'Supported fixed detector labels. For other visual subjects use inspect_scene or localize_target.')
+            properties['classes']['maxItems'] = len(labels)
         if ('target_altitude_agl_m' in properties and context.get('state', {}).get('landed') is False
                 and context.get('state', {}).get('armed') is True):
             properties.pop('maximum_climb_rate_mps', None)
@@ -513,7 +515,11 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
             raise ValueError(f"Tool {name!r} is unavailable in this decision; use a listed tool")
     if 'classes' in schema.get('properties', {}):
         schema = copy.deepcopy(schema)
-        supported = DETECTION_CLASSES['items']['enum'] if detector_classes is None else detector_classes
+        declared = schema['properties']['classes']['items'].get('enum')
+        supported = (declared if declared is not None else DETECTION_CLASSES['items']['enum'])
+        if detector_classes is not None:
+            supported = ([label for label in supported if label in detector_classes]
+                         if tools is not None else detector_classes)
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
     arguments = canonical_view_arguments(name, copy.deepcopy(arguments))

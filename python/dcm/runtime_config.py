@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 DIRECT_PROMPT_VERSION = 'direct-agent-v13-stage-preserving-feedback'
-DIRECT_TOOL_VERSION = 'direct-tools-v21-explicit-controller-contracts'
+DIRECT_TOOL_VERSION = 'direct-tools-v22-aligned-detector-contract'
 
 
 class DeadlineExceeded(Exception):
