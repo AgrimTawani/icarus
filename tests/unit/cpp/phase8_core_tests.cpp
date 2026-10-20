@@ -1614,7 +1614,6 @@ icarus::v1::ActionStatus RunClearanceScenario(Motion motion,
   icarus::guardrails::Guardrails guardrails(policy);
   icarus::state_engine::StateEngine states(clock);
   auto state = AirborneState(clock, start_north, 0.0);
-  state.mutable_velocity_ned_mps()->set_x(velocity_north_mps);
   states.Publish(state);
   icarus::perception::PerceptionEngine perception(
       clock, states, policy.maximum_perception_age_ms);
@@ -1663,6 +1662,7 @@ icarus::v1::ActionStatus RunClearanceScenario(Motion motion,
     clock.now_ms += 800;
   } else {
     state.mutable_local_position_ned()->set_north_m(moved_north);
+    state.mutable_velocity_ned_mps()->set_x(velocity_north_mps);
     states.Publish(state);
   }
   const auto status = WaitForTerminal(actions, receipt.action_id(), 5'000);
@@ -2053,6 +2053,7 @@ int main(int argc, char** argv) {
     }
     if (argc == 2 && std::string(argv[1]) == "--clearance-planner-only") {
       TestPlannerRetreatUsesExecutorClearanceContract();
+      TestHardMinimumClearance();
       std::cout << "Clearance planner recovery tests passed\n";
       return 0;
     }
