@@ -14,12 +14,30 @@ from python.perception.vlm import (
     extract_answer,
     ground_description,
     inspect_image,
+    inspection_prompt,
     normalize_question,
     presence_answer_is_yes,
 )
 
 
 class VlmContractTests(unittest.TestCase):
+    def test_scene_prompt_distinguishes_camera_view_from_named_subject(self):
+        prompt = inspection_prompt("What is visible ahead?", True, "description")
+        self.assertIn("image is the camera view", prompt)
+        self.assertIn("does not require the drone itself to appear", prompt)
+        self.assertIn("general scene question", prompt)
+        self.assertIn("attribute of an unseen subject is not answerable", prompt)
+        self.assertIn("do not invent", prompt)
+        self.assertTrue(prompt.endswith("Question: What is visible ahead?"))
+
+    def test_scene_prompt_keeps_negative_and_count_contracts_distinct(self):
+        boolean = inspection_prompt("Is the subject visible?", True, "boolean")
+        count = inspection_prompt("How many are visible?", True, "count")
+        self.assertIn('"found":true or false or null', boolean)
+        self.assertIn("False is a usable negative answer", boolean)
+        self.assertIn("individually visible instances", count)
+        self.assertIn("never infer invisible instances", count)
+
     def test_question_is_compact_and_bounded(self):
         self.assertEqual(normalize_question("  count   visible trees "),
                          "count visible trees")

@@ -201,6 +201,30 @@ def viewing_context_text(view_context):
             'This metadata is not evidence that an object is present.\n')
 
 
+def inspection_prompt(question, structured=False, result_type="description"):
+    """Keep the camera frame distinct from subjects mentioned in a question."""
+    context = (
+        "You inspect a drone camera image. The image is the camera view; a question about the view does not require the drone itself to appear. "
+        "Answer using only visible evidence. For a general scene question describe visible objects and surfaces. For a named subject, report if it is absent or obscured; do not invent its properties or unseen parts. "
+        "Do not infer metric distance, geographic position or safe flight actions from appearance. ")
+    if structured and result_type == "description":
+        output = (
+            'Return JSON only: {"answerable":true or false or null,"answer":"brief visible evidence and limits"}. '
+            'answerable means the image supports answering this question. A negative presence answer can be answerable. An attribute of an unseen subject is not answerable.')
+    elif structured and result_type == "boolean":
+        output = (
+            'Return JSON only: {"found":true or false or null,"answer":"brief visible evidence"}. '
+            'found is the truth of the asked yes/no question. False is a usable negative answer; use null when the image cannot decide it.')
+    elif structured:
+        output = (
+            'Count only individually visible instances in this single image. Return JSON only: '
+            '{"count":nonnegative integer or null,"answer":"brief visible evidence"}. '
+            'Use null if the count is uncertain; never infer invisible instances.')
+    else:
+        output = "Briefly describe visible parts and limits."
+    return context + output + "\nQuestion: " + question
+
+
 def inspect_image(image_path: Path, question: str, manifest_path: Path,
                   binary: Path | None = None, timeout_s: float = 45.0,
                   gpu_layers: int = 99, structured=False, result_type=None,
@@ -221,37 +245,10 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         raise ValueError("VLM result_type must be boolean, count or description")
     structured = structured or result_type is not None
     result_type = result_type or "boolean"
-    answer_format = (
-        "First describe the visible colors, surfaces and their image placement, then answer briefly. "
-        "A cropped or partial surface does not establish the whole object's shape, height or distance. "
-        "State which part is visible and what cannot be determined; do not complete unseen parts.")
-    if structured and result_type == 'description':
-        answer_format += (
-            ' Return JSON only: {"answerable":true or false or null,"answer":"brief visible evidence and limits"}. '
-            'answerable means the image supports answering THIS question, not that a condition is true. '
-            'A presence question can have an answerable negative answer. '
-            'A description or attribute of an unseen subject is not answerable: use false or null. '
-            'Do not substitute another object or complete unseen parts.')
-    elif structured:
-        answer_format = (
-            'Return JSON only: {"found":true or false or null,"answer":"brief visible evidence"}. '
-            'found is the truth of the asked yes/no question. False is a usable negative answer; use null when the image cannot decide it.' if result_type == "boolean" else
-            'Count only individually visible instances in this single image. Return JSON only: '
-            '{"count":nonnegative integer or null,"answer":"brief visible evidence"}. '
-            'Use null if the count is uncertain; never infer invisible instances.')
-    # Pose belongs to the flight agent and the observation receipt. The visual
-    # component describes pixels; small VLMs mistake heading instructions for
-    # additional subject-identity constraints and reject clearly visible objects.
-    viewing_context_text(view_context)  # validate metadata without injecting it
-    prompt = (
-        "You are a visual inspection component. Describe only what is visible "
-        "in the supplied image. The question may assume a subject that is absent. "
-        "First check whether the subject is actually visible; if absent or uncertain, say so "
-        "instead of describing an assumed object. Do not infer visibility from the question, "
-        "geographic labels or prior context. Do not propose flight actions, landing sites, "
-        "coordinates, or safety decisions. " + answer_format + "\n"
-        + f"Question: {question}"
-    )
+    # Navigation pose is retained in the receipt. It does not prove that a
+    # geographically named subject appears in this image.
+    viewing_context_text(view_context)
+    prompt = inspection_prompt(question, structured, result_type)
     started = time.monotonic()
     cpu_threads = artifact.get('cpu_threads', 4)
     command = [str(executable), "-m", artifact["path"], "--mmproj",

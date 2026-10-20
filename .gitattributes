@@ -1,0 +1,2 @@
+# Unified-diff blank context lines are patch syntax.
+config/dependencies/patches/*.patch whitespace=-blank-at-eol

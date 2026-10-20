@@ -227,10 +227,12 @@ def fly_mission(
             from python.dcm.action_memory import indexed_results
             context['retained_action_result_count'] = sum(1 for _ in indexed_results(session.actions))
             from python.dcm.agent_tools import OPTIONAL_TOOL_SUMMARIES
-            context['optional_tools'] = dict(OPTIONAL_TOOL_SUMMARIES)
-            context['loaded_tools'] = sorted(session.loaded_tools)
             tools = decision_tools(context, session.angular_scans, session.area_scans,
                                    loaded_tools=session.loaded_tools)
+            offered = {tool['function']['name'] for tool in tools}
+            context['optional_tools'] = {name: description for name, description
+                in OPTIONAL_TOOL_SUMMARIES.items() if name not in offered}
+            context['loaded_tools'] = sorted(offered.intersection(OPTIONAL_TOOL_SUMMARIES))
             messages = decision_messages(session, context)
             if show_prompts:
                 echo(json.dumps({"messages": messages, "tools": tools}, indent=2))

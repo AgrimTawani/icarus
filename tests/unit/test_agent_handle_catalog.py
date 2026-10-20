@@ -77,7 +77,7 @@ def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflow
     client._scan_workflows = {'previous_area': {}}
     session = AgentSession('Hold and report.')
     # Handle-contract tests exercise already-discovered tools.
-    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target"})
+    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target", "execute_sequence"})
     session.angular_scans = {'current_turn': {'completed': False, 'phase': 'observe',
                                             'swept_deg': 30, 'observations': []}}
     session.area_scans = {'current_area': {'completed': False}}
@@ -198,7 +198,7 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
         client = FakeClient()
         session = AgentSession('Exercise tool contract.')
         # Handle-contract tests exercise already-discovered tools.
-        session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target"})
+        session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target", "execute_sequence"})
         session.angular_scans = {'completed': {'completed': True}}
         session.area_scans = {'completed_area': {'completed': True}}
         runtime = Runtime(call(name, **arguments),
@@ -219,7 +219,7 @@ def test_exact_contract_is_also_used_after_truncation_retry():
     client = FakeClient()
     session = AgentSession('Check retry contract.')
     # Handle-contract tests exercise already-discovered tools.
-    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target"})
+    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target", "execute_sequence"})
     catalogs = []
     class Runtime:
         def decide(self, messages, tools, concise=False):

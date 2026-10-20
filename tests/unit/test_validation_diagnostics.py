@@ -71,3 +71,53 @@ def test_missing_and_unknown_fields_are_explicit():
     assert missing['expected']['missing_required'] == ['target_altitude_agl_m']
     _, extra = rejected('arm', {'fictional_switch': True})
     assert extra['expected']['unknown_keys'] == ['fictional_switch']
+
+
+def diagnostic(schema, value):
+    from jsonschema import Draft202012Validator
+    from python.dcm.validation_diagnostics import schema_diagnostic
+    return schema_diagnostic(next(Draft202012Validator(schema).iter_errors(value)))
+
+
+def test_arbitrary_discriminators_report_only_selected_representation():
+    schema = {'oneOf': [
+        {'properties': {'format': {'const': 'vector'}, 'basis': {'const': 'cartesian'},
+                        'x': {'type': 'number'}, 'y': {'type': 'number'}},
+         'required': ['format', 'basis', 'x', 'y']},
+        {'properties': {'format': {'const': 'vector'}, 'basis': {'const': 'polar'}},
+         'required': ['format', 'basis', 'radius', 'angle']}]}
+    result = diagnostic(schema, {'format': 'vector', 'basis': 'cartesian', 'x': 3})
+    assert result['validator'] == 'required'
+    assert result['expected']['missing_required'] == ['y']
+    assert 'radius' not in json.dumps(result)
+
+
+def test_ambiguous_discriminators_remain_explicit_choices():
+    schema = {'oneOf': [
+        {'properties': {'kind': {'const': 'vector'}, 'basis': {'const': 'local'}},
+         'required': ['kind', 'basis', 'x']},
+        {'properties': {'kind': {'const': 'vector'}, 'basis': {'const': 'global'}},
+         'required': ['kind', 'basis', 'latitude']}]}
+    result = diagnostic(schema, {'kind': 'vector'})
+    assert result['validator'] == 'oneOf'
+    assert {v['discriminators']['basis'] for v in result['expected']['alternatives']} == {'local', 'global'}
+
+
+def test_boolean_discriminator_is_not_confused_with_numeric_one():
+    schema = {'oneOf': [
+        {'properties': {'tag': {'const': 1}}, 'required': ['tag', 'numeric_payload']},
+        {'properties': {'tag': {'const': True}}, 'required': ['tag', 'boolean_payload']}]}
+    result = diagnostic(schema, {'tag': True})
+    assert result['expected']['missing_required'] == ['boolean_payload']
+
+
+def test_selected_branch_reports_multiple_real_faults_without_other_branches():
+    schema = {'oneOf': [
+        {'properties': {'kind': {'const': 'record'}, 'payload': {'type': 'string'}},
+         'required': ['kind', 'payload'], 'additionalProperties': False},
+        {'properties': {'kind': {'const': 'sequence'}}, 'required': ['kind', 'items']}]}
+    result = diagnostic(schema, {'kind': 'record', 'extra': 3})
+    faults = [result, *result.get('related_errors', [])]
+    assert any(f['expected'].get('missing_required') == ['payload'] for f in faults)
+    assert any(f['expected'].get('unknown_keys') == ['extra'] for f in faults)
+    assert 'items' not in json.dumps(result)

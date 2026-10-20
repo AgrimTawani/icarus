@@ -169,6 +169,10 @@ def context(client):
 
 
 def run(client, runtime, mission="mission", **kw):
+    # These execution tests assume batching was already discovered. Default
+    # catalogue/discovery behavior is exercised in test_progressive_tools.
+    session = kw.setdefault('session', AgentSession(mission))
+    session.loaded_tools.add('execute_sequence')
     return fly_mission(
         client, runtime, mission, context_provider=context, echo=lambda *a: None, **kw
     )

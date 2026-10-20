@@ -6,7 +6,7 @@ COMPASS_HEADINGS = {'north':0, 'northeast':45, 'east':90, 'southeast':135,
 VIEW_SCHEMA = {'anyOf':[
     {'enum':['current',*COMPASS_HEADINGS]},
     {'type':'number','minimum':0,'exclusiveMaximum':360}],
-    'description':'Absolute compass name (prefer when given), degrees, or current; aircraft yaw, no tilt.'}
+    'description':'Camera yaw at the current vehicle position: compass name or absolute degrees; current retains measured heading. Use compass values for explicit viewing directions. Camera tilt is fixed.'}
 
 
 def resolve_view(view, state):

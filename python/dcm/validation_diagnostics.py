@@ -1,5 +1,6 @@
 """Concise factual schema errors without replaying entire arguments or schemas."""
 import json
+from jsonschema import Draft202012Validator
 
 
 def _actual(value):
@@ -13,29 +14,56 @@ def _actual(value):
                      else 'string' if isinstance(value, str) else 'number'), 'value': value}
 
 
+def _union_candidates(value, branches):
+    """Select only with explicit constant tags, never guessed intent."""
+    if not isinstance(value, dict):
+        return None
+    candidates = []
+    for index, branch in enumerate(branches):
+        if not isinstance(branch, dict):
+            continue
+        tags = {key: node['const'] for key, node in branch.get('properties', {}).items()
+                if isinstance(node, dict) and 'const' in node and key in value}
+        if tags and all(Draft202012Validator({'const': tag}).is_valid(value[key])
+                        for key, tag in tags.items()):
+            candidates.append((index, len(tags)))
+    if not candidates:
+        return None
+    score = max(weight for _, weight in candidates)
+    return [index for index, weight in candidates if weight == score]
+
+
 def schema_diagnostic(error):
     """Preserve the failing path, constraint and relevant actual measurement."""
     validator = error.validator
     value = error.instance
     expected = error.validator_value
     if validator in ('oneOf', 'anyOf'):
-        # For a tagged action union, report that action's real argument failure,
-        # rather than every other action's unrelated discriminator mismatch.
-        if isinstance(value, dict) and 'name' in value:
-            for index, branch in enumerate(expected):
-                if branch.get('properties', {}).get('name', {}).get('const') == value['name']:
-                    relevant = [child for child in error.context
-                                if child.schema_path and child.schema_path[0] == index]
-                    if relevant:
-                        return schema_diagnostic(relevant[0])
+        # Any explicit constant discriminator can identify a union branch.
+        # Required fields and numeric constraints remain unchanged; only the
+        # diagnostic is narrowed to the caller's actual representation.
+        selected = _union_candidates(value, expected)
+        if selected and len(selected) == 1 and error.context:
+            relevant = [child for child in error.context
+                        if child.schema_path and child.schema_path[0] == selected[0]]
+            if relevant:
+                result = schema_diagnostic(relevant[0])
+                extra = [schema_diagnostic(child) for child in relevant[1:4]]
+                if extra:
+                    result.setdefault('related_errors', []).extend(extra)
+                return result
+        variants = [(index, branch) for index, branch in enumerate(expected)
+                    if not selected or index in selected]
         alternatives = []
-        for branch in expected[:16]:
+        for _, branch in variants[:16]:
+            branch = branch if isinstance(branch, dict) else {}
             variant = {'required': branch.get('required', [])}
-            name = branch.get('properties', {}).get('name', {}).get('const')
-            if name is not None:
-                variant['name'] = name
+            tags = {key: node['const'] for key, node in branch.get('properties', {}).items()
+                    if isinstance(node, dict) and 'const' in node}
+            if tags:
+                variant['discriminators'] = tags
             alternatives.append(variant)
-        expected = {'alternatives': alternatives, 'alternative_count': len(expected)}
+        expected = {'alternatives': alternatives, 'alternative_count': len(variants)}
     elif validator == 'required':
         expected = {'missing_required': [key for key in expected if key not in value]}
     elif validator == 'enum':

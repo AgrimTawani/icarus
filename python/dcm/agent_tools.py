@@ -134,9 +134,12 @@ WORKFLOW_FLIGHT = {
     "resume_heading_scan": obj({"scan_id": TEXT}, ["scan_id"]),
     "scan_area": obj({
         "exit_policy": copy.deepcopy(EXIT_POLICY),
-        "shape": {"enum": ["square", "rectangle", "circle"]},
+        "shape": {"enum": ["square", "rectangle", "circle"],
+                  "description": "Square has equal sides; rectangle has independent width_m and length_m; circle uses radius_m."},
         "coverage": {"enum": ["perimeter", "area"]},
-        "width_m": POSITIVE, "length_m": POSITIVE, "radius_m": POSITIVE,
+        "width_m": {**POSITIVE, "description": "Square side or rectangle side across the heading."},
+        "length_m": {**POSITIVE, "description": "Rectangle side along the heading; omit for square and circle."},
+        "radius_m": POSITIVE,
         "lane_spacing_m": POSITIVE, "altitude_agl_m": POSITIVE,
         "heading_deg": NUMBER,
         "clockwise": BOOL, "maximum_ground_speed_mps": POSITIVE,
@@ -163,7 +166,11 @@ WORKFLOW_FLIGHT["fly_pattern"] = obj({
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
 SEQUENCE_FLIGHT = {name: schema for name, schema in FLIGHT.items()
                    if name != 'execute_route'}
+# Ordinary geometric maneuvers are directly callable; parameter-heavy
+# batching and observation workflows remain discoverable on demand.
+DEFAULT_CONTROLLER_TOOLS = frozenset({'orbit', 'fly_pattern'})
 OPTIONAL_TOOL_SUMMARIES = {
+    'execute_sequence': 'Batch two or three unconditional primitive actions after loading this schema.',
     'goto': 'Fly to supplied coordinates, home/launch or a saved navigation pose.',
     'orbit': 'Circle an object or coordinate center; supports target-facing camera intent.',
     'localize_target': 'Acquire/update object geometry from camera, depth and LiDAR.',
@@ -237,7 +244,7 @@ for name in (*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, "execute_sequence"):
 DESCRIPTIONS = {
     'load_tools': 'Load optional navigation/observation tool schemas for subsequent decisions. Read-only; performs no flight or observation. Names and purposes are listed in context.optional_tools.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
-    'orbit': 'Choose destination.type explicitly: coordinates, home, launch, named_waypoint, visible_object or registered_target. Object orbits use standoff_m from measured hull and face the object; visual_query also needs view. Coordinate/home/launch orbits use radius_m and altitude_agl_m. Coordinates require coordinate_frame and local_ned requires origin_id. Select camera explicitly; none means heading-only. Fixed cameras cannot tilt.',
+    'orbit': 'Fly a circular path around a center; face it by default. Object destinations use standoff_m from measured hull; coordinate/home/launch destinations use radius_m and altitude_agl_m. Select camera explicitly; none requests heading-only flight. Cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
     'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
@@ -362,6 +369,7 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
         catalogue_navigation = (function['name'] == 'goto'
             and bool(context.get('registered_waypoints', {}).get('entries')))
         if (loaded_tools is not None and function['name'] in OPTIONAL_TOOLS
+                and function['name'] not in DEFAULT_CONTROLLER_TOOLS
                 and function['name'] not in loaded_tools and not catalogue_navigation):
             continue
         if function['name'] in TARGET_FLIGHT and function['name'] not in ('overfly_target','approach_target'):
