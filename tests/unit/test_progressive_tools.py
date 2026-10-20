@@ -69,7 +69,7 @@ def test_fly_loop_discloses_loaded_tool_on_next_decision_without_flight():
     assert session.actions[0]['action']=='load_tools'
 
 
-def test_live_decisions_require_nonempty_working_memory_without_a_mission_parser():
+def test_explicit_legacy_catalogue_can_still_require_diagnostic_memory():
     tools = decision_tools({}, loaded_tools=set(), require_progress=True)
     for name, args in [('takeoff', {'target_altitude_agl_m':3}),
                        ('finish', {'outcome':'incomplete','message':'No action.'})]:
@@ -80,3 +80,22 @@ def test_live_decisions_require_nonempty_working_memory_without_a_mission_parser
         validate_call(name, {**args,'mission_progress':'Preserve unresolved operator requirements.'}, tools=tools)
     for tool in tools:
         assert next(iter(tool['function']['parameters']['properties']))=='mission_progress'
+
+
+def test_loaded_waypoint_handles_expose_navigation_without_second_discovery():
+    context = {'registered_waypoints': {'loaded': True, 'entries': [
+        {'name': 'configured observation pose', 'role': 'observation_pose'}]}}
+    offered = decision_tools(context, loaded_tools=set())
+    assert 'goto' in names(offered)
+    validate_call('goto', {'destination': {'type': 'named_waypoint',
+        'waypoint_name': 'configured observation pose'}}, tools=offered)
+    assert 'orbit' not in names(offered)
+    assert 'goto' not in names(decision_tools({}, loaded_tools=set()))
+
+
+def test_live_catalogue_does_not_advertise_self_written_plan_notes():
+    for tool in decision_tools({}, loaded_tools=set()):
+        assert 'mission_progress' not in tool['function']['parameters']['properties']
+    # Old recorded diagnostic metadata is harmless and not a physical argument.
+    validate_call('takeoff', {'target_altitude_agl_m': 3, 'mission_progress': 'Old note'},
+                  tools=decision_tools({}, loaded_tools=set()))

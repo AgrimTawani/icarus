@@ -356,7 +356,13 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
     catalog = []
     for tool in bind_limits(TOOLS):
         function = tool['function']
-        if loaded_tools is not None and function['name'] in OPTIONAL_TOOLS and function['name'] not in loaded_tools:
+        # A loaded navigation catalogue must expose the tool that can consume
+        # its handles; discovering a waypoint must not require guessing a second
+        # unrelated tool-discovery action. This depends on data, not mission text.
+        catalogue_navigation = (function['name'] == 'goto'
+            and bool(context.get('registered_waypoints', {}).get('entries')))
+        if (loaded_tools is not None and function['name'] in OPTIONAL_TOOLS
+                and function['name'] not in loaded_tools and not catalogue_navigation):
             continue
         if function['name'] in TARGET_FLIGHT and function['name'] not in ('overfly_target','approach_target'):
             # Native tools distinguish approach from overflight; object orbit
@@ -417,12 +423,12 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             function['description'] = function['description'].replace('description', 'visual_query')
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
-        # Optional legacy diagnostic only; the live agent does not require it
-        # or feed self-authored plans back as decision instructions.
-        function['parameters']['properties'] = {
-            'mission_progress': {'type': 'string', 'minLength': 1, 'maxLength': 600},
-            **function['parameters']['properties']}
+        # Explicit legacy callers can still request the old diagnostic. The
+        # live catalogue carries no self-authored plan field.
         if require_progress:
+            function['parameters']['properties'] = {
+                'mission_progress': {'type': 'string', 'minLength': 1, 'maxLength': 600},
+                **function['parameters']['properties']}
             function['parameters']['required'].append('mission_progress')
         if function['name'] in ('scan_heading', 'scan_area'):
             # Legacy scheduling aliases remain available to Python callers;
@@ -454,6 +460,10 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
     arguments = canonical_view_arguments(name, copy.deepcopy(arguments))
+    if 'mission_progress' not in schema.get('properties', {}):
+        # Read old saved/native turns without forwarding diagnostic text to a
+        # physical controller or advertising it to current model decisions.
+        arguments.pop('mission_progress', None)
     if reference_call:
         from python.dcm.destinations import canonical_destination_arguments
         arguments = canonical_destination_arguments(name, arguments)

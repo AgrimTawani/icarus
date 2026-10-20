@@ -90,3 +90,49 @@ def test_invalid_receipt_path_returns_actual_structure_without_claiming_data():
     assert answer['data']=='grey structure' and actions==original
     bad_index=read_action_result(actions,3,['result','evidence','samples',-1])
     assert bad_index['path_found'] is False and bad_index['next_path']==['result','evidence','samples',0]
+
+
+def test_execution_history_bounds_repeated_geometry_without_deleting_action_identities():
+    import json
+    from python.dcm.action_memory import execution_memory_view
+    entries = [{'index': i, 'action': 'observe', 'source': 'model_tool_call',
+                'verification_scope': 'Repeated description of result scope.',
+                'arguments': {'sensor': 'camera'}, 'status': 'SUCCEEDED',
+                'outcome_facts': {'found': False, 'count': 0, 'range_m': None,
+                                 'camera_geometry': {'raw': 'x' * 10000}}}
+               for i in range(1, 65)]
+    original = copy.deepcopy(entries)
+    packed = execution_memory_view(entries)
+    assert [(e['index'], e['action'], e['status']) for e in packed] == [
+        (i, 'observe', 'SUCCEEDED') for i in range(1, 65)]
+    assert len(json.dumps(packed)) < 13000
+    assert len(json.dumps(packed)) < len(json.dumps(entries)) / 20
+    assert packed[-1]['outcome_facts'] == {'found': False, 'count': 0, 'range_m': None}
+    assert packed[-1]['retained_details']['paths'] == [['result', 'evidence']]
+    assert packed[0]['details_paged'] is True and entries == original
+
+
+def test_execution_projection_preserves_small_condition_facts_and_real_lookup_path():
+    from python.dcm.action_memory import execution_memory_view
+    actions = [{'action': 'inspect_scene', 'arguments': {'question': 'Measure the view'},
+                'result': {'status': 'SUCCEEDED', 'evidence': {
+                    'found': False, 'counts': {'object': 0}, 'answerable': None,
+                    'details': {'measurements': list(range(900))}}}}]
+    entry = {'index': 1, 'action': 'inspect_scene', 'arguments': actions[0]['arguments'],
+             'status': 'SUCCEEDED', 'outcome_facts': copy.deepcopy(actions[0]['result']['evidence'])}
+    packed = execution_memory_view([entry])[0]
+    assert packed['outcome_facts'] == {'found': False, 'counts': {'object': 0}, 'answerable': None}
+    path = packed['retained_details']['paths'][0]
+    assert path == ['result', 'evidence']
+    resolved = read_action_result(actions, packed['retained_details']['action_index'], [*path, 'details', 'measurements', 899])
+    assert resolved['data'] == 899
+
+
+def test_grouped_receipt_projection_retains_both_range_and_actual_lookup_index():
+    from python.dcm.action_memory import execution_memory_view
+    entry = {'index': 2, 'through_index': 9, 'action': 'resume_scan', 'executions': 8,
+             'status': 'FAILED', 'message': 'x' * 800, 'outcome_facts': {'found': False}}
+    row = execution_memory_view([entry])[0]
+    assert row['index'] == 2 and row['through_index'] == 9 and row['executions'] == 8
+    assert row['status'] == 'FAILED' and row['outcome_facts']['found'] is False
+    assert row['retained_details']['action_index'] == 9

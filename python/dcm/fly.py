@@ -841,6 +841,15 @@ def decision_messages(session, context, lean=False):
             context['execution_progress']['last_completed_action'] = lean_execution_receipt(
                 context['execution_progress']['last_completed_action'])
         context['memory_packing'] = 'Receipt details are retained; use read_action_result by index/path when needed.'
+    from python.dcm.action_memory import execution_memory_view
+    context['executed_actions'] = execution_memory_view(context['executed_actions'],
+        history_bytes=1500 if lean else 4000)
+    if context['execution_progress']['last_completed_action']:
+        context['execution_progress']['last_completed_action'] = execution_memory_view(
+            [context['execution_progress']['last_completed_action']], keep_recent=1)[0]
+    context['execution_receipt_scope'] = (
+        'Recorded tool outcomes, not a mission-completion verdict. Coordinate movement is no proof of object-relative goal. Motion success does not prove a camera outcome; '
+        'observation success does not imply presence or a true condition. For paged details use read_action_result at through_index if present, otherwise index.')
     feedback = context_message(context, mission=session.mission,
                                operator_updates=session.operator_updates)["content"]
     # Native tool conversations resume on a tool result. Adding a synthetic

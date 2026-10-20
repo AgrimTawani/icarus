@@ -216,3 +216,50 @@ def lean_execution_receipt(entry):
             result[key] = {'retained_action_index': index, 'path': path,
                            'tool': 'read_action_result'}
     return result
+
+
+def execution_memory_view(entries, *, history_bytes=4000, keep_recent=2):
+    """Bound repeated execution details, retaining every receipt's identity.
+
+    This is a projection of measured history, never a plan or a completion
+    verdict. Full arguments and evidence remain at the original receipt index.
+    Large facts are paged explicitly rather than silently truncated or made
+    false. Small condition results (including zero/False/None) stay inline.
+    """
+    projected = copy.deepcopy(entries)
+    split = max(0, len(projected) - keep_recent)
+    for offset, entry in enumerate(projected):
+        entry.pop('verification_scope', None)  # one shared scope in live context
+        index = entry.get('through_index', entry['index'])
+        retained = []
+        for key, path in (('arguments', ['arguments']), ('motion', ['result', 'motion']),
+                          ('message', ['result', 'message'])):
+            limit = (1400 if key == 'motion' else 512 if key == 'arguments' else 256) if offset >= split else 256
+            if key in entry and _size(entry[key]) > limit:
+                entry.pop(key)
+                retained.append(path)
+        facts = entry.get('outcome_facts')
+        if isinstance(facts, dict):
+            budget = 1400 if offset >= split else 384
+            # Remove large fields first, so short answers, readiness flags and
+            # exact small count maps survive bulky camera/geometry metadata.
+            for key in sorted(facts, key=lambda key: _size(facts[key]), reverse=True):
+                if _size(facts) <= budget:
+                    break
+                facts.pop(key)
+                if ['result', 'evidence'] not in retained:
+                    retained.append(['result', 'evidence'])
+        if retained:
+            entry['retained_details'] = {'tool': 'read_action_result',
+                                        'action_index': index, 'paths': retained}
+    # Keep the full chronological action/status index, but page old details
+    # when their aggregate exceeds the history allowance. This also bounds
+    # long runs of individually small receipts.
+    for entry in projected[:split]:
+        if _size(projected[:split]) <= history_bytes:
+            break
+        for key in ('arguments', 'motion', 'message', 'outcome_facts'):
+            entry.pop(key, None)
+        entry.pop('retained_details', None)
+        entry['details_paged'] = True
+    return projected
