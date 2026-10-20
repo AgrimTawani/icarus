@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v14-visual-condition-continuity'
-DIRECT_TOOL_VERSION = 'direct-tools-v23-unresolved-visual-approach'
+DIRECT_PROMPT_VERSION = 'direct-agent-v15-contradictory-localization-recovery'
+DIRECT_TOOL_VERSION = 'direct-tools-v24-viewpoint-recovery'
 
 
 class DeadlineExceeded(Exception):

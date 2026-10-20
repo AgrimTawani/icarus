@@ -1617,6 +1617,23 @@ def test_uncertain_visual_condition_blocks_approach_without_sending_motion():
     assert not c.sent
 
 
+def test_contradictory_localization_blocks_same_view_reacquisition_without_camera_or_motion():
+    c = FakeClient()
+    session = AgentSession('Search for an object.')
+    f = session.visual_feedback
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition'},
+              {'status': 'SUCCEEDED', 'evidence': {'validity': 'valid', 'found': True}})
+    f.observe('localize_target', {'visual_query': 'landmark'},
+              {'status': 'SUCCEEDED', 'evidence': {'found': False}})
+    executor = ToolExecutor(c, session=session)
+    for name, args in [('localize_target', {'visual_query': 'landmark', 'new_target': True}),
+                       ('approach_target', {'destination': {'type': 'visible_object',
+                           'visual_query': 'landmark', 'view': 'current', 'standoff_m': 4}})]:
+        result = executor.execute(name, args)
+        assert result['status'] == 'VIEWPOINT_REQUIRED' and result['no_action_executed']
+    assert not c.sent
+
+
 def test_failed_camera_refresh_does_not_reuse_old_counts_or_fail_successful_motion():
     c = FakeClient()
     c.vehicle.landed = False

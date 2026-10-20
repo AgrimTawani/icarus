@@ -80,3 +80,51 @@ def test_no_automatic_retry_loop_after_observation_failure():
     assert f.refresh(Executor())['result']['status'] == 'OBSERVATION_UNAVAILABLE'
     assert f.snapshot()['found'] is None
     assert f.refresh(Executor()) is None
+
+
+@pytest.mark.parametrize('tool', ['localize_target', 'approach_target', 'orbit'])
+def test_contradictory_localization_needs_new_view_and_new_observation(tool):
+    f = requested(True)
+    args = ({'visual_query': 'landmark'} if tool == 'localize_target' else
+            {'destination': {'type': 'visible_object', 'visual_query': 'landmark'}})
+    evidence = {'found': False, 'reason': 'no_match'}
+    result = {'status': 'SUCCEEDED' if tool == 'localize_target' else 'FAILED',
+              'evidence': evidence if tool == 'localize_target' else {'target_localization': evidence}}
+    f.observe(tool, args, result)
+    assert f.snapshot()['found'] is None
+    assert f.recovery_required(tool, args)
+    # Merely asking again or resetting association cannot erase the conflict.
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition'}, answer(True))
+    assert f.recovery_required('localize_target', {'description': 'landmark', 'new_target': True})
+    f.observe('hold', {}, {'status': 'SUCCEEDED'})
+    f.observe('face_heading', {}, {'status': 'SUCCEEDED',
+                                 'evidence': {'no_flight_command_sent': True}})
+    f.observe('yaw', {}, {'status': 'FAILED'})
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition'}, answer(True))
+    assert f.recovery_required(tool, args)
+    f.observe('yaw', {'angle_deg': 17}, {'status': 'SUCCEEDED'})
+    assert f.recovery_required(tool, args)  # movement alone is insufficient
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition'}, answer(None))
+    assert f.recovery_required(tool, args)  # unknown still insufficient
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition'}, answer(False))
+    assert not f.recovery_required(tool, args)
+    assert f.snapshot()['found'] is False
+
+
+def test_recovery_is_scoped_to_failed_subject_not_home_or_another_target():
+    f = requested(True)
+    f.observe('localize_target', {'visual_query': 'tower'}, answer(False))
+    assert not f.recovery_required('goto', {'destination': {'type': 'home'}})
+    assert not f.recovery_required('localize_target', {'description': 'vehicle'})
+    assert f.recovery_required('localize_target', {'description': ' TOWER '})
+
+
+def test_post_motion_refresh_resolves_recovery_without_an_extra_model_call():
+    f = requested(True)
+    f.observe('localize_target', {'visual_query': 'landmark'}, answer(False))
+    f.observe('yaw', {'angle_deg': 13}, {'status': 'SUCCEEDED'})
+    class Executor:
+        def interrupted(self): return False
+        def execute(self, *_): return answer(False)
+    f.refresh(Executor())
+    assert not f.recovery and f.snapshot()['found'] is False

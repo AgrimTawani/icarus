@@ -645,6 +645,11 @@ class ToolExecutor:
                 "message": "Operator interrupted the mission.",
             }
         visual_feedback = getattr(self.session, 'visual_feedback', None)
+        if visual_feedback and visual_feedback.recovery_required(name, arguments):
+            return {'status': 'VIEWPOINT_REQUIRED', 'no_action_executed': True,
+                    'message': 'Localization contradicted the visual answer for this subject. Change viewpoint '
+                               'and obtain a fresh visual check before retrying acquisition. No movement sent.',
+                    'evidence': {'visual_condition': visual_feedback.snapshot()}}
         if visual_feedback and visual_feedback.unresolved_approach(name, arguments):
             return {'status': 'OBSERVATION_UNAVAILABLE', 'no_action_executed': True,
                     'message': 'The current visual question is unanswered. Obtain a valid inspection or measured '
