@@ -246,7 +246,8 @@ def fly_mission(
                                    loaded_tools=session.loaded_tools)
             offered = {tool['function']['name'] for tool in tools}
             context['optional_tools'] = {name: description for name, description
-                in OPTIONAL_TOOL_SUMMARIES.items() if name not in offered}
+                in OPTIONAL_TOOL_SUMMARIES.items() if name not in offered and not
+                (session.visual_feedback.recovery and name in executor_flight_names())}
             context['loaded_tools'] = sorted(offered.intersection(OPTIONAL_TOOL_SUMMARIES))
             messages = decision_messages(session, context)
             if show_prompts:
@@ -498,8 +499,13 @@ def fly_mission(
                     failures = 0
             else:
                 failures += 1
-            signature = json.dumps([name, {key: value for key, value in args.items()
-                                          if key != 'mission_complete'}], sort_keys=True)
+            retry_identity = [name, {key: value for key, value in args.items()
+                                    if key != 'mission_complete'}]
+            if session.visual_feedback.interest and session.visual_feedback._subject(name, args):
+                # A fresh view is a new acquisition attempt, not another retry
+                # of the same failed evidence. Same-view loops remain bounded.
+                retry_identity.append(session.visual_feedback.revision)
+            signature = json.dumps(retry_identity, sort_keys=True)
             if result['status'] == 'SUCCEEDED':
                 session.tool_failure_counts.pop(signature, None)
             else:

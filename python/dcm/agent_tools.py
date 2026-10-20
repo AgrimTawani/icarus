@@ -325,6 +325,18 @@ def turn_arguments(name, arguments, *, native=False):
     return args
 
 
+# A repeated observation carries only its immediate continuation, not a route
+# or future branch. Null explicitly denotes a one-shot observation.
+SCHEMAS['inspect_scene']['properties']['repeat_motion'] = {
+    'description': 'The user-requested movement repeated between views; null for a one-shot inspection. '
+                   'Retain the requested direction/rate. This declares intent and executes no movement.',
+    'oneOf': [{'type': 'null'}, *[
+        obj({'name': {'const': name}, 'arguments': schema}, ['name', 'arguments'])
+        for name, schema in (
+            ('yaw', directional_yaw_schema(SCHEMAS['yaw'])),
+            ('move_relative', copy.deepcopy(SCHEMAS['move_relative'])))]]}
+
+
 def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=None, require_progress=False):
     """Bind opaque handles to exact currently known values, without rewriting calls.
 
@@ -494,8 +506,11 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             # the agent makes one explicit lifecycle choice instead.
             function['parameters']['properties'].pop('return_on', None)
             function['parameters']['required'].append('exit_policy')
+        if function['name'] == 'inspect_scene':
+            function['parameters']['required'].append('repeat_motion')
         catalog.append(tool)
-    return catalog
+    from python.dcm.active_visual_feedback import bind_recovery_tools
+    return bind_recovery_tools(catalog, context.get('current_visual_condition'))
 
 
 def validate_call(name, arguments, *, tools=None, detector_classes=None):
@@ -523,6 +538,10 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
     arguments = canonical_view_arguments(name, copy.deepcopy(arguments))
+    if name == 'inspect_scene' and tools is not None:
+        # Saved pre-continuation calls remain read-only by default. Live native
+        # generation must explicitly supply the field in the advertised schema.
+        arguments.setdefault('repeat_motion', None)
     arguments = turn_arguments(name, arguments, native=tools is not None)
     if 'mission_progress' not in schema.get('properties', {}):
         # Read old saved/native turns without forwarding diagnostic text to a
@@ -647,8 +666,13 @@ class ToolExecutor:
         visual_feedback = getattr(self.session, 'visual_feedback', None)
         if visual_feedback and visual_feedback.recovery_required(name, arguments):
             return {'status': 'VIEWPOINT_REQUIRED', 'no_action_executed': True,
-                    'message': 'Localization contradicted the visual answer for this subject. Change viewpoint '
-                               'and obtain a fresh visual check before retrying acquisition. No movement sent.',
+                    'message': 'Localization contradicted the visual answer for this subject. Resume its observation '
+                               'continuation and check fresh evidence, or clarify if none exists. No movement sent.',
+                    'evidence': {'visual_condition': visual_feedback.snapshot()}}
+        if visual_feedback and not visual_feedback.permits_motion(name, arguments):
+            return {'status': 'CONTINUATION_REQUIRED', 'no_action_executed': True,
+                    'message': 'Observation recovery must resume its saved movement, not introduce a new maneuver. '
+                               'Use the continuation or clarify with the operator. No movement sent.',
                     'evidence': {'visual_condition': visual_feedback.snapshot()}}
         if visual_feedback and visual_feedback.unresolved_approach(name, arguments):
             return {'status': 'OBSERVATION_UNAVAILABLE', 'no_action_executed': True,

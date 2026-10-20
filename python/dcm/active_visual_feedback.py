@@ -16,6 +16,19 @@ class ActiveVisualFeedback:
         self.pending = False
         self.revision = 0
         self.recovery = None
+        self.continuation = None
+
+    def permits_motion(self, name, arguments):
+        """Recovery can resume existing work, never authorize a new maneuver."""
+        if not self.recovery or name in {'hold', 'land', 'return_home', 'cancel'}:
+            return True
+        from python.dcm.agent_tools import FLIGHT, TARGET_FLIGHT, WORKFLOW_FLIGHT, turn_arguments
+        if name not in {*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, 'execute_sequence'}:
+            return True
+        continuation = self.recovery.get('continuation')
+        args = turn_arguments(name, arguments)
+        args.pop('mission_complete', None)
+        return bool(continuation and name == continuation['name'] and args == continuation['arguments'])
 
     @staticmethod
     def _subject(name, arguments):
@@ -50,10 +63,11 @@ class ActiveVisualFeedback:
         subject = self._subject(name, arguments)
         if subject and localization.get('found') is False and current and current['found'] is True:
             self.recovery = {'subject': subject, 'motion_revision': self.revision,
+                'continuation': copy.deepcopy(self.continuation),
                 'reason': localization.get('reason', 'target_not_localized'),
-                'next_step': 'Change viewpoint within the user\'s requested motion constraints, then obtain a fresh visual check. '
-                             'Prefer an in-place heading change when sufficient; do not advance toward an unlocalized subject. '
-                             'Do not retry acquisition from this view; if a new view is unavailable, report the limitation.'}
+                'next_step': 'Resume the saved observation continuation, then check the fresh evidence. '
+                             'Recovery does not authorize a different motion. If no continuation exists or the user '
+                             'did not request repetition, clarify rather than invent movement.'}
             self.result = None
             self.pending = False
             return
@@ -75,6 +89,12 @@ class ActiveVisualFeedback:
             self.pending = False
             return
         if name == 'inspect_scene' and arguments.get('question_type') == 'condition':
+            if 'repeat_motion' in arguments and not self.recovery:
+                from python.dcm.agent_tools import turn_arguments
+                repeat = arguments['repeat_motion']
+                self.continuation = ({'name': repeat['name'],
+                    'arguments': turn_arguments(repeat['name'], repeat['arguments'])}
+                    if repeat else None)
             self.interest = {key: copy.deepcopy(arguments[key]) for key in
                              ('question', 'camera', 'question_type') if key in arguments}
             self.interest.setdefault('camera', 'forward_d435i')
@@ -89,6 +109,15 @@ class ActiveVisualFeedback:
                 self.revision += 1
             self.result = None
             self.pending = result.get('status') == 'SUCCEEDED' and name not in {'land', 'return_home'}
+        if (name in _MOTION and name != 'hold' and result.get('status') == 'SUCCEEDED'
+                and not evidence.get('no_flight_command_sent')):
+            from python.dcm.agent_tools import turn_arguments
+            args = turn_arguments(name, arguments)
+            args.pop('mission_complete', None)
+            # Only relative primitive movements can be continued unchanged.
+            # Absolute destinations/headings would revisit the same view.
+            self.continuation = ({'name': name, 'arguments': args}
+                                 if name in {'yaw', 'move_relative'} else None)
 
     def refresh(self, executor):
         if not self.pending or not self.interest:
@@ -113,6 +142,7 @@ class ActiveVisualFeedback:
         known = (not self.recovery and result.get('status') == 'SUCCEEDED'
                  and evidence.get('validity') == 'valid' and type(evidence.get('found')) is bool)
         return {'question': self.interest['question'], 'camera': self.interest['camera'],
+                'continuation': copy.deepcopy(self.continuation),
                 'found': evidence['found'] if known else None,
                 'validity': 'valid' if known else 'unknown',
                 'motion_revision': self.revision, 'refresh_pending': self.pending,
@@ -125,3 +155,27 @@ class ActiveVisualFeedback:
         return bool(name in {'approach_target', 'orbit', 'overfly_target'}
                     and destination.get('type') == 'visible_object'
                     and snapshot and snapshot['found'] is None)
+
+
+def bind_recovery_tools(tools, condition):
+    """Advertise the same continuation contract enforced by dispatch."""
+    recovery = (condition or {}).get('recovery')
+    if not recovery:
+        return tools
+    from python.dcm.agent_tools import FLIGHT, TARGET_FLIGHT, WORKFLOW_FLIGHT, turn_arguments
+    motion = {*FLIGHT, *TARGET_FLIGHT, *WORKFLOW_FLIGHT, 'execute_sequence'}
+    continuation = recovery.get('continuation') or {}
+    result = []
+    for tool in tools:
+        name = tool['function']['name']
+        if name in motion and name not in {'hold', 'land', 'return_home', 'cancel'}:
+            if name != continuation.get('name'):
+                continue
+            tool = copy.deepcopy(tool)
+            args = turn_arguments(name, continuation['arguments'], native=True)
+            schema = tool['function']['parameters']
+            schema['properties'] = {key: {'const': value} for key, value in args.items()}
+            schema['required'] = list(args)
+            schema['additionalProperties'] = False
+        result.append(tool)
+    return result

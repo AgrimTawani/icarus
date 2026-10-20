@@ -1634,6 +1634,74 @@ def test_contradictory_localization_blocks_same_view_reacquisition_without_camer
     assert not c.sent
 
 
+def test_recovery_dispatch_cannot_replace_search_rotation_with_forward_travel():
+    c = FakeClient()
+    session = AgentSession('Keep searching using the requested motion.')
+    f = session.visual_feedback
+    f.observe('yaw', {'angle_deg': 19, 'direction': 'clockwise', 'rate_deg_s': 13}, {'status': 'SUCCEEDED'})
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition'},
+              {'status': 'SUCCEEDED', 'evidence': {'validity': 'valid', 'found': True}})
+    f.observe('localize_target', {'visual_query': 'object'},
+              {'status': 'SUCCEEDED', 'evidence': {'found': False}})
+    result = ToolExecutor(c, session=session).execute('move_relative', {'forward_m': 10})
+    assert result['status'] == 'CONTINUATION_REQUIRED' and result['no_action_executed']
+    assert not c.sent
+
+
+def test_fresh_view_acquisition_attempts_are_not_counted_as_same_evidence_retries(monkeypatch):
+    original = ToolExecutor.execute
+    def execute(self, name, args):
+        if name == 'inspect_scene':
+            return {'status': 'SUCCEEDED', 'evidence': {'validity': 'valid', 'found': True}}
+        if name == 'approach_target':
+            return {'status': 'FAILED', 'evidence': {'target_localization': {'found': False}}}
+        return original(self, name, args)
+    monkeypatch.setattr(ToolExecutor, 'execute', execute)
+    c = FakeClient()
+    c.vehicle.landed = False
+    c.vehicle.armed = True
+    steps = [call('yaw', angle_deg=21),
+             call('inspect_scene', question='Visible?', question_type='condition')]
+    for _ in range(4):
+        steps.extend([call('approach_target', destination={'type': 'visible_object',
+            'visual_query': 'object', 'view': 'current', 'standoff_m': 4}),
+                      call('yaw', angle_deg=21)])
+    steps.append(call('finish', outcome='incomplete', message='Not found in the tested views.'))
+    result = run(c, Runtime(*steps))
+    assert result['message'] == 'Not found in the tested views.'
+    assert len([x for x in result['executed'] if x['action'] == 'approach_target']) == 4
+
+
+def test_declared_repeat_motion_recovers_even_when_inspection_precedes_first_turn(monkeypatch):
+    original = ToolExecutor.execute
+    attempts = []
+    def execute(self, name, args):
+        if name == 'inspect_scene':
+            return {'status': 'SUCCEEDED', 'evidence': {'validity': 'valid', 'found': True}}
+        if name == 'approach_target':
+            attempts.append(args)
+            return ({'status': 'FAILED', 'evidence': {'target_localization': {'found': False}}}
+                    if len(attempts) == 1 else {'status': 'SUCCEEDED'})
+        return original(self, name, args)
+    monkeypatch.setattr(ToolExecutor, 'execute', execute)
+    c = FakeClient()
+    c.vehicle.landed = False
+    c.vehicle.armed = True
+    repeat = {'name': 'yaw', 'arguments': {'angle_deg': 17, 'direction': 'counterclockwise', 'rate_deg_s': 12}}
+    destination = {'type': 'visible_object', 'visual_query': 'object', 'view': 'current', 'standoff_m': 4}
+    runtime = Runtime(call('inspect_scene', question='Visible?', question_type='condition', repeat_motion=repeat),
+                      call('approach_target', destination=destination),
+                      call('yaw', **repeat['arguments']),
+                      call('approach_target', destination=destination),
+                      call('finish', outcome='completed', message='Continued the requested observation.'))
+    result = run(c, runtime)
+    assert result['status'] == 'completed'
+    assert [name for name, _ in c.sent] == ['Yaw']
+    assert len(attempts) == 2
+    assert [entry['action'] for entry in result['executed']] == [
+        'inspect_scene', 'approach_target', 'yaw', 'inspect_scene', 'approach_target']
+
+
 def test_failed_camera_refresh_does_not_reuse_old_counts_or_fail_successful_motion():
     c = FakeClient()
     c.vehicle.landed = False

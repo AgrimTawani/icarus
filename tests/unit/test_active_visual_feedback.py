@@ -128,3 +128,72 @@ def test_post_motion_refresh_resolves_recovery_without_an_extra_model_call():
         def execute(self, *_): return answer(False)
     f.refresh(Executor())
     assert not f.recovery and f.snapshot()['found'] is False
+
+
+@pytest.mark.parametrize('name,args', [
+    ('yaw', {'angle_deg': 23, 'direction': 'counterclockwise', 'rate_deg_s': 11}),
+    ('move_relative', {'right_m': 2, 'maximum_ground_speed_mps': 1}),
+])
+def test_recovery_preserves_preceding_motion_instead_of_inventing_a_new_one(name, args):
+    from python.dcm.agent_tools import decision_tools
+    f = ActiveVisualFeedback()
+    f.observe(name, args, {'status': 'SUCCEEDED'})
+    f.observe('inspect_scene', {'question': 'Is the object visible?', 'question_type': 'condition'}, answer(True))
+    f.observe('localize_target', {'visual_query': 'object'}, answer(False))
+    assert f.permits_motion(name, args)
+    assert not f.permits_motion('move_relative', {'forward_m': 10})
+    assert not f.permits_motion('yaw', {'angle_deg': 90})
+    assert not f.permits_motion('execute_sequence', {'actions': []})
+    for stop in ('hold', 'land', 'return_home', 'cancel'):
+        assert f.permits_motion(stop, {})
+    tools = decision_tools({'current_visual_condition': f.snapshot()}, loaded_tools=set())
+    offered = {t['function']['name']: t['function']['parameters'] for t in tools}
+    assert ('move_relative' in offered) == (name == 'move_relative')
+    assert offered[name]['additionalProperties'] is False
+    assert 'const' in next(iter(offered[name]['properties'].values()))
+
+
+def test_missing_continuation_requires_clarification_not_a_guessed_movement():
+    f = requested(True)
+    f.observe('localize_target', {'visual_query': 'object'}, answer(False))
+    assert f.recovery['continuation'] is None
+    assert not f.permits_motion('move_relative', {'forward_m': 10})
+    assert not f.permits_motion('yaw', {'angle_deg': 30})
+    assert f.permits_motion('ask_user', {})
+
+
+def test_repeat_intent_exists_before_first_motion_and_cannot_be_replaced_during_recovery():
+    f = ActiveVisualFeedback()
+    repeat = {'name': 'yaw', 'arguments': {'angle_deg': 27, 'direction': 'counterclockwise', 'rate_deg_s': 12}}
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition',
+                               'repeat_motion': repeat}, answer(True))
+    assert f.snapshot()['continuation']['arguments']['angle_deg'] == -27
+    f.observe('localize_target', {'visual_query': 'object'}, answer(False))
+    assert f.permits_motion('yaw', repeat['arguments'])
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition',
+        'repeat_motion': {'name': 'move_relative', 'arguments': {'forward_m': 10}}}, answer(True))
+    assert f.permits_motion('yaw', repeat['arguments'])
+    assert not f.permits_motion('move_relative', {'forward_m': 10})
+
+
+def test_explicit_one_shot_inspection_does_not_inherit_a_previous_turn():
+    f = ActiveVisualFeedback()
+    f.observe('yaw', {'angle_deg': 42}, {'status': 'SUCCEEDED'})
+    f.observe('inspect_scene', {'question': 'Visible?', 'question_type': 'condition',
+                               'repeat_motion': None}, answer(True))
+    f.observe('localize_target', {'visual_query': 'object'}, answer(False))
+    assert f.recovery['continuation'] is None
+    assert not f.permits_motion('yaw', {'angle_deg': 42})
+
+
+def test_live_tool_schema_declares_repeat_intent_and_validates_it():
+    from python.dcm.agent_tools import decision_tools, validate_call
+    tools = decision_tools({})
+    schema = next(t['function']['parameters'] for t in tools if t['function']['name'] == 'inspect_scene')
+    assert 'repeat_motion' in schema['required']
+    args = {'question': 'Visible?', 'question_type': 'condition', 'repeat_motion': {
+        'name': 'yaw', 'arguments': {'angle_deg': 17, 'direction': 'clockwise', 'rate_deg_s': 15}}}
+    validate_call('inspect_scene', args, tools=tools)
+    args['repeat_motion']['name'] = 'invented_operation'
+    with pytest.raises(ValueError):
+        validate_call('inspect_scene', args, tools=tools)
