@@ -891,14 +891,18 @@ def safe_exit_recovery(client, echo=print):
         if state.get('manual_override_active'):
             return {'status': 'manual_override', 'return_home_attempt': compact_result(recovery)}
         if state.get('landed') and not state.get('armed'):
-            return {'status': 'SUCCEEDED', 'return_home_attempt': compact_result(recovery)}
+            landing = executor.execute('land', {})
+            landing['return_home_attempt'] = compact_result(recovery)
+            return landing
         echo("Return-home did not complete; requesting landing here before releasing control.")
         landing = executor.execute('land', {})
         landing['return_home_attempt'] = compact_result(recovery)
         return landing
     if state.get("armed"):
-        return ToolExecutor(client).execute("disarm", {})
-    return {"status": "SUCCEEDED", "message": "Aircraft landed and disarmed."}
+        disarm = ToolExecutor(client).execute("disarm", {})
+        if disarm.get('status') != 'SUCCEEDED':
+            return disarm
+    return ToolExecutor(client).execute('land', {})
 
 
 def summarize(result):

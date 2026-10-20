@@ -870,8 +870,21 @@ def test_exit_disarms_a_landed_armed_vehicle():
 
     c = FakeClient()
     c.vehicle.armed = True
+    wait = c.wait_action
+    def completed(receipt, *args, **kwargs):
+        result = wait(receipt, *args, **kwargs)
+        if c.sent[-1][0] == 'Disarm':
+            c.vehicle.armed = False
+        return result
+    c.wait_action = completed
+    def measured_state():
+        c.vehicle.observed_at_unix_ms = int(time.time() * 1000)
+        c.vehicle.attitude_received_at_unix_ms = c.vehicle.observed_at_unix_ms
+        c.vehicle.velocity_ned_mps.z = 0
+        return c.vehicle
+    c.state = measured_state
     assert safe_exit_recovery(c)["status"] == "SUCCEEDED"
-    assert c.sent[-1][0] == "Disarm"
+    assert [name for name, _ in c.sent] == ['Disarm']
 
 
 def test_exit_lands_here_if_return_home_is_rejected():

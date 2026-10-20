@@ -879,11 +879,8 @@ class ToolExecutor:
             client.ensure_action_settled()
         state = message_dict(client.state())
         if name == 'land' and state.get('landed') is True and state.get('armed') is False:
-            age_ms = time.time() * 1000 - int(state.get('observed_at_unix_ms', 0))
-            if 0 <= age_ms <= 500:
-                return {'status': 'SUCCEEDED', 'message': 'Already landed and disarmed; no flight command sent.',
-                    'state': state, 'evidence': {'end_state_already_satisfied': True,
-                    'no_flight_command_sent': True, 'state_age_ms': round(age_ms, 1)}}
+            from python.dcm.ground_recovery import verify_ground_recovery
+            return verify_ground_recovery(client, message_dict)
         orbit_evidence = None
         absolute_heading = None
         if name == 'face_heading':

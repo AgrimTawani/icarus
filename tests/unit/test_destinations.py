@@ -1,6 +1,7 @@
 """Reference types choose measured controllers; no mission-specific aliases."""
 import copy
 import json
+import time
 from types import SimpleNamespace
 import pytest
 from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
@@ -167,6 +168,12 @@ def test_native_overflight_dispatches_existing_measured_controller(monkeypatch):
 def test_landing_after_landed_return_home_never_rearms_or_sends_another_command():
     client=FakeClient();ex=ToolExecutor(client)
     assert ex.execute('return_home',{})['status']=='SUCCEEDED'
+    def measured_state():
+        client.vehicle.observed_at_unix_ms = int(time.time() * 1000)
+        client.vehicle.attitude_received_at_unix_ms = client.vehicle.observed_at_unix_ms
+        client.vehicle.velocity_ned_mps.z = 0
+        return client.vehicle
+    client.state = measured_state
     sent=len(client.sent)
     result=ex.execute('land',{})
     assert result['status']=='SUCCEEDED' and result['evidence']['end_state_already_satisfied']
@@ -179,8 +186,12 @@ def test_landing_cannot_infer_an_already_satisfied_end_state(condition):
     if condition=='stale':client.vehicle.observed_at_unix_ms=1
     if condition=='armed':client.vehicle.armed=True
     if condition=='airborne':client.vehicle.landed=False
-    ToolExecutor(client).execute('land',{})
-    assert [n for n,_ in client.sent]==['Land']
+    result = ToolExecutor(client).execute('land',{})
+    if condition == 'stale':
+        assert result['status'] == 'FAILED'
+        assert not client.sent  # stale telemetry must not trigger a mode change on disarmed aircraft
+    else:
+        assert [n for n,_ in client.sent]==['Land']
 
 
 @pytest.mark.parametrize('height',[2,5,8])
