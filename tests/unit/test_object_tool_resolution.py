@@ -54,8 +54,8 @@ def test_description_localizes_then_real_controller_refreshes_and_moves():
     client = DescribedClient()
     result = executor(client).execute('approach_target', {'description': 'grey object', 'standoff_m': 3})
     assert result['status'] == 'SUCCEEDED'
-    # depth first (no depth here), then LiDAR acquisition; both ground the nearest instance
-    assert client.localized == ['nearest grey object', 'nearest grey object']
+    # one LiDAR acquisition, grounding the nearest instance; no depth planning
+    assert client.localized == ['nearest grey object']
     assert set(client.refreshed) == {'measured_123'}
     assert client.north == pytest.approx(7)
     assert result['evidence']['target_localization']['target_id'] == 'measured_123'
@@ -112,18 +112,12 @@ def test_object_alternatives_have_complete_typed_grammar_branches():
 
 
 class StripClient(DescribedClient):
-    """The far fix ('strip') is lost up close; the house is measured again from there."""
+    """The far fix ('strip') is lost up close; the tool reports it instead of guessing."""
     def __init__(self):
         super().__init__({'found': True, 'target_id': 'strip'})
 
     def target_feedback(self):
         return [{'target_id': 'strip', 'description': 'house'}, {'target_id': 'house'}]
-
-    def localize_target(self, description):
-        self.localized.append(description)
-        if len(self.localized) > 2:  # after the depth try and the far LiDAR fix
-            self.measurement = {'found': True, 'target_id': 'house'}
-        return self.measurement
 
     def refresh_target(self, target_id):
         target = super().refresh_target(target_id)
@@ -132,28 +126,32 @@ class StripClient(DescribedClient):
         return target
 
 
-def test_lost_far_fix_is_measured_again_once_and_the_approach_continues():
+def test_lost_far_fix_fails_honestly_after_one_localization():
     client = StripClient()
     result = executor(client).execute('approach_target', {'description': 'house', 'standoff_m': 3})
-    assert result['status'] == 'SUCCEEDED'
-    assert result['evidence']['target_id'] == 'house'
-    assert 'remeasured_after_target_lost' in result['evidence']
-    assert client.localized == ['nearest house'] * 3  # depth try, LiDAR fix, re-measure
+    assert result['status'] == 'FAILED'
+    assert client.localized == ['nearest house']
+    assert 'lost' in result['message'].lower()
+    assert [name for name, _, _ in client.calls] == ['goto', 'hold']
 
 
-def test_orbit_falls_back_to_depth_when_lidar_geometry_is_partial():
+def test_orbit_uses_the_lidar_enclosure_even_when_only_one_face_was_measured():
     client = DescribedClient()
     client.partial = True
     client.target_feedback = lambda: [{'target_id': 'measured_123', 'description': 'house'}]
-    client.measurement = {'found': False, 'reason': 'target_association_ambiguous',
-                          'bearing_deg': {'image_absolute': 0.0, 'image_span_relative': [-20.0, 20.0]},
-                          'depth_at_capture': {'p10_optical_z_m': 6.0, 'median_optical_z_m': 9.0}}
     result = executor(client).execute('orbit_target', {'target_id': 'measured_123', 'standoff_m': 5, 'camera': 'none'})
-    assert result['status'] == 'SUCCEEDED'
-    assert result['evidence']['orbit_centre_measured_by'] == 'vlm_box_bearing_and_forward_depth'
-    assert 'lidar_measurement_failed' in result['evidence']
+    assert client.localized == []  # no VLM/depth re-localization for a registered target
     orbit = [args for name, args, kw in client.calls if name == 'orbit'][-1]
     assert orbit['face_center'] and orbit['revolutions'] == 1.0
+    assert 'orbit_centre_measured_by' not in result['evidence']
+    assert result['evidence']['orbit_envelope']['unseen_shape_bounded']
+
+
+def test_orbit_on_an_unmeasured_object_fails_without_flight():
+    client = DescribedClient({'found': False, 'reason': 'no_lidar_cluster_in_selected_region'})
+    result = executor(client).execute('orbit_target', {'description': 'house', 'standoff_m': 5, 'camera': 'none'})
+    assert result['status'] == 'FAILED'
+    assert all(name != 'orbit' for name, _, _ in client.calls)
 
 
 def test_safety_abort_never_falls_back_to_depth():

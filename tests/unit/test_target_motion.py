@@ -130,9 +130,21 @@ def test_operator_stop_does_not_override_recovery():
     assert result['status'] == 'CANCELLED' and not c.calls
 
 
-def test_partial_footprint_cannot_be_reported_as_a_measured_orbit():
+def test_partial_footprint_orbits_with_a_stated_assumption(monkeypatch):
+    fake_measured_orbit(monkeypatch)
     c = Client(); c.partial = True
     result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
+    assert result['status'] == 'SUCCEEDED'
+    assert [x[0] for x in c.calls] == ['orbit']
+    assert result['evidence']['orbit_envelope']['unseen_shape_bounded'] != False
+
+
+def test_object_without_lidar_hull_cannot_be_orbited():
+    class Unmeasured(Client):
+        def refresh_target(self, target_id):
+            return {'found': False, 'reason': 'unknown_target_id', 'origin_id': 'test'}
+    c = Unmeasured()
+    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'ghost', 'standoff_m': 3})
     assert result['status'] == 'FAILED'
     assert [x[0] for x in c.calls] == ['hold']
 
@@ -219,149 +231,6 @@ def fake_measured_orbit(monkeypatch):
         def result(self):
             return {'angular_coverage_deg': 360}
     monkeypatch.setattr('python.dcm.target_motion.OrbitMeasurements', Measurements)
-
-
-def test_orbit_acquires_closest_measured_side_view_and_preserves_identity(monkeypatch):
-    fake_measured_orbit(monkeypatch)
-    c = AcquisitionClient()
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'SUCCEEDED'
-    assert [call[0] for call in c.calls] == ['goto', 'orbit']
-    move = c.calls[0]
-    assert move[1]['north_m'] == 3 and move[1]['east_m'] == 4
-    assert move[1]['heading_deg'] == 320 and move[1]['altitude_agl_m'] == 4
-    assert move[2]['expected_origin_id'] == 'test'
-    assert 'minimum_clearance_m' not in move[1]  # retain the independent API policy
-    assert c.captures == [('the observed object', False)]
-    assert [step['phase'] for step in result['evidence']['geometry_acquisition']] == ['move_to_measurement_view', 'localize_same_target']
-    assert result['evidence']['camera_visibility_verified'] is False
-
-
-def test_partial_geometry_after_two_views_stops_without_orbit():
-    c = AcquisitionClient(succeed_after=3)
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'FAILED'
-    assert 'two additional' in result['message']
-    assert [call[0] for call in c.calls] == ['goto', 'goto', 'hold']
-    assert len(c.captures) == 2
-    assert c.calls[0][1]['east_m'] != c.calls[1][1]['east_m']
-
-
-def test_blocked_orbit_does_not_claim_acquisition_movement_never_happened(monkeypatch):
-    fake_measured_orbit(monkeypatch)
-    c = AcquisitionClient()
-    def flight(name, args, **kwargs):
-        if name == 'orbit' and args.get('revolutions', 1) >= 1:  # the full orbit, not a transit arc
-            return {'status': 'FAILED', 'requires_user_choice': True, 'question': 'Choose another camera?',
-                    'evidence': {'no_flight_executed': True}}
-        return c.flight(name, args, **kwargs)
-    result = TargetMotion(c, flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert c.calls[0][0] == 'goto'
-    assert result['requires_user_choice']
-    assert result['evidence']['orbit_not_dispatched'] is True
-    assert 'no_flight_executed' not in result['evidence']
-
-
-@pytest.mark.parametrize('fault', ['new_identity', 'not_found', 'exception'])
-def test_geometry_acquisition_failure_keeps_history_and_does_not_orbit(fault):
-    c = AcquisitionClient()
-    if fault == 'new_identity':
-        c.capture_identity = 'different'
-    elif fault == 'not_found':
-        c.capture_found = False
-    else:
-        c.capture_error = RuntimeError('camera unavailable')
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'FAILED'
-    assert [call[0] for call in c.calls] == ['goto', 'hold']
-    assert len(result['evidence']['geometry_acquisition']) == 2
-
-
-@pytest.mark.parametrize('when', ['before_move', 'after_move', 'after_capture'])
-def test_operator_interruption_never_overrides_recovery_during_acquisition(when):
-    c = AcquisitionClient()
-    c.cancel = when == 'before_move'
-    c.cancel_after_move = when == 'after_move'
-    c.cancel_after_capture = when == 'after_capture'
-    result = TargetMotion(c, c.flight, lambda: c.cancel).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'CANCELLED'
-    assert all(call[0] not in ('orbit', 'hold') for call in c.calls)
-    assert len(c.captures) == (1 if when == 'after_capture' else 0)
-
-
-def test_invalid_or_repeated_view_candidates_do_not_authorize_movement():
-    c = AcquisitionClient()
-    c.views = [
-        {'north_m': 3, 'east_m': 4, 'origin_id': 'other', 'face_observed_midpoint_heading_deg': 30},
-        {'north_m': 0, 'east_m': 0, 'origin_id': 'test', 'face_observed_midpoint_heading_deg': 30},
-        {'north_m': float('nan'), 'east_m': 0, 'origin_id': 'test', 'face_observed_midpoint_heading_deg': 30}]
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'FAILED'
-    assert [call[0] for call in c.calls] == ['hold']
-    assert not c.captures
-
-
-def test_second_distinct_view_can_complete_geometry(monkeypatch):
-    fake_measured_orbit(monkeypatch)
-    c = AcquisitionClient(succeed_after=2)
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'SUCCEEDED'
-    assert [call[0] for call in c.calls] == ['goto', 'goto', 'orbit']
-    assert len(c.captures) == 2
-
-
-def test_measurement_move_failure_does_not_capture_or_orbit():
-    c = AcquisitionClient()
-    def fail_move(name, args, **kw):
-        c.calls.append((name, args, kw))
-        return {'status': 'FAILED', 'message': 'clearance unavailable'}
-    result = TargetMotion(c, fail_move).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'FAILED'
-    assert result['message'] == 'clearance unavailable'
-    assert [call[0] for call in c.calls] == ['orbit']  # the smooth transit arc to the first view
-    assert not c.captures
-
-
-def test_origin_change_during_capture_stops_before_orbit():
-    c = AcquisitionClient()
-    original = c.refresh_target
-    def refreshed(target_id):
-        target = original(target_id)
-        if c.captures:
-            target['origin_id'] = 'reset-origin'
-        return target
-    c.refresh_target = refreshed
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    assert result['status'] == 'FAILED'
-    assert 'origin changed' in result['message']
-    assert [call[0] for call in c.calls] == ['goto', 'hold']
-
-
-def test_larger_requested_standoff_recomputes_views_from_measured_face(monkeypatch):
-    fake_measured_orbit(monkeypatch)
-    c = AcquisitionClient()
-    original = c.refresh_target
-    def with_hull(target_id):
-        target = original(target_id)
-        target['geometry']['observed_hull'] = [
-            {'north_m': 10, 'east_m': -2, 'origin_id': 'test'},
-            {'north_m': 10, 'east_m': 2, 'origin_id': 'test'}]
-        return target
-    c.refresh_target = with_hull
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 10})
-    assert result['status'] == 'SUCCEEDED'
-    move = c.calls[0][1]
-    assert move['north_m'] == 0 and abs(move['east_m']) == 12
-    assert 'minimum_clearance_m' not in move
-    assert result['evidence']['geometry_acquisition'][0]['observation_standoff_m'] == 10
-
-
-def test_larger_standoff_without_measured_hull_cannot_use_closer_default_view():
-    c = AcquisitionClient()
-    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 10})
-    assert result['status'] == 'FAILED'
-    assert [call[0] for call in c.calls] == ['hold']
-    assert not c.captures
 
 
 def test_orbit_reserves_controller_error_without_lowering_clearance(monkeypatch):
@@ -534,18 +403,6 @@ def test_overhead_point_is_outside_level_front_camera_but_in_downward_view():
     assert not views['downward_brio']['image_proof']
 
 
-def test_side_view_transit_keeps_the_nose_on_the_target_centre(monkeypatch):
-    fake_measured_orbit(monkeypatch)
-    c = AcquisitionClient()
-    TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
-    geometry = c.refresh_target('a')['geometry']
-    centre = geometry.get('orbit_center') or geometry['center']
-    assert c.arcs, 'a side-view move should be flown as one smooth arc'
-    for _, arc, _ in c.arcs:
-        assert arc['face_center'] is True and 0 < arc['revolutions'] < 1
-        assert (arc['center_north_m'], arc['center_east_m']) == (centre['north_m'], centre['east_m'])
-
-
 def test_a_single_missed_lidar_scan_does_not_lose_the_target(monkeypatch):
     import python.dcm.target_motion as target_motion
     monkeypatch.setattr(target_motion, 'REFRESH_WAIT_S', 0)
@@ -605,12 +462,8 @@ def test_approach_stops_if_remeasurement_jumps_implausibly_closer():
     assert len(goto_calls) == 1  # stopped before compounding a second unsafe move
 
 
-class DepthClient(Client):
-    """LiDAR loses the far strip after the first leg; depth sees the face."""
-    def __init__(self, depth):
-        super().__init__()
-        self.depth = depth
-
+class LosingClient(Client):
+    """LiDAR loses the target after the first leg; the forward depth sees something near."""
     def refresh_target(self, target_id):
         self.lost = bool(self.calls)
         target = super().refresh_target(target_id)
@@ -618,26 +471,55 @@ class DepthClient(Client):
         return target
 
     def depth_feedback(self):
-        return {'fresh': True, 'center': {'p10_optical_z_m': self.depth}}
+        return {'fresh': True, 'center': {'p10_optical_z_m': 3.0}}
 
 
-def test_lost_lidar_but_close_depth_counts_as_reached():
-    c = DepthClient(depth=6.5)
-    result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 5})
-    assert result['status'] == 'SUCCEEDED'
-    assert result['evidence']['standoff_measured_by'] == 'forward_depth_camera'
-
-
-def test_lost_lidar_and_far_depth_still_fails():
-    c = DepthClient(depth=20.0)
+def test_lost_lidar_fails_even_when_forward_depth_is_close():
+    """Depth under the nose is not the target; at roofline height it is the roof below."""
+    c = LosingClient()
     result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 5})
     assert result['status'] == 'FAILED'
+    assert 'standoff_measured_by' not in result['evidence']
     assert result['evidence']['target_measurement']['reason'] == 'target_not_observed'
+    assert result['evidence']['last_measured_range_m'] == 10
+    assert [n for n, a, kw in c.calls] == ['goto', 'hold']
 
 
-def test_depth_nearer_than_standoff_stops_the_approach():
-    c = Client()
-    c.depth_feedback = lambda: {'fresh': True, 'center': {'p10_optical_z_m': 1.5}}
+def test_approach_stops_if_remeasurement_jumps_farther():
+    """Re-association with a surface behind the target must not be chased."""
+    class DriftingClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.readings = iter([10.0, 9.0])  # after moving 7 m closer the range barely changed
+
+        def refresh_target(self, target_id):
+            base = super().refresh_target(target_id)
+            base['surface_range_m'] = next(self.readings)
+            return base
+
+    c = DriftingClient()
     result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 3})
+    assert result['status'] == 'FAILED'
+    assert 'different' in result['message']
+    assert [n for n, a, kw in c.calls] == ['goto', 'hold']
+
+
+def test_single_face_orbit_encloses_an_assumed_square_footprint(monkeypatch):
+    """One measured face: the circle must also clear a building as deep as it is wide."""
+    fake_measured_orbit(monkeypatch)
+    c = Client(); c.partial = True
+    original = c.refresh_target
+    def one_face(target_id):
+        target = original(target_id)
+        target['geometry'].update(center={'north_m': 10, 'east_m': 0}, radius_m=4,
+                                  observed_hull=[{'north_m': 10, 'east_m': -4}, {'north_m': 10, 'east_m': 4}])
+        return target
+    c.refresh_target = one_face
+    result = TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
     assert result['status'] == 'SUCCEEDED'
-    assert result['evidence']['final_depth_range_m'] == 1.5
+    assert [name for name, _, _ in c.calls] == ['orbit']  # no measurement arcs, no side-view goto
+    orbit = c.calls[0][1]
+    # centre pushed back by half the 8 m face, radius encloses the 8x8 square plus standoff plus reserve
+    assert orbit['center_north_m'] == pytest.approx(14) and orbit['center_east_m'] == pytest.approx(0)
+    assert orbit['radius_m'] == pytest.approx(math.hypot(4, 4) + 3 + 1)
+    assert result['evidence']['orbit_envelope']['unseen_shape_bounded'] == 'assumed square footprint from one measured face'

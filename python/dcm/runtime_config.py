@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v24-operator-standoff'
+DIRECT_PROMPT_VERSION = 'direct-agent-v25-measured-orbit'
 DIRECT_TOOL_VERSION = 'direct-tools-v31-survey-arc'
 
 

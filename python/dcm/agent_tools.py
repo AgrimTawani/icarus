@@ -106,9 +106,6 @@ def object_motion_schema(properties, required=()):
 
 
 
-# Object motions that fall back to forward depth when LiDAR cannot measure the target.
-DEPTH_FALLBACK = ('approach_target', 'orbit_target')
-
 TARGET_FLIGHT = {
     "approach_target": object_motion_schema({"standoff_m": POSITIVE,
                             "maximum_ground_speed_mps": POSITIVE}, ["standoff_m"]),
@@ -677,16 +674,9 @@ class ToolExecutor:
             elif name in TARGET_FLIGHT:
                 from python.dcm.target_motion import TargetMotion
                 localization = acquisition = None
-                description = arguments.get('description')
-                if name == 'approach_target' and description and not self.interrupted():
-                    # Depth ranges the object from the current view in one VLM call;
-                    # the LiDAR acquisition below re-grounds and turns repeatedly.
-                    from python.dcm.skills import depth_approach
-                    result = depth_approach(self, description, arguments['standoff_m'],
-                                            maximum_ground_speed_mps=arguments.get('maximum_ground_speed_mps', 1.0))
-                    if result.get('status') != 'FAILED' or result.get('reason_code'):
-                        return result
                 if 'description' in arguments:
+                    # The LiDAR is the only sensor that measures where an object
+                    # is. Ground the description once; fly only a registered target.
                     from python.dcm.skills import acquire
                     localization, acquisition = acquire(self, arguments.pop('description'))
                     target_id = localization.get('target_id')
@@ -694,11 +684,6 @@ class ToolExecutor:
                                   and localization.get('found') is True
                                   and any(item.get('target_id') == target_id
                                           for item in self.client.target_feedback()))
-                    if not registered and name in DEPTH_FALLBACK and not self.interrupted():
-                        result = self._depth_fallback(name, description, arguments, 'no LiDAR-registered target')
-                        result.setdefault('evidence', {}).update(target_localization=localization,
-                                                                 acquisition=acquisition)
-                        return result
                     if not registered:
                         return {'status': 'FAILED',
                                 'message': 'No measured registered target was localized; no flight action executed.',
@@ -706,41 +691,7 @@ class ToolExecutor:
                     arguments['target_id'] = target_id
                 if self.interrupted():
                     return {'status': 'CANCELLED', 'message': 'Operator interrupted target localization.'}
-                feedback = getattr(self.client, 'target_feedback', None)
-                known = next((item for item in feedback() if item.get('target_id') == arguments['target_id']),
-                             {}) if name == 'orbit_target' and callable(feedback) else {}
-                if (name == 'orbit_target' and known.get('description')
-                        and (known.get('geometry') or {}).get('orbit_usable') is False):
-                    # A partial LiDAR outline would first fly arcs to side views
-                    # round a guessed centre; depth measures the whole object now.
-                    result = self._depth_fallback(name, known['description'], arguments,
-                                                  'LiDAR outline is partial')
-                else:
-                    result = TargetMotion(self.client, self._flight, self.interrupted).execute(name, arguments)
-                lost =result.get('evidence', {}).get('target_measurement', {}).get('reason') == 'target_not_observed'
-                if lost and result.get('status') == 'FAILED' and not self.interrupted():
-                    # A far first fix can be a strip in front of the object (a
-                    # hedge or fence) that drops out of the beams up close.
-                    # Measure the object again from here, once, and continue.
-                    from python.dcm.skills import acquire, registered
-                    description = next((item.get('description') for item in self.client.target_feedback()
-                                        if item.get('target_id') == arguments['target_id']), None)
-                    if isinstance(description, str) and description.strip():
-                        relocalization, reacquisition = acquire(self, description)
-                        if registered(self.client, relocalization) and not self.interrupted():
-                            arguments['target_id'] = relocalization['target_id']
-                            retry = TargetMotion(self.client, self._flight, self.interrupted).execute(name, arguments)
-                            retry.setdefault('evidence', {})['remeasured_after_target_lost'] = {
-                                'first_attempt': result.get('message'), 'acquisition': reacquisition}
-                            result = retry
-                if (name in DEPTH_FALLBACK and result.get('status') == 'FAILED'
-                        and not result.get('reason_code') and not self.interrupted()):
-                    # A measurement failure, not a flight or safety one: range the
-                    # object with the forward depth camera instead of LiDAR identity.
-                    description = description or next((item.get('description') for item in self.client.target_feedback()
-                                                       if item.get('target_id') == arguments['target_id']), None)
-                    if isinstance(description, str) and description.strip():
-                        result = self._depth_fallback(name, description, arguments, result.get('message'))
+                result = TargetMotion(self.client, self._flight, self.interrupted).execute(name, arguments)
                 if localization is not None:
                     result.setdefault('evidence', {}).update(target_localization=localization,
                                                              acquisition=acquisition)
@@ -838,19 +789,6 @@ class ToolExecutor:
                 return None
             time.sleep(0.05)
         return None
-
-    def _depth_fallback(self, name, description, arguments, why):
-        from python.dcm.skills import depth_approach, depth_orbit
-        speed = arguments.get('maximum_ground_speed_mps', 1.0)
-        if name == 'orbit_target':
-            result = depth_orbit(self, description, arguments['standoff_m'],
-                                 revolutions=arguments.get('revolutions', 1.0),
-                                 clockwise=arguments.get('clockwise', True), maximum_ground_speed_mps=speed)
-        else:
-            result = depth_approach(self, description, arguments['standoff_m'],
-                                    target_id=arguments.get('target_id'), maximum_ground_speed_mps=speed)
-        result.setdefault('evidence', {})['lidar_measurement_failed'] = why
-        return result
 
     def _flight(self, name, args, runtime_target=False, acceptance_radius_m=None, expected_origin_id=None):
         client, pb = self.client, self.pb

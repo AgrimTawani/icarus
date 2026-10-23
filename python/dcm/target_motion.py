@@ -107,26 +107,30 @@ def _aim_height(target, state):
 
 REFRESH_ATTEMPTS = 3
 REFRESH_WAIT_S = 0.3  # LiDAR publishes at 10 Hz
-# The forward depth camera sees the whole face the nose points at, where a
-# sparse LiDAR may only catch a strip of it. Depth within this margin of the
-# requested standoff counts as close enough; nearer than the standoff, stop.
-DEPTH_CLOSE_MARGIN_M = 3.0
+# A re-measured range that disagrees with the aircraft's own movement by more
+# than this was taken on a different surface, not on the target.
+RANGE_CONSISTENCY_M = 1.5
 
 
-def depth_ahead_m(client):
-    """Near (10th percentile) depth in the forward camera's central patch, or None."""
-    feedback = getattr(client, 'depth_feedback', None)
-    if not callable(feedback):
-        return None
-    try:
-        summary = feedback()
-    except (OSError, RuntimeError, ValueError, KeyError):
-        return None
-    centre = summary.get('center', {}) if isinstance(summary, dict) else {}
-    value = centre.get('p10_optical_z_m')
-    if not summary.get('fresh', True) or isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value) if math.isfinite(value) else None
+def single_face_enclosure(geometry, viewer_xy):
+    """Bound an object measured from one side as a square as deep as it is wide.
+
+    The LiDAR has seen one face; the far side is unknown. Push the centre
+    away from the viewer by half the visible width and enclose the square.
+    """
+    center = point_xy(geometry.get('orbit_center') or geometry['center'])
+    hull = [point_xy(p) for p in geometry.get('observed_hull') or []]
+    width = max((math.dist(a, b) for a in hull for b in hull), default=0.0)
+    width = max(width, 2 * float(geometry.get('orbit_radius_m', geometry['radius_m'])))
+    half = width / 2
+    away = math.dist(viewer_xy, center)
+    if away < 0.05:
+        raise ValueError('Target direction is not measurable at this position')
+    pushed = (center[0] + half * (center[0] - viewer_xy[0]) / away,
+              center[1] + half * (center[1] - viewer_xy[1]) / away)
+    return {'center': {'north_m': pushed[0], 'east_m': pushed[1]},
+            'radius_m': math.hypot(half, half),
+            'observed_hull': geometry.get('observed_hull') or []}
 
 
 class TargetMeasurementError(ValueError):
@@ -182,33 +186,44 @@ class TargetMotion:
 
     def approach_target(self, target_id, standoff_m, maximum_ground_speed_mps=1.0):
         history = []
+        last_surface = None
         for _ in range(24):
             if self.interrupted():
                 return self._stop('Operator interrupted target approach.', measurements=history)
             try:
                 target = self._target(target_id)
             except TargetMeasurementError as error:
-                depth = depth_ahead_m(self.client)
-                if history and depth is not None and depth <= standoff_m + DEPTH_CLOSE_MARGIN_M:
-                    return self._depth_reached(target_id, standoff_m, depth, history,
-                                               'LiDAR lost the target surface')
-                raise error
+                if not history:
+                    raise
+                # Only the LiDAR measures the standoff. Losing the target is a
+                # result to report, not something to paper over with other sensors.
+                return self._stop(
+                    f'LiDAR lost the target after closing to {history[-1]:.1f} m '
+                    f'({error.measurement.get("reason", "target lost")}). A nearby object at or below '
+                    'this altitude falls under the LiDAR beams; it has not been reached. Holding here.',
+                    target_id=target_id, target_measurement=error.measurement,
+                    last_measured_range_m=history[-1], measurements_m=history)
             distance = float(target['surface_range_m'])
-            depth = depth_ahead_m(self.client)
-            if history and depth is not None and depth <= standoff_m and depth < distance - 1.0:
-                # Something the nose faces is already nearer than LiDAR says.
-                return self._depth_reached(target_id, standoff_m, depth, history + [distance],
-                                           'depth is nearer than the LiDAR surface')
             # A clean re-measurement should not jump far closer than the last
             # commanded step could explain. In a cluttered scene, LiDAR
             # association can drift onto a different nearby surface; treat an
             # implausible overshoot as a measurement fault, not progress.
-            if history and distance < standoff_m * 0.5 and distance < history[-1] - 1.5:
+            if history and distance < standoff_m * 0.5 and distance < history[-1] - RANGE_CONSISTENCY_M:
                 return self._stop(
                     'Re-measured target surface jumped implausibly closer; '
                     'likely re-associated with a different nearby surface. Stopping short of it.',
                     target_id=target_id, measurements=history + [distance])
+            if last_surface is not None:
+                # The range the previous surface would show from where we now are.
+                _, now_n, now_e = pose(self.client.state())
+                expected = math.dist((now_n, now_e), last_surface)
+                if distance > expected + RANGE_CONSISTENCY_M:
+                    return self._stop(
+                        f'Re-measured target surface is {distance:.1f} m away where the previous surface '
+                        f'would be {expected:.1f} m; the LiDAR is now on a different, farther surface. Holding here.',
+                        target_id=target_id, measurements=history + [distance])
             history.append(distance)
+            last_surface = point_xy(target['surface_point'])
             error = distance - standoff_m
             if abs(error) <= 0.25:
                 return {'status': 'SUCCEEDED', 'message': 'Measured target surface standoff reached.',
@@ -243,14 +258,6 @@ class TargetMotion:
             if len(history) >= 4 and max(history[-3:]) - min(history[-3:]) < 0.08:
                 return self._stop('No measurable progress toward target distance.', measurements=history)
         return self._stop('Target approach did not converge within its bounded execution.', measurements=history)
-
-    def _depth_reached(self, target_id, standoff_m, depth, history, why):
-        self.flight('hold', {'duration_s': 0.5})
-        return {'status': 'SUCCEEDED',
-                'message': f'Close enough: forward depth {depth:.1f} m ({why}).',
-                'evidence': {'target_id': target_id, 'requested_standoff_m': standoff_m,
-                             'final_depth_range_m': round(depth, 2),
-                             'standoff_measured_by': 'forward_depth_camera', 'measurements_m': history}}
 
     def _acquire_target_geometry(self, target_id, target, standoff_m, maximum_ground_speed_mps, require_height=False):
         """Measure at most two new face-edge views, preserving target identity.
@@ -387,13 +394,18 @@ class TargetMotion:
         if self.interrupted():
             return self._stop('Operator interrupted target orbit.')
         target = self._target(target_id, static_reference=True)
-        target, acquisition, failure = self._acquire_target_geometry(target_id, target, standoff_m, maximum_ground_speed_mps)
-        if failure is not None:
-            return failure
+        acquisition = []  # no measurement flights: orbit what the LiDAR has measured
         geometry = target['geometry']
-        state, _, _ = pose(self.client.state())
+        state, north, east = pose(self.client.state())
+        if state['local_position_ned']['origin_id'] != target['origin_id']:
+            raise ValueError('Target coordinate origin changed before orbit dispatch')
+        assumption = False
+        if not geometry.get('orbit_usable'):
+            geometry = single_face_enclosure(geometry, (north, east))
+            assumption = 'assumed square footprint from one measured face'
         center, radius, envelope = orbit_envelope(geometry, standoff_m,
             state.get('estimator', {}).get('horizontal_uncertainty_m'))
+        envelope['unseen_shape_bounded'] = assumption
         if self.interrupted():
             return self._stop('Operator interrupted before orbit movement.', geometry_acquisition=acquisition)
         metrics = OrbitMeasurements(center, clockwise)
