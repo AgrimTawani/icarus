@@ -167,6 +167,15 @@ class TargetMotion:
                 return self._stop('Operator interrupted target approach.', measurements=history)
             target = self._target(target_id)
             distance = float(target['surface_range_m'])
+            # A clean re-measurement should not jump far closer than the last
+            # commanded step could explain. In a cluttered scene, LiDAR
+            # association can drift onto a different nearby surface; treat an
+            # implausible overshoot as a measurement fault, not progress.
+            if history and distance < standoff_m * 0.5 and distance < history[-1] - 1.5:
+                return self._stop(
+                    'Re-measured target surface jumped implausibly closer; '
+                    'likely re-associated with a different nearby surface. Stopping short of it.',
+                    target_id=target_id, measurements=history + [distance])
             history.append(distance)
             error = distance - standoff_m
             if abs(error) <= 0.25:

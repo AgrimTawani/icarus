@@ -574,3 +574,27 @@ def test_orbit_camera_aims_level_when_the_target_top_was_not_measured():
     assert _aim_height({'footprint': {'height_m': 6.5}}, state) == 6.5
     assert _aim_height({'footprint': {'height_m': None, 'height_clipped': True}}, state) == 5.0
     assert _aim_height({}, state) == 5.0
+
+
+def test_approach_stops_if_remeasurement_jumps_implausibly_closer():
+    """Clutter can re-associate the target with a different, nearer surface.
+
+    This must be reported as a measurement fault, not treated as progress to
+    chase: otherwise approach can creep far past the requested standoff.
+    """
+    class DriftingClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.readings = iter([10.0, 0.3])  # second reading jumps far below standoff*0.5
+
+        def refresh_target(self, target_id):
+            base = super().refresh_target(target_id)
+            base['surface_range_m'] = next(self.readings)
+            return base
+
+    c = DriftingClient()
+    result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 3})
+    assert result['status'] == 'FAILED'
+    assert 'implausibly closer' in result['message']
+    goto_calls = [call for call in c.calls if call[0] == 'goto']
+    assert len(goto_calls) == 1  # stopped before compounding a second unsafe move
