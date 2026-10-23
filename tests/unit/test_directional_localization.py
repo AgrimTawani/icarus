@@ -1,7 +1,6 @@
 """Directional image acquisition owns orientation, never implicit departure."""
 import pytest
 from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
-from python.dcm.active_detection_feedback import ActiveDetectionFeedback
 from test_direct_agent import FakeClient, context
 
 
@@ -46,29 +45,14 @@ def test_native_localization_requires_direction():
     validate_call('localize_target',{'visual_query':'structure','view_heading_deg':0},tools=tools)
 
 
-def test_directional_capture_invalidates_previous_camera_sample():
-    feedback=ActiveDetectionFeedback(clock_ms=lambda:1000)
-    feedback.observe('detect',{'classes':['person']},{'status':'SUCCEEDED',
-        'evidence':{'camera':'forward_d435i','counts':{'person':0},'captured_at_unix_ms':1000}})
-    feedback.observe('localize_target',{}, {'status':'SUCCEEDED',
-        'evidence':{'found':True,'motion_command_issued':True}})
-    assert feedback.needs_refresh and feedback.revision==1
-
-
 def test_failed_inference_after_turn_invalidates_old_counts_and_keeps_error_code():
     from python.perception.vlm import VlmInferenceError
     client=FakeClient();client.vehicle.armed=True;client.vehicle.landed=False
     client.vehicle.relative_altitude_m=3
     def fail(**kwargs):raise VlmInferenceError('invalid_pixel_box','Bad measured image box')
     client.localize_target=fail
-    feedback=ActiveDetectionFeedback(clock_ms=lambda:1000)
-    feedback.observe('detect',{'classes':['person']},{'status':'SUCCEEDED',
-        'evidence':{'camera':'forward_d435i','counts':{'person':1},'captured_at_unix_ms':1000}})
     result=ToolExecutor(client).execute('localize_target',{
         'visual_query':'visible structure','view_heading_deg':90})
     assert result['status']=='FAILED' and result['error_code']=='invalid_pixel_box'
     assert result['evidence']['motion_command_issued'] is True
     assert [name for name,_ in client.sent]==['Yaw']
-    feedback.observe('localize_target',{},result)
-    assert feedback.revision==1 and not feedback.needs_refresh
-    assert feedback.snapshot()['observation']['validity']=='unknown'

@@ -105,9 +105,6 @@ def test_explicit_finish_at_match_is_terminal_before_next_turn():
     count = len(ex.calls)
     assert workflow.resume_heading_scan(result['evidence']['scan_id'])['workflow_complete']
     assert len(ex.calls) == count
-    from python.dcm.agent_tools import decision_tools
-    assert 'resume_heading_scan' not in [t['function']['name'] for t in
-        decision_tools({}, angular_scans=ex.client._angular_scans)]
 
 
 def test_explicit_pause_at_match_preserves_remaining_scan_for_nested_branch():

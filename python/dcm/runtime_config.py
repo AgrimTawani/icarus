@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v17-declared-observation-continuation'
-DIRECT_TOOL_VERSION = 'direct-tools-v26-explicit-repeat-motion'
+DIRECT_PROMPT_VERSION = 'direct-agent-v19-simple-loop'
+DIRECT_TOOL_VERSION = 'direct-tools-v28-fixed-catalogue'
 
 
 class DeadlineExceeded(Exception):

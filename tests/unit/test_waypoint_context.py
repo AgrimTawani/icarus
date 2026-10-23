@@ -29,18 +29,13 @@ def test_default_index_omits_names_coordinates_and_filesystem_path(tmp_path,monk
     assert waypoint_catalogue()['entries'][0]['heading_deg']==45
 
 
-def test_explicit_retrieval_persists_only_in_the_current_mission(tmp_path,monkeypatch):
+def test_saved_waypoint_names_are_offered_from_the_first_decision(tmp_path,monkeypatch):
     catalogue(tmp_path,monkeypatch)
-    def capture(client,include_waypoints=False,**kwargs):
-        return {**context(client),'registered_waypoints':catalogue_context(include_waypoints)}
-    monkeypatch.setattr('python.dcm.agent_context.capture_context',capture)
-    client=FakeClient();session=AgentSession('List the saved navigation poses.')
-    runtime=Runtime(call('get_context',include_waypoints=True),
-                    call('finish',outcome='completed',message='Retrieved saved poses.'))
-    result=fly_mission(client,runtime,session.mission,session=session,context_provider=capture,echo=lambda *a:None)
+    client=FakeClient()
+    runtime=Runtime(call('finish',outcome='completed',message='Listed saved poses.'))
+    result=run(client,runtime,mission='List the saved navigation poses.')
     assert result['status']=='completed' and not client.sent
-    assert 'Saved view A' not in json.dumps(runtime.inputs[0])
-    assert 'Saved view A' in json.dumps(runtime.inputs[1])
-    assert session.include_waypoints
-    fresh=AgentSession('Observe the current scene.')
-    assert not fresh.include_waypoints
+    assert 'saved waypoints: Saved view A' in runtime.inputs[0][-1]['content']
+    goto=next(t['function']['parameters'] for t in runtime.tools[0] if t['function']['name']=='goto')
+    assert 'Saved view A' in json.dumps(goto)
+    assert '"north_m": 2' not in json.dumps(runtime.inputs[0])

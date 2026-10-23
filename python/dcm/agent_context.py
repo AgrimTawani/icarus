@@ -10,14 +10,10 @@ from pathlib import Path
 from python.dcm.agent_tools import message_dict
 
 ROOT = Path(__file__).resolve().parents[2]
-PROMPT_FILES = ("system.md", "soul.md", "perception.md", "drone_api.md")
 
 
 def system_prompt():
-    return "\n\n".join(
-        (ROOT / "config/dcm/prompts" / name).read_text().strip()
-        for name in PROMPT_FILES
-    )
+    return (ROOT / "config/dcm/prompts/system.md").read_text().strip()
 
 
 def advertised_motion_limits(capabilities):

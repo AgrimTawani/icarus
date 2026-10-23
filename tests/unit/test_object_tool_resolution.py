@@ -105,8 +105,6 @@ def test_object_alternatives_have_complete_typed_grammar_branches():
             assert branch['type'] == 'object'
             assert branch['additionalProperties'] is False
             assert reference in branch['required']
-            assert 'mission_complete' in branch['properties']
             assert not Draft202012Validator(branch).is_valid({})
-            assert not Draft202012Validator(branch).is_valid({'mission_complete': True})
             if name != 'overfly_target':
                 assert 'standoff_m' in branch['required']

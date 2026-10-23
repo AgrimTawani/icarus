@@ -149,13 +149,9 @@ def test_orbit_measurements_cover_clockwise_and_counterclockwise():
         assert result['minimum_center_radius_m'] == 5
 
 
-def test_target_tools_are_not_sequence_items():
+def test_target_tools_accept_a_registered_target():
     for name in TARGET_FLIGHT:
         validate_call(name, {'target_id': 'a', **({'standoff_m': 3} if name != 'overfly_target' else {})})
-        with pytest.raises(ValueError):
-            validate_call('execute_sequence', {'actions': [
-                {'name': 'arm', 'arguments': {}},
-                {'name': name, 'arguments': {'target_id':'a', 'standoff_m':3}}]})
 
 
 def test_detector_schema_is_actual_capability():

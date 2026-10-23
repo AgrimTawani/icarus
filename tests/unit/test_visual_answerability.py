@@ -50,39 +50,6 @@ def test_answerable_negative_presence_is_a_successful_observation(tmp_path,monke
     assert result['status']=='SUCCEEDED' and not client.sent
 
 
-def test_agent_cannot_finish_completed_after_unanswerable_inspection(tmp_path,monkeypatch):
-    client=camera_client(tmp_path,monkeypatch,{'answerable':False,'answer':'View is inadequate.'})
-    runtime=Runtime(call('inspect_scene',question='Describe the subject.',question_type='description'),
-        call('finish',outcome='completed',message='Unsupported success.'),
-        call('finish',outcome='incomplete',message='The camera view could not answer the question.'))
-    result=run(client,runtime)
-    assert result['status']=='incomplete'
-    assert result['unresolved_tool_failures'][0]['action']=='inspect_scene'
-    assert 'UNRESOLVED_TOOL_FAILURES' in str(runtime.inputs[2])
-    assert not client.sent
-
-
-def test_camera_clarification_requires_new_usable_evidence_before_completion(tmp_path,monkeypatch):
-    from python.dcm.fly import AgentSession
-    client=camera_client(tmp_path,monkeypatch,{})
-    replies=iter([{'answerable':False,'answer':'Subject outside this view.'},
-                  {'answerable':True,'answer':'A brown surface is visible.'}])
-    cameras=[]
-    def inspect(question,view,**kwargs):
-        cameras.append(view['camera']);return next(replies)
-    monkeypatch.setattr(client,'inspect_scene',inspect)
-    session=AgentSession('Describe the selected subject.')
-    first=run(client,Runtime(call('inspect_scene',question='Describe the subject.',question_type='description',camera='forward_d435i'),
-        call('ask_user',question='May I use the other camera?')),session=session)
-    assert first['status']=='awaiting_user' and session.unresolved_tool_failures
-    session.answer('Use the downward camera.')
-    assert session.unresolved_tool_failures
-    final=run(client,Runtime(call('inspect_scene',question='Describe the subject.',question_type='description',camera='downward_brio'),
-        call('finish',outcome='completed',message='Visible surface described.')),session=session)
-    assert final['status']=='completed' and not session.unresolved_tool_failures
-    assert cameras==['forward_d435i','downward_brio'] and not client.sent
-
-
 def test_typed_false_visual_condition_does_not_require_positive_visibility(tmp_path,monkeypatch):
     client=camera_client(tmp_path,monkeypatch,{'found':False,'validity':'valid','answer':'No subject visible.'})
     result=ToolExecutor(client).execute('inspect_scene',
@@ -98,14 +65,3 @@ def test_unknown_visual_condition_cannot_be_coerced_to_negative_branch(tmp_path,
     assert result['status']=='OBSERVATION_UNAVAILABLE' and not client.sent
 
 
-def test_successful_condition_cannot_erase_an_unanswered_description():
-    from python.dcm.fly import AgentSession
-    session=AgentSession('Describe a target.')
-    session.remember_tool_result('inspect_scene',{'question_type':'description'},
-        {'status':'OBSERVATION_UNAVAILABLE','message':'Subject unseen.'})
-    session.remember_tool_result('inspect_scene',{'question_type':'condition'},
-        {'status':'SUCCEEDED','evidence':{'found':False}})
-    assert len(session.unresolved_tool_failures)==1
-    session.remember_tool_result('inspect_scene',{'question_type':'description'},
-        {'status':'SUCCEEDED','evidence':{'answerable':True}})
-    assert not session.unresolved_tool_failures

@@ -40,38 +40,6 @@ def test_invalid_turn_intent_never_dispatches(args):
     assert not client.sent
 
 
-def test_short_sequence_translates_direction_before_native_dispatch():
-    from test_direct_agent import FakeClient
-    client = FakeClient()
-    client.vehicle.armed = True
-    client.vehicle.landed = False
-    client.vehicle.relative_altitude_m = 3
-    args = {'actions': [
-        {'name': 'yaw', 'arguments': {'direction': 'counterclockwise', 'angle_deg': 30}},
-        {'name': 'hold', 'arguments': {'duration_s': 1}},
-    ]}
-    tools = decision_tools({}, loaded_tools={'execute_sequence'})
-    validate_call('execute_sequence', args, tools=tools)
-    result = ToolExecutor(client).execute('execute_sequence', args)
-    assert result['status'] == 'SUCCEEDED'
-    assert [name for name, _ in client.sent] == ['Yaw', 'Hold']
-    assert client.sent[0][1].relative_angle_deg == -30
-
-
-def test_completion_hint_has_one_contract_across_flight_and_observation_tools():
-    tools = decision_tools({})
-    for tool in tools:
-        assert tool['function']['parameters']['properties']['mission_complete']['type'] == 'boolean'
-    for name, args in [
-        ('inspect_scene', {'question': 'Describe visible surfaces', 'question_type': 'description'}),
-        ('detect', {'classes': ['person']}),
-        ('get_context', {'include_waypoints': True}),
-        ('load_tools', {'names': ['scan_heading']}),
-        ('finish', {'outcome': 'incomplete', 'message': 'No flight requested.'}),
-    ]:
-        validate_call(name, {**args, 'mission_complete': False}, tools=tools)
-
-
 def test_native_horizontal_pattern_inherits_height_without_a_second_altitude_goal():
     tools = decision_tools({})
     args = {'shape': 'rectangle', 'coverage': 'perimeter', 'width_m': 2,

@@ -3,7 +3,6 @@ import math
 import pytest
 from python.dcm.viewing import resolve_view,COMPASS_HEADINGS
 from python.dcm.agent_tools import ToolExecutor,decision_tools,validate_call
-from python.dcm.active_detection_feedback import ActiveDetectionFeedback
 from python.perception.vlm import VlmInferenceError
 from test_direct_agent import FakeClient,context
 
@@ -53,13 +52,9 @@ def test_failed_capture_after_turn_invalidates_old_view_counts(tmp_path):
     client,_=camera_client(tmp_path)
     def fail(**kwargs):raise VlmInferenceError('capture_failed','Camera acquisition failed')
     client.capture_view=fail
-    feedback=ActiveDetectionFeedback(clock_ms=lambda:1000)
-    feedback.observe('detect',{'classes':['person']},{'status':'SUCCEEDED',
-        'evidence':{'camera':'forward_d435i','counts':{'person':1},'captured_at_unix_ms':1000}})
     result=ToolExecutor(client).execute('inspect_scene',{'question':'Describe this view.','view':'north'})
-    feedback.observe('inspect_scene',{},result)
     assert result['status']=='FAILED' and result['error_code']=='capture_failed'
-    assert feedback.revision==1 and feedback.snapshot()['observation']['validity']=='unknown'
+    assert result['evidence']['motion_command_issued'] is True
 
 
 def test_face_heading_native_and_legacy_numeric_forms_share_controller(tmp_path):
@@ -71,7 +66,6 @@ def test_face_heading_native_and_legacy_numeric_forms_share_controller(tmp_path)
     assert math.degrees(client.vehicle.attitude.yaw_rad)%360==pytest.approx(270)
     tools=decision_tools(context(client))
     validate_call('face_heading',{'heading_deg':0},tools=tools)
-    validate_call('execute_sequence',{'actions':[{'name':'face_heading','arguments':{'heading_deg':0}},{'name':'hold','arguments':{'duration_s':1}}]},tools=tools)
 
 
 def test_detect_can_aim_and_capture_without_a_separate_model_call(tmp_path):
@@ -81,9 +75,5 @@ def test_detect_can_aim_and_capture_without_a_separate_model_call(tmp_path):
         return {'camera':'forward_d435i','counts':{'person':0},'captured_at_unix_ms':1000}
     client.detect=detect
     result=ToolExecutor(client).execute('detect',{'classes':['person'],'view':'north'})
-    feedback=ActiveDetectionFeedback(clock_ms=lambda:1000)
-    feedback.observe('detect',{'classes':['person']},result)
-    assert result['status']=='SUCCEEDED' and feedback.revision==1
-    assert feedback.snapshot()['observation']['counts']=={'person':0}
-    from python.dcm.fly import compact_result
-    assert compact_result(result)['evidence']['motion_command_issued'] is True
+    assert result['status']=='SUCCEEDED' and result['evidence']['counts']=={'person':0}
+    assert result['evidence']['motion_command_issued'] is True

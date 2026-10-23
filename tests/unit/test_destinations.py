@@ -231,7 +231,3 @@ def test_airborne_tool_catalogue_only_offers_supported_altitude_options():
         {'target_altitude_agl_m':5,'maximum_climb_rate_mps':1},tools=tools)
 
 
-def test_airborne_batch_cannot_reintroduce_unsupported_departure_rate():
-    tools=decision_tools({'state':{'landed':False,'armed':True}})
-    args={'actions':[{'name':'takeoff','arguments':{'target_altitude_agl_m':5,'maximum_climb_rate_mps':1}}]}
-    with pytest.raises(ValueError):validate_call('execute_sequence',args,tools=tools)

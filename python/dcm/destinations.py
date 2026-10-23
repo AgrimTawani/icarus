@@ -131,7 +131,7 @@ def validate_destination(operation, args):
     kind = args['destination_type']
     coords = {'north_m', 'east_m'} if operation == 'goto' else {'center_north_m', 'center_east_m'}
     required = set()
-    allowed = {'destination_type', 'mission_complete', 'mission_progress',
+    allowed = {'destination_type',
                'maximum_ground_speed_mps', 'altitude_agl_m'}
     if operation == 'orbit':
         allowed |= {'camera', 'clockwise', 'revolutions'}

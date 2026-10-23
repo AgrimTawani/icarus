@@ -34,7 +34,8 @@ class VlmContractTests(unittest.TestCase):
         boolean = inspection_prompt("Is the subject visible?", True, "boolean")
         count = inspection_prompt("How many are visible?", True, "count")
         self.assertIn('"found":true or false or null', boolean)
-        self.assertIn("False is a usable negative answer", boolean)
+        self.assertIn("First write what you see", boolean)
+        self.assertLess(boolean.index('"answer"'), boolean.index('"found"'))
         self.assertIn("individually visible instances", count)
         self.assertIn("never infer invisible instances", count)
 

@@ -164,43 +164,16 @@ WORKFLOW_FLIGHT["fly_pattern"] = obj({
                     "classes", "stop_on_detection", "minimum_count", "return_on", "exit_policy"}
 }, ["shape", "coverage"])
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
-SEQUENCE_FLIGHT = {name: schema for name, schema in FLIGHT.items()
-                   if name != 'execute_route'}
-# Ordinary geometric maneuvers are directly callable; parameter-heavy
-# batching and observation workflows remain discoverable on demand.
-DEFAULT_CONTROLLER_TOOLS = frozenset({'orbit', 'fly_pattern'})
-OPTIONAL_TOOL_SUMMARIES = {
-    'execute_sequence': 'Batch two or three unconditional primitive actions after loading this schema.',
-    'goto': 'Fly to supplied coordinates, home/launch or a saved navigation pose.',
-    'orbit': 'Circle an object or coordinate center; supports target-facing camera intent.',
-    'localize_target': 'Acquire/update object geometry from camera, depth and LiDAR.',
-    'scan_heading': 'Turn-settle-observe cycles, conditional stopping and resumable scans.',
-    'scan_area': 'Geometric area/perimeter flight with sampled camera observations.',
-    'fly_pattern': 'Camera-free geometric perimeter/area flight delegated to ArduPilot.',
-    'execute_route': 'Explicit waypoint list delegated to ArduPilot AUTO.'}
-OPTIONAL_TOOLS = tuple(OPTIONAL_TOOL_SUMMARIES)
+# The fixed live catalogue for the mission agent. Scan/route workflows and
+# get_context stay available to Python callers, not to per-step decisions.
+AGENT_TOOLS = (
+    'arm', 'disarm', 'takeoff', 'land', 'return_home', 'hold', 'cancel',
+    'yaw', 'face_heading', 'move_relative', 'goto', 'orbit',
+    'approach_target', 'overfly_target', 'fly_pattern',
+    'detect', 'inspect_scene', 'localize_target', 'assess_landing_zone',
+    'ask_user', 'finish')
 SCHEMAS.update(
     {
-        "load_tools": obj({"names": {"type": "array", "items": {"enum": list(OPTIONAL_TOOLS)}, "minItems": 1, "uniqueItems": True}}, ["names"]),
-        "execute_sequence": obj(
-            {
-                "actions": {
-                    "type": "array",
-                    "minItems": 2,
-                    "maxItems": 3,
-                    # Each action carries exactly its own contract. A union of
-                    # all argument properties invites models to fill irrelevant
-                    # fields and loses the name/arguments relationship.
-                    "items": {"oneOf": [
-                        obj({"name": {"const": name},
-                             "arguments": copy.deepcopy(schema)},
-                            ["name", "arguments"])
-                        for name, schema in SEQUENCE_FLIGHT.items()
-                    ]},
-                }
-            },
-            ["actions"],
-        ),
         "detect": obj(
             {
                 "classes": DETECTION_CLASSES,
@@ -217,12 +190,6 @@ SCHEMAS.update(
             {"view": VIEW_SCHEMA, "view_heading_deg": {"type":"number", "minimum":0, "exclusiveMaximum":360}, "description": {**TEXT, 'description': 'Visual subject in the current image. Compass labels are not observable in pixels: face the requested direction first, then describe the object by visible features.'}, "new_target": {**BOOL, "description": "Default false: add measurements to the same physical object across viewpoints. True explicitly discards prior views and starts a distinct target; do not use true just to refresh a measurement."}}, ["description"]
         ),
         "get_context": obj({"include_geometry": BOOL, "include_waypoints": {**BOOL, "description": "Load saved vehicle navigation poses when a named waypoint is requested; these are not physical object positions."}}),
-        "read_action_result": obj({
-            "action_index": {"type": "integer", "minimum": 1},
-            "path": {"type": "array", "maxItems": 16,
-                     "items": {"oneOf": [{"type": "string"}, {"type": "integer", "minimum": 0}]}},
-            "offset": {"type": "integer", "minimum": 0},
-            "limit": {"type": "integer", "minimum": 1, "maximum": 16}}, ['action_index']),
         "ask_user": obj({"question": TEXT}, ["question"]),
         "finish": obj(
             {
@@ -235,14 +202,7 @@ SCHEMAS.update(
         ),
     }
 )
-for name in SCHEMAS:
-    for branch in SCHEMAS[name].get("oneOf", [SCHEMAS[name]]):
-        branch["properties"]["mission_complete"] = {
-            "type": "boolean",
-            "description": "Optional completion hint, never a mission verdict.",
-        }
 DESCRIPTIONS = {
-    'load_tools': 'Load optional navigation/observation tool schemas for subsequent decisions. Read-only; performs no flight or observation. Names and purposes are listed in context.optional_tools.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Fly a circular path around a center; face it by default. Object destinations use standoff_m from measured hull; coordinate/home/launch destinations use radius_m and altitude_agl_m. Select camera explicitly; none requests heading-only flight. Cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
@@ -253,19 +213,17 @@ DESCRIPTIONS = {
     'takeoff': 'Reach the requested altitude above home. From landed, arm if needed and take off. If already flying, change height vertically with native goto while holding current horizontal position. Explicit maximum_climb_rate_mps applies only to ground departure.',
     'return_home': 'Return to measured autopilot home and land by default. land_at_home=false returns and holds. Return flight may change yaw.',
     "move_relative": "Move a specified body-frame distance, or one derived from a current metric measurement. Never guess a distance to reach a named waypoint or visual object: ask about missing waypoints, or use object-motion tools. Forward/right follow current heading; up increases altitude; negative values reverse direction.",
-    'execute_sequence': 'Execute 2–3 contiguous unconditional flight actions in order, stopping at failure. Do not cross an intervening observation or decision.',
     'execute_route': 'Upload local waypoints as one ArduPilot AUTO route. Stopped checkpoints honor heading/dwell; fly_through=true permits continuous course-facing motion without them. Altitudes are above home.',
     'fly_pattern': 'ArduPilot geometric flight without observations, anchored at current position. Square needs width; rectangle width extends right, length forward; circle center lies one radius forward; area needs lane_spacing_m. Heading defaults current; clockwise=false starts rightward. Perimeters return to start. repetitions repeats; hold_time_s dwells; camera_heading_deg fixes heading.',
     'scan_area': 'Geometric flight plus sampled camera stations, anchored at current position. Rectangle width extends right, length forward; square needs width, circle radius, area lane_spacing_m. observation defaults scene, camera downward_brio, observation_count4. Select exit_policy explicitly: each_observation for arbitrary branching, finish_at_match to end at a detector match, pause_at_match for nested branches that resume, complete_coverage for unconditional scans. Resume with resume_scan.',
     'resume_scan': 'Resume a saved area scan with its original anchor and remaining stations.',
     'detect': 'Detect/count supported class enum labels in a current image, including while disarmed. Unsupported objects use inspect_scene/localize_target. Counts are thresholded detections, not guaranteed totals; default camera forward_d435i.',
-    'inspect_scene': 'Ask onboard VLM about visible appearance, objects or relationships. Samples configured detector counts separately when available; VLM prose is qualitative evidence, not metric geometry or measured counts.',
+    'inspect_scene': 'Ask the onboard VLM one question about the current camera image. VLM prose is qualitative evidence, not metric geometry or measured counts.',
     'localize_target': 'Associate a visible object with measured LiDAR/depth. Returns surface range, footprint quality and reusable target_id; another viewpoint may be needed. Reuse the query to accumulate views.',
     'approach_target': 'Move to a measured surface standoff from a visible or registered object destination. Recede only if already closer. This does not establish being above it. Another viewpoint may be needed to measure its geometry.',
     'orbit_target': 'Circle a measured object with nose facing it. Supply target_id or visual_query. standoff_m is minimum distance from its observed hull, not center radius or global obstacle clearance; wall distance varies for non-round shapes. Partial geometry may require two measured side views first. Select camera for visual intent.',
     'overfly_target': 'Fly ABOVE a physical object: climb above its measured top, then move over its footprint center. destination selects visible_object with visual_query and view, or registered_target with target_id. An observation waypoint is not above the object. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
     'get_context': 'Refresh state/health/perception; include_geometry adds obstacle bounds. Normally refreshed automatically.',
-    'read_action_result': 'Read retained history by executed_actions index. Omit path to discover receipt fields. Optional path lists exact returned keys/array indices, starting at action/arguments/result; follow retained_details paths or returned fields. An absent path returns path_found=false and valid paths, never the missing data. offset/limit page large data. Read-only: historical data never establishes a current condition.',
     'ask_user': 'Ask one concise question about operator intent or ambiguity left after available sensing. Use available tools yourself; do not ask the operator to perform their actions. The answer continues this mission.',
     'finish': 'Report measured outcome, operating defaults/assumptions used and limitations. completed requires all requested work; incomplete/rejected explains what prevents progress.',
 }
@@ -305,11 +263,6 @@ def turn_arguments(name, arguments, *, native=False):
     args = copy.deepcopy(arguments)
     if not isinstance(args, dict):
         return args
-    if name == 'execute_sequence' and isinstance(args.get('actions'), list):
-        for child in args['actions']:
-            if isinstance(child, dict) and isinstance(child.get('arguments'), dict):
-                child['arguments'] = turn_arguments(
-                    child.get('name'), child['arguments'], native=native)
     if name != 'yaw':
         return args
     angle = args.get('angle_deg')
@@ -325,19 +278,7 @@ def turn_arguments(name, arguments, *, native=False):
     return args
 
 
-# A repeated observation carries only its immediate continuation, not a route
-# or future branch. Null explicitly denotes a one-shot observation.
-SCHEMAS['inspect_scene']['properties']['repeat_motion'] = {
-    'description': 'The user-requested movement repeated between views; null for a one-shot inspection. '
-                   'Retain the requested direction/rate. This declares intent and executes no movement.',
-    'oneOf': [{'type': 'null'}, *[
-        obj({'name': {'const': name}, 'arguments': schema}, ['name', 'arguments'])
-        for name, schema in (
-            ('yaw', directional_yaw_schema(SCHEMAS['yaw'])),
-            ('move_relative', copy.deepcopy(SCHEMAS['move_relative'])))]]}
-
-
-def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=None, require_progress=False):
+def decision_tools(context, names=AGENT_TOOLS):
     """Bind opaque handles to exact currently known values, without rewriting calls.
 
     Geometry validity and workflow ownership remain backend responsibilities.
@@ -348,14 +289,6 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
                          if isinstance(item, dict) and isinstance(item.get('target_id'), str)
                          and item.get('reference_available', True) is not False
                          and item['target_id']}) if isinstance(targets, list) else []
-    def resumable_ids(registry):
-        return sorted(key for key, saved in (registry or {}).items()
-                      if isinstance(key, str) and key and isinstance(saved, dict)
-                      and not saved.get('completed', False))
-    scan_ids = {
-        'resume_heading_scan': resumable_ids(angular_scans),
-        'resume_scan': resumable_ids(area_scans),
-    }
     advertised = context.get('motion_limits', {})
     limits = {}
     for parameter, capability in (
@@ -414,14 +347,7 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
     catalog = []
     for tool in bind_limits(TOOLS):
         function = tool['function']
-        # A loaded navigation catalogue must expose the tool that can consume
-        # its handles; discovering a waypoint must not require guessing a second
-        # unrelated tool-discovery action. This depends on data, not mission text.
-        catalogue_navigation = (function['name'] == 'goto'
-            and bool(context.get('registered_waypoints', {}).get('entries')))
-        if (loaded_tools is not None and function['name'] in OPTIONAL_TOOLS
-                and function['name'] not in DEFAULT_CONTROLLER_TOOLS
-                and function['name'] not in loaded_tools and not catalogue_navigation):
+        if names is not None and function['name'] not in names:
             continue
         if function['name'] in TARGET_FLIGHT and function['name'] not in ('overfly_target','approach_target'):
             # Native tools distinguish approach from overflight; object orbit
@@ -459,25 +385,7 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             function['parameters']['properties'].pop('altitude_agl_m', None)
             function['description'] += (' This horizontal pattern retains current altitude; '
                 'use takeoff first for an explicitly requested altitude change.')
-        if function['name'] == 'execute_sequence':
-            variants = function['parameters']['properties']['actions']['items']['oneOf']
-            function['parameters']['properties']['actions']['items']['oneOf'] = [
-                branch for branch in variants if branch['properties']['name']['const'] not in ('goto', 'orbit')]
-            for branch in function['parameters']['properties']['actions']['items']['oneOf']:
-                if branch['properties']['name']['const'] == 'yaw':
-                    branch['properties']['arguments'] = directional_yaw_schema(
-                        branch['properties']['arguments'])
-        if function['name'] == 'read_action_result':
-            count = context.get('retained_action_result_count', 0)
-            if type(count) is not int or count < 1:
-                continue
-            function['parameters']['properties']['action_index']['maximum'] = count
         properties = function['parameters'].get('properties', {})
-        if function['name'] in scan_ids and not scan_ids[function['name']]:
-            continue
-        choices = scan_ids.get(function['name'])
-        if choices and 'scan_id' in properties:
-            properties['scan_id'] = {**properties['scan_id'], 'enum': choices.copy()}
         if function['name'] == 'localize_target' and 'description' in properties:
             # Give the model a typed image-space query rather than an
             # ambiguous target name. Existing Python callers retain their
@@ -494,23 +402,25 @@ def decision_tools(context, angular_scans=None, area_scans=None, loaded_tools=No
             function['description'] = function['description'].replace('description', 'visual_query')
             if isinstance(function['parameters'].get('description'), str):
                 function['parameters']['description'] = function['parameters']['description'].replace('description', 'visual_query')
-        # Explicit legacy callers can still request the old diagnostic. The
-        # live catalogue carries no self-authored plan field.
-        if require_progress:
-            function['parameters']['properties'] = {
-                'mission_progress': {'type': 'string', 'minLength': 1, 'maxLength': 600},
-                **function['parameters']['properties']}
-            function['parameters']['required'].append('mission_progress')
-        if function['name'] in ('scan_heading', 'scan_area'):
-            # Legacy scheduling aliases remain available to Python callers;
-            # the agent makes one explicit lifecycle choice instead.
-            function['parameters']['properties'].pop('return_on', None)
-            function['parameters']['required'].append('exit_policy')
-        if function['name'] == 'inspect_scene':
-            function['parameters']['required'].append('repeat_motion')
+        parameters = function['parameters']
+        if 'oneOf' not in parameters and not parameters.get('properties'):
+            # The pinned llama.cpp cannot build a grammar for an object with no
+            # properties. Advertise one optional log-only field; drop_padding
+            # removes it before dispatch.
+            parameters['properties'] = {PADDING: {'type': 'string', 'maxLength': 200,
+                                                  'description': 'Optional short reason, logged only.'}}
         catalog.append(tool)
-    from python.dcm.active_visual_feedback import bind_recovery_tools
-    return bind_recovery_tools(catalog, context.get('current_visual_condition'))
+    return catalog
+
+
+PADDING = 'reason'
+
+
+def drop_padding(name, arguments):
+    """Remove the advertised-only grammar padding from a parameterless tool call."""
+    if name in SCHEMAS and not SCHEMAS[name].get('properties') and 'oneOf' not in SCHEMAS[name]:
+        arguments.pop(PADDING, None)
+    return arguments
 
 
 def validate_call(name, arguments, *, tools=None, detector_classes=None):
@@ -538,15 +448,7 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         schema['properties']['classes']['items'] = {'type':'string', 'enum':list(supported)}
         schema['properties']['classes']['maxItems'] = len(supported)
     arguments = canonical_view_arguments(name, copy.deepcopy(arguments))
-    if name == 'inspect_scene' and tools is not None:
-        # Saved pre-continuation calls remain read-only by default. Live native
-        # generation must explicitly supply the field in the advertised schema.
-        arguments.setdefault('repeat_motion', None)
     arguments = turn_arguments(name, arguments, native=tools is not None)
-    if 'mission_progress' not in schema.get('properties', {}):
-        # Read old saved/native turns without forwarding diagnostic text to a
-        # physical controller or advertising it to current model decisions.
-        arguments.pop('mission_progress', None)
     if reference_call:
         from python.dcm.destinations import canonical_destination_arguments
         arguments = canonical_destination_arguments(name, arguments)
@@ -591,15 +493,6 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None):
         from python.dcm.scan_policy import scan_arguments
         scan_arguments(arguments, default_observation='detect' if name == 'scan_heading' else 'scene',
                        coverage_return='sweep' if name == 'scan_heading' else 'completion')
-    if name == "execute_sequence" and tools is None:
-        for action in arguments["actions"]:
-            errors = list(
-                Draft202012Validator(FLIGHT[action["name"]]).iter_errors(
-                    action["arguments"]
-                )
-            )
-            if errors:
-                raise ValueError(format_schema_error(action['name'], errors[0]))
 
 
 def observation_call(args, *, default_observation, default_camera, client=None):
@@ -657,28 +550,12 @@ class ToolExecutor:
         arguments = turn_arguments(name, arguments)
         if name in (*TARGET_FLIGHT, 'localize_target') and 'visual_query' in arguments:
             arguments['description'] = arguments.pop('visual_query')
-        complete = arguments.pop("mission_complete", False)
         if self.interrupted():
             return {
                 "status": "CANCELLED",
                 "message": "Operator interrupted the mission.",
             }
-        visual_feedback = getattr(self.session, 'visual_feedback', None)
-        if visual_feedback and visual_feedback.recovery_required(name, arguments):
-            return {'status': 'VIEWPOINT_REQUIRED', 'no_action_executed': True,
-                    'message': 'Localization contradicted the visual answer for this subject. Resume its observation '
-                               'continuation and check fresh evidence, or clarify if none exists. No movement sent.',
-                    'evidence': {'visual_condition': visual_feedback.snapshot()}}
-        if visual_feedback and not visual_feedback.permits_motion(name, arguments):
-            return {'status': 'CONTINUATION_REQUIRED', 'no_action_executed': True,
-                    'message': 'Observation recovery must resume its saved movement, not introduce a new maneuver. '
-                               'Use the continuation or clarify with the operator. No movement sent.',
-                    'evidence': {'visual_condition': visual_feedback.snapshot()}}
-        if visual_feedback and visual_feedback.unresolved_approach(name, arguments):
-            return {'status': 'OBSERVATION_UNAVAILABLE', 'no_action_executed': True,
-                    'message': 'The current visual question is unanswered. Obtain a valid inspection or measured '
-                               'localize_target result before approaching a visible object. No movement sent.',
-                    'evidence': {'visual_condition': visual_feedback.snapshot()}}
+        gate = getattr(self.session, 'viewpoint_gate', None)
         orientation = None
         requested_view = None
         heading = None
@@ -702,26 +579,18 @@ class ToolExecutor:
                         if orientation['status'] != 'SUCCEEDED':
                             orientation.setdefault('evidence',{})['motion_command_issued']=True
                             return orientation
+            # Checked after any directional turn above, which is itself a new view.
+            if gate and gate.blocks(name, arguments):
+                return {'status': 'VIEWPOINT_REQUIRED', 'no_action_executed': True,
+                        'message': 'Measured localization contradicted the positive visual answer in this view, so '
+                                   'observing it again cannot resolve the conflict. Change the viewpoint with motion '
+                                   "the user's request calls for, then observe again; or ask the user or finish if "
+                                   'it calls for none. No camera or flight command sent.'}
             if name in ('goto', 'orbit', 'overfly_target','approach_target') and 'destination' in arguments:
                 from python.dcm.destinations import execute_destination
                 operation = 'goto' if name in ('overfly_target','approach_target') else name
                 bound = dict(arguments, object_position='above') if name == 'overfly_target' else arguments
                 result = execute_destination(self, operation, bound)
-            elif name == "execute_sequence":
-                results = []
-                for item in arguments["actions"]:
-                    result = self.execute(item["name"], item["arguments"])
-                    results.append({**item, "result": result})
-                    if result["status"] != "SUCCEEDED":
-                        break
-                result = {
-                    "status": results[-1]["result"]["status"],
-                    "actions": results,
-                    "message": f"Executed {len(results)} of {len(arguments['actions'])} actions.",
-                }
-                if results[-1]['result'].get('requires_user_choice'):
-                    result.update(requires_user_choice=True,
-                                  question=results[-1]['result']['question'])
             elif name == "takeoff":
                 state = message_dict(self.client.state())
                 if state.get('landed') is False and state.get('armed') is True:
@@ -833,21 +702,6 @@ class ToolExecutor:
                             'The requested inspection is unfinished. Obtain a usable view, or ask the operator '
                             'before changing an explicitly requested camera or viewing constraint. '
                             'Do not report the target description as completed.'))
-                    vocabulary = getattr(self.client, 'camera_detector_classes', lambda: [])()
-                    if vocabulary and not self.interrupted():
-                        # Quantitative feedback comes from the configured
-                        # detector, never numbers inferred from VLM prose.
-                        # This is a separate current capture with its own pose
-                        # and timestamp, not a same-frame sensor-fusion claim.
-                        request = {'camera': camera, 'classes': vocabulary}
-                        try:
-                            detection = {'status': 'SUCCEEDED',
-                                'evidence': self.client.detect(**request)}
-                        except Exception as error:
-                            detection = {'status': 'FAILED', 'message': str(error)}
-                        result['evidence']['camera_detection'] = {
-                            'arguments': request, 'result': detection,
-                            'capture_relationship': 'separate_detector_capture_after_vlm_inspection'}
                 finally:
                     # inspect_scene normally consumes the frame; clean up if inference fails early.
                     import shutil
@@ -858,18 +712,6 @@ class ToolExecutor:
                     "status": "SUCCEEDED",
                     "evidence": getattr(self.client, name)(**arguments),
                 }
-            elif name == 'read_action_result':
-                from python.dcm.action_memory import read_action_result
-                if self.session is None:
-                    raise ValueError('Receipt lookup needs the active mission conversation')
-                result = {'status': 'SUCCEEDED',
-                          'retained_result': read_action_result(self.session.actions, **arguments)}
-            elif name == 'load_tools':
-                if self.session is None:
-                    raise ValueError('Tool loading needs an active mission session')
-                self.session.loaded_tools.update(arguments['names'])
-                result = {'status': 'SUCCEEDED', 'loaded_tools': sorted(self.session.loaded_tools),
-                          'message': 'Schemas available on the next decision; no flight executed.'}
             elif name == "get_context":
                 from python.dcm.agent_context import capture_context
 
@@ -897,8 +739,8 @@ class ToolExecutor:
             result.setdefault('evidence',{}).update(requested_view=requested_view,
                 motion_command_issued=orientation is not None)
             if heading is not None:result['evidence']['requested_view_heading_deg']=heading
-        if complete and result["status"] == "SUCCEEDED" and result.get("workflow_complete", True) and not self.interrupted():
-            result["mission_complete"] = True
+        if gate:
+            gate.dispatched(name, arguments, result)
         return result
 
     def _confirm_disarmed_ground(self, timeout_s=2.5):

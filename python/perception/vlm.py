@@ -24,11 +24,12 @@ from pathlib import Path
 SCHEMA = "icarus.vision.qualitative.v1"
 GROUNDING_SCHEMA = "icarus.vision.grounding.v1"
 MAX_QUESTION_CHARS = 240
+# answer precedes found: the model describes the image before committing to a verdict.
 CONDITION_SCHEMA = {
     "type": "object", "properties": {
-        "found": {"type": ["boolean", "null"]},
-        "answer": {"type": "string", "maxLength": 300}},
-    "required": ["found", "answer"], "additionalProperties": False,
+        "answer": {"type": "string", "maxLength": 300},
+        "found": {"type": ["boolean", "null"]}},
+    "required": ["answer", "found"], "additionalProperties": False,
 }
 COUNT_SCHEMA = {
     "type": "object", "properties": {
@@ -213,8 +214,9 @@ def inspection_prompt(question, structured=False, result_type="description"):
             'answerable means the image supports answering this question. A negative presence answer can be answerable. An attribute of an unseen subject is not answerable.')
     elif structured and result_type == "boolean":
         output = (
-            'Return JSON only: {"found":true or false or null,"answer":"brief visible evidence"}. '
-            'found is the truth of the asked yes/no question. False is a usable negative answer; use null when the image cannot decide it.')
+            'Return JSON only: {"answer":"<the main things actually visible in this image>","found":true or false or null}. '
+            'First write what you see, then set found: true only if the asked subject is clearly visible in what you described. '
+            'Sky, ground, grass and roads alone mean false. Use null when the image cannot decide it.')
     elif structured:
         output = (
             'Count only individually visible instances in this single image. Return JSON only: '

@@ -2,7 +2,6 @@
 import pytest
 from python.dcm.angular_scan import AngularScan
 from python.dcm.scan_workflow import ScanWorkflow
-from python.dcm.fly import compact_result
 from test_angular_scan import Executor as AngularExecutor
 from test_scan_workflow import Executor as AreaExecutor
 
@@ -30,13 +29,9 @@ def test_receipt_expresses_only_actual_filter_and_survives_compaction(kind, coun
                        'observed_count': count, 'matched': match, 'station': 1,
                        'scope': 'workflow_stop_filter_not_mission_verdict'}
     assert (r['evidence']['event'] == 'condition_met') == match
-    # Exercise shared-station compaction with a realistic cumulative receipt.
-    evidence = r['evidence']
-    evidence['observations'] = evidence['observations'] * 3
-    packed = compact_result(r)
-    assert packed['evidence']['workflow_stop_filter'] == receipt
+    assert r['evidence']['workflow_stop_filter'] == receipt
     assert all(item['workflow_stop_filter'] == receipt
-               for item in packed['evidence']['observations'])
+               for item in r['evidence']['observations'])
 
 
 @pytest.mark.parametrize('kind', ['angular', 'area'])

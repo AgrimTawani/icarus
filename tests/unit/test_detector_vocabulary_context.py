@@ -7,7 +7,7 @@ from test_direct_agent import FakeClient
 
 def test_native_schemas_constrain_labels_before_generation_and_dispatch():
     tools=decision_tools({'detector_classes':['model-specific-label']})
-    for name in ('detect','scan_heading','scan_area'):
+    for name in ('detect',):
         schema=next(t['function']['parameters'] for t in tools if t['function']['name']==name)
         assert schema['properties']['classes']['items']['enum'] == ['model-specific-label']
         # Inspect the advertised schema directly: validate_call must not hide

@@ -99,9 +99,7 @@ def test_actual_camera_captures_keep_separate_trackers_and_shared_model(tmp_path
     assert all(model is client.edge_detector_runtime for model in models)
     assert first['camera'] == 'forward_d435i' and second['camera'] == 'downward_brio'
     assert first['captured_at_unix_ms'] > 0
-    from python.dcm.fly import compact_result
     assert first['confidence_threshold'] == 0.35
-    assert compact_result(first)['confidence_threshold'] == 0.35
 
 
 

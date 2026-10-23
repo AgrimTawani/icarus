@@ -60,16 +60,3 @@ def test_all_public_detection_lists_share_identical_capability_contract():
         assert SCHEMAS[name]['properties']['classes'] == expected
 
 
-def test_native_scan_calls_require_explicit_exit_policy_without_removing_python_compatibility():
-    from python.dcm.agent_tools import decision_tools, validate_call
-    tools=decision_tools({})
-    for name,args in [('scan_heading',{'step_deg':30,'classes':['person']}),
-                      ('scan_area',{'shape':'square','coverage':'perimeter','width_m':2})]:
-        validate_call(name,args)  # Existing Python callers keep their contract.
-        with pytest.raises(ValueError,match='exit_policy'):
-            validate_call(name,args,tools=tools)
-        validate_call(name,{**args,'exit_policy':'each_observation'},tools=tools)
-        schema=next(t['function']['parameters'] for t in tools if t['function']['name']==name)
-        assert 'return_on' not in schema['properties']
-    pattern=next(t['function']['parameters'] for t in tools if t['function']['name']=='fly_pattern')
-    assert 'exit_policy' not in pattern['properties']

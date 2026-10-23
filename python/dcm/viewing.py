@@ -28,7 +28,4 @@ def canonical_view_arguments(name, arguments):
     if name in ('face_heading','localize_target','inspect_scene','detect') and key in result:
         if 'view' in result:raise ValueError('Supply view once, not both heading aliases')
         result['view']=result.pop(key)
-    if name=='execute_sequence' and isinstance(result.get('actions'),list):
-        result['actions']=[{**a,'arguments':canonical_view_arguments(a.get('name'),a.get('arguments'))}
-                           if isinstance(a,dict) else a for a in result['actions']]
     return result

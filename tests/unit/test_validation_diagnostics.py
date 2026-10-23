@@ -47,15 +47,6 @@ def test_object_reference_alternatives_remain_visible():
     assert len(message) < 450
 
 
-def test_tagged_union_reports_selected_action_missing_field_not_all_other_actions():
-    message, result = rejected('execute_sequence', {'actions': [
-        {'name': 'takeoff', 'arguments': {}}, {'name': 'arm', 'arguments': {}}]})
-    assert result['validator'] == 'required'
-    assert result['path'] == ['actions', 0, 'arguments']
-    assert result['expected']['missing_required'] == ['target_altitude_agl_m']
-    assert len(message) < 300
-
-
 @pytest.mark.parametrize('arguments,validator,expected,actual', [
     ({'angle_deg': 30, 'rate_deg_s': 90}, 'maximum', 60, 90),
     ({'angle_deg': 'ninety'}, 'type', 'number', 'ninety'),

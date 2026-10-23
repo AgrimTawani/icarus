@@ -51,36 +51,9 @@ def test_registered_target_handles_include_stale_and_update_without_mutating_sta
     validate_call('orbit_target', {'target_id': 'unknown', 'standoff_m': 3})
 
 
-def test_workflow_handle_choices_are_separate_and_missing_ids_hide_dependent_tools():
-    catalog = decision_tools({}, {'turn_123': {}}, {'area_456': {}})
-    assert prop(catalog, 'resume_heading_scan', 'scan_id')['enum'] == ['turn_123']
-    assert prop(catalog, 'resume_scan', 'scan_id')['enum'] == ['area_456']
-    empty = decision_tools({})
-    names = {tool['function']['name'] for tool in empty}
-    assert not names.intersection({'resume_heading_scan', 'resume_scan'})
-    for name in ('approach_target', 'orbit'):
-        schema = next(t['function']['parameters'] for t in empty if t['function']['name'] == name)
-        variants = schema['properties']['destination']['oneOf']
-        assert 'registered_target' not in [v['properties']['type']['const'] for v in variants]
-        visible = next(v for v in variants if v['properties']['type']['const']=='visible_object')
-        assert {'visual_query','view'} <= set(visible['required'])
-    assert 'orbit_target' not in names and 'approach_target' in names
-    assert 'overfly_target' in names
-    assert {'localize_target', 'orbit', 'goto', 'face_heading', 'scan_area', 'scan_heading'} <= names
-    assert 'enum' not in prop(TOOLS, 'resume_heading_scan', 'scan_id')
-    assert 'enum' not in prop(TOOLS, 'orbit_target', 'target_id')
-
-
 def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflows():
     client = FakeClient()
-    client._angular_scans = {'previous_turn': {}}
-    client._scan_workflows = {'previous_area': {}}
     session = AgentSession('Hold and report.')
-    # Handle-contract tests exercise already-discovered tools.
-    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target", "execute_sequence"})
-    session.angular_scans = {'current_turn': {'completed': False, 'phase': 'observe',
-                                            'swept_deg': 30, 'observations': []}}
-    session.area_scans = {'current_area': {'completed': False}}
     catalogs = []
     calls = 0
 
@@ -100,26 +73,6 @@ def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflow
     assert result['status'] == 'completed'
     assert prop(catalogs[0], 'orbit', 'target_id')['enum'] == ['target_1']
     assert prop(catalogs[1], 'orbit', 'target_id')['enum'] == ['target_2']
-    for catalog in catalogs:
-        assert prop(catalog, 'resume_heading_scan', 'scan_id')['enum'] == ['current_turn']
-        assert prop(catalog, 'resume_scan', 'scan_id')['enum'] == ['current_area']
-
-
-def test_completed_workflows_disappear_but_paused_and_open_ended_remain():
-    angular = {'done': {'completed': True},
-               'paused': {'completed': False, 'phase': 'observe'},
-               'open': {'completed': False, 'args': {'repeat_until_match': True}}}
-    area = {'done_area': {'completed': True}, 'paused_area': {'completed': False}}
-    catalog = decision_tools({}, angular, area)
-    assert prop(catalog, 'resume_heading_scan', 'scan_id')['enum'] == ['open', 'paused']
-    assert prop(catalog, 'resume_scan', 'scan_id')['enum'] == ['paused_area']
-    angular['paused']['completed'] = angular['open']['completed'] = True
-    area['paused_area']['completed'] = True
-    next_catalog = decision_tools({}, angular, area)
-    assert not {'resume_heading_scan', 'resume_scan'}.intersection(
-        tool['function']['name'] for tool in next_catalog)
-    assert prop(catalog, 'resume_heading_scan', 'scan_id')['enum'] == ['open', 'paused']
-    assert 'enum' not in prop(TOOLS, 'resume_heading_scan', 'scan_id')
 
 
 def test_truncation_retry_uses_same_handle_bindings():
@@ -135,7 +88,6 @@ def test_truncation_retry_uses_same_handle_bindings():
             return call('finish', outcome='incomplete', message='No flight needed.')
 
     session = AgentSession('Report.')
-    session.loaded_tools.add('orbit')
     fly_mission(client, Runtime(), 'Report.', session=session,
                 context_provider=lambda c: {**context(c), 'targets': [{'target_id': 'exact_123'}]},
                 echo=lambda *args: None)
@@ -150,11 +102,6 @@ def test_server_motion_limits_apply_to_nested_arguments_without_affecting_other_
     assert prop(catalog, 'takeoff', 'maximum_climb_rate_mps')['maximum'] == 1.25
     assert prop(catalog, 'goto', 'maximum_ground_speed_mps')['maximum'] == 4.5
     assert 'maximum' not in prop(catalog, 'goto', 'north_m')
-    points = prop(catalog, 'execute_route', 'points')['items']['properties']
-    assert points['maximum_ground_speed_mps']['maximum'] == 4.5
-    branches = prop(catalog, 'execute_sequence', 'actions')['items']['oneOf']
-    takeoff = next(b for b in branches if b['properties']['name']['const'] == 'takeoff')
-    assert takeoff['properties']['arguments']['properties']['maximum_climb_rate_mps']['maximum'] == 1.25
     assert TOOLS == before
     # An older server or unavailable/malformed capability must not invent a limit.
     for value in (None, {}, {'maximum_climb_speed_mps': float('nan')},
@@ -168,8 +115,6 @@ def test_orbit_catalog_requires_visual_intent_and_reference_workflows_are_not_ba
     schema = next(t['function']['parameters'] for t in catalog if t['function']['name']=='orbit')
     assert {'camera','destination'} <= set(schema['required'])
     assert schema['properties']['camera']['enum'] == ['forward_d435i','downward_brio','none']
-    variants = prop(catalog, 'execute_sequence', 'actions')['items']['oneOf']
-    assert not {'goto','orbit'}.intersection(b['properties']['name']['const'] for b in variants)
     validate_call('orbit', {'center_reference':'home','radius_m':3,'altitude_agl_m':8})
 
 
@@ -182,14 +127,7 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
          {'motion_limits': {'maximum_climb_speed_mps': 2.5}}, 'maximum'),
         ('orbit', {'destination': {'type':'registered_target','target_id':'invented'}, 'standoff_m':3, 'camera':'forward_d435i'},
          {'targets':[{'target_id':'registered'}]}, 'destination'),
-        ('resume_heading_scan', {'scan_id': 'completed'}, {}, 'unavailable'),
-        ('resume_scan', {'scan_id': 'completed_area'}, {}, 'unavailable'),
-        ('execute_sequence', {'actions': [{'name': 'arm', 'arguments': {}},
-            {'name': 'takeoff', 'arguments': {'target_altitude_agl_m': 3,
-                                            'maximum_climb_rate_mps': 3}}]},
-         {'motion_limits': {'maximum_climb_speed_mps': 2.5}}, 'maximum'),
-        ('execute_sequence', {'actions': [{'name': 'orbit', 'arguments': {
-            'center_reference': 'home', 'radius_m': 3, 'altitude_agl_m': 8}}]}, {}, 'actions'),
+        ('scan_heading', {'step_deg': 30}, {}, 'unavailable'),
     ]
     def unexpected_execution(*args, **kwargs):
         raise AssertionError('Invalid advertised call reached ToolExecutor')
@@ -197,10 +135,6 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
     for name, arguments, extra_context, diagnostic in cases:
         client = FakeClient()
         session = AgentSession('Exercise tool contract.')
-        # Handle-contract tests exercise already-discovered tools.
-        session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target", "execute_sequence"})
-        session.angular_scans = {'completed': {'completed': True}}
-        session.area_scans = {'completed_area': {'completed': True}}
         runtime = Runtime(call(name, **arguments),
                           call('finish', outcome='incomplete', message='Invalid arguments.'))
         fly_mission(client, runtime, session.mission, session=session,
@@ -208,18 +142,16 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
                     echo=lambda *args: None)
         assert not client.sent
         assert not session.actions
-        assert len(session.rejected_validation_attempts) == 1
-        rejected = session.rejected_validation_attempts[0]
-        assert rejected['no_action_executed'] is True
-        assert diagnostic in rejected['message'], (name, rejected)
+        rejected = [m['content'] for m in session.messages
+                    if m.get('role') == 'tool' and 'INVALID_ARGUMENT' in m['content']]
+        assert len(rejected) == 1
+        assert diagnostic in rejected[0], (name, rejected)
 
 
 def test_exact_contract_is_also_used_after_truncation_retry():
     from python.dcm.llama_runtime import IncompleteModelResponse
     client = FakeClient()
     session = AgentSession('Check retry contract.')
-    # Handle-contract tests exercise already-discovered tools.
-    session.loaded_tools.update({"goto", "orbit", "localize_target", "overfly_target", "approach_target", "execute_sequence"})
     catalogs = []
     class Runtime:
         def decide(self, messages, tools, concise=False):
@@ -235,7 +167,7 @@ def test_exact_contract_is_also_used_after_truncation_retry():
                 echo=lambda *args: None)
     assert catalogs[0] is catalogs[1]
     assert not client.sent
-    assert 'maximum' in session.rejected_validation_attempts[0]['message']
+    assert 'maximum' in next(m['content'] for m in session.messages if m.get('role') == 'tool')
 
 
 def test_direct_executor_retains_static_api_contract():

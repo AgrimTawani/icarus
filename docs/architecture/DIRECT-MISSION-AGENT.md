@@ -14,96 +14,55 @@ involved in that argument-name translation.
 
 ## Execution
 
-1. Preserve the original mission and clarification answers in a conversation.
-2. Fetch state, health and perception concurrently. Compact obstacle geometry
-   and telemetry without injecting simulator ground truth.
-3. Ask for one native tool call. `ask_user` pauses the conversation; `finish`
-   communicates its final outcome. Neither is a flight command.
-4. Execute the selected tool using the existing typed Drone API. A takeoff
-   arms if necessary. A sequence contains two or three unconditional flight
-   actions, each waited to completion; the first non-success stops the group.
-5. Return the result and refresh context for the next decision. `mission_complete`
-   is only a hint: the same agent sees the results and continues omitted work or
-   calls `finish`. Successful actions are not an independent proof of mission intent.
+One step at a time, in `python/dcm/fly.py`:
 
-There is no whole-mission JSON, semantic compiler, resolver, admission model,
-review model, preflight mission graph, or automatic plan confirmation.
-JSON Schema checks only tool names, argument types and required fields.
-The Drone API still owns physical limits, leases, live clearance, action
-preconditions, cancellation and autopilot protections.
+1. Read live state, health and perception (used to bind tool schemas: registered
+   target IDs, saved waypoint names, motion limits, detector classes).
+2. Ask the model for one native tool call. `ask_user` pauses the conversation;
+   `finish` reports the outcome. Neither is a flight command.
+3. Execute that call through the typed Drone API (`ToolExecutor`), then append a
+   brief result (status, message, key measured facts) and a one-line vehicle
+   state to the conversation.
+4. Stop after three unsuccessful calls in a row, at the decision limit, on
+   `cancel`, or when the operator interrupts.
+
+Nothing runs between steps that the model did not ask for: no automatic camera
+or VLM refreshes, no batching, no completion hints, no context packing. The
+conversation (system prompt, request, then each call/result) is append-only, so
+llama-server reuses its prompt cache and a step only processes the newest
+exchange. Model reasoning is off. If the context fills, the oldest call/result
+pair is dropped; the request is always kept. Full results stay in the episode.
+
+There is no whole-mission JSON, semantic compiler, admission or review model.
+JSON Schema checks tool names, argument types and required fields. The Drone API
+still owns physical limits, leases, live clearance, action preconditions,
+cancellation and autopilot protections.
 
 ## Prompt and tools
 
-The four agreed files are concatenated in this order:
-`system.md`, `soul.md`, `perception.md`, `drone_api.md`. There are no example
-missions. Native tool definitions are generated from `agent_tools.py` and
-included once in the request; their serialization adds tokens beyond the prose
-prefix. New communication tools carry questions/results unambiguously.
-`get_context(include_geometry=true)` requests measured obstacle bounds;
-`localize_target` exposes the existing camera/LiDAR measurement service.
-Neither reconstructs the removed language-grounding gate.
+`config/dcm/prompts/system.md` is the whole prompt: follow the request in order
+with its exact quantities, use only requested motion, measure an object with
+`localize_target` before flying to it, and finish with measured results.
 
-Native target tools use `visual_query` for an image referent; legacy Python
-callers may still supply `description`. The operator's wording remains in
-target identity and reporting. The vision component identifies the referred
-object, then supplies an image box using the pinned model's native format;
-LiDAR/depth and measured capture pose supply metric geometry. Unknown visual
-answers remain unknown. Navigation metadata stays in the grounding receipt
-and pilot context rather than becoming extra visual-presence constraints.
+The catalogue is fixed (`AGENT_TOOLS` in `agent_tools.py`): flight primitives,
+`goto`, `orbit`, `approach_target`, `overfly_target`, `fly_pattern`, `detect`,
+`inspect_scene`, `localize_target`, `assess_landing_zone`, `ask_user`, `finish`.
+Scan and route workflows remain available to Python callers, not the agent.
+Handle-bound schemas enumerate exact registered target IDs and waypoint names.
+The pinned llama.cpp cannot compile a grammar for a parameterless object, so
+such tools advertise one optional log-only `reason` field, dropped before dispatch.
 
-Handle-dependent tools appear after a measured target or saved workflow exists.
-Their schemas enumerate exact registered IDs, avoiding transcription of opaque
-handles; this does not interpret the mission or guess a missing reference.
-Episodes record the actual tool catalog with each decision for reproducibility.
+Visual objects: `inspect_scene` question_type=condition asks the VLM a yes/no
+question; its grammar makes it describe the image before giving `found`. A VLM
+answer is not a measurement. `localize_target` associates the image region with
+depth/LiDAR and returns a `target_id`, which `approach_target` (surface
+standoff) and `orbit` (circle at standoff, nose facing it) consume.
 
-The state/perception context is data. Missing data remains unavailable and
-timestamps are retained. Hull vertices are not sent every turn. Detailed
-localization remains in perception code. Flight history drops repeated state
-snapshots from model input while complete execution records remain in episodes.
-An empty geometric-perception detection field is explicitly unknown camera
-evidence, not proof of zero objects. The agent's `detect` tool always defaults
-to a current forward-camera image; it cannot accidentally invoke the legacy
-multi-camera counting window by omitting the camera argument.
-
-Feedback includes factual successful-action counts and indexed observations.
-These aid the model but do not independently verify its interpretation of the
-mission. A malformed native tool response gets one concise retry before any
-action is dispatched; unrelated server failures are not blindly retried.
-Failed tool receipts remain unresolved until that tool later succeeds;
-all attempts remain in the execution ledger. Corrected arguments may recover
-an operation without an exact-argument admission rule. The
-final `completed` claim cannot conceal those unresolved failures; the agent
-must continue the operation or report incomplete. This is a receipt check,
-not an interpretation or upfront validation of the user's mission. It does
-not independently prove omitted instructions or the truth of VLM descriptions.
-Current target geometry appears once in the registry view. Historical nested
-localizations retain identity, timestamp, range, bearing, height and uncertainty,
-and refer to that current geometry; raw historical geometry remains in episodes.
-Older observation details are paged out of the decision view, not deleted.
-`read_action_result` retrieves retained receipts by the execution ledger's
-stable index and a JSON-data path. Large results return field/page cursors;
-lookup has no flight authority and explicitly labels historical evidence.
-This keeps retry chains and long scans from repeatedly injecting diagnostics
-into the 16K window, without dropping the operator's request or adding a
-mission compiler. Exact model token counts still guard each request.
-If counting finds insufficient room, the agent repacks retained receipts once
-before inference, keeping the original request and every clarification. This
-does not spend an LLM decision or dispatch an action. If even that cannot fit,
-the session reports the context limit without truncating the operator's text.
-
-Angular scans own a resumable turn/observe phase. A failed capture leaves the
-observation pending; it cannot advance the heading. Without a declared
-predicate the workflow returns each observation for the agent's decision.
-Only an explicit unconditional sweep or measured detector predicate permits
-automatic continuation. Workflow state belongs to one mission; clarification
-preserves it, while a new mission starts with fresh workflow state. The console
-retains the previous request/outcome as reference data for follow-up requests.
-
-Recent native exchanges preserve action order. Observation evidence appears
-once in the indexed feedback, rather than again in every cumulative tool
-result. Full telemetry remains in episodes; the model sees the measurements
-and validity needed for decisions. Unknown battery endurance is not reported
-as zero remaining flight time.
+Same-view gate (`viewpoint_gate.py`): when localization finds nothing after a
+positive visual answer, dispatch refuses `inspect_scene`, `localize_target` and
+visible-object flight until a movement succeeds (`VIEWPOINT_REQUIRED`). The model
+chooses that movement from the request; the gate only guarantees new evidence
+comes from a new view.
 
 Coordinate orbits resolve named home/launch references from measured frames.
 Horizontal target-facing yaw and camera visibility have separate contracts.
