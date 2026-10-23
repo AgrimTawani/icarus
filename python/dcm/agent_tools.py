@@ -678,6 +678,14 @@ class ToolExecutor:
                 from python.dcm.target_motion import TargetMotion
                 localization = acquisition = None
                 description = arguments.get('description')
+                if name == 'approach_target' and description and not self.interrupted():
+                    # Depth ranges the object from the current view in one VLM call;
+                    # the LiDAR acquisition below re-grounds and turns repeatedly.
+                    from python.dcm.skills import depth_approach
+                    result = depth_approach(self, description, arguments['standoff_m'],
+                                            maximum_ground_speed_mps=arguments.get('maximum_ground_speed_mps', 1.0))
+                    if result.get('status') != 'FAILED' or result.get('reason_code'):
+                        return result
                 if 'description' in arguments:
                     from python.dcm.skills import acquire
                     localization, acquisition = acquire(self, arguments.pop('description'))

@@ -229,10 +229,11 @@ def test_depth_approach_is_close_enough_without_moving():
     assert result['evidence']['target_id'] == 't'
 
 
-def test_depth_fix_centres_an_off_centre_object_first():
-    executor = FlightExecutor(DepthClient([depth_view(20.0, bearing=40.0), depth_view(20.0, bearing=41.0)]))
+def test_depth_fix_faces_an_off_centre_object_from_one_reading():
+    executor = FlightExecutor(DepthClient([depth_view(20.0, bearing=40.0)]))
     fix, _ = skills.depth_fix(executor, 'house')
-    assert names(executor) == ['face_heading'] and fix['bearing_deg'] == 41.0
+    assert names(executor) == ['face_heading'] and fix['bearing_deg'] == 40.0
+    assert executor.client.localizations == []  # no second VLM call after turning
 
 
 def test_no_depth_means_no_motion():

@@ -141,18 +141,17 @@ def depth_fix(executor, description):
     """Return (fix, localization): the object's centre from box bearing and depth, or None."""
     from python.dcm.agent_tools import message_dict
     client = executor.client
-    localization = {}
-    for _ in range(2):
-        localization = client.localize_target(nearest(description))
-        bearing = _image_bearing(localization)
-        depth = localization.get('depth_at_capture') or {}
-        near, median = depth.get('p10_optical_z_m'), depth.get('median_optical_z_m')
-        span = (localization.get('bearing_deg') or {}).get('image_span_relative')
-        if bearing is None or not _finite(near, median) or not isinstance(span, list) or not _finite(*span):
-            return None, localization
-        offset = (bearing - _heading_deg(client) + 180) % 360 - 180
-        if abs(offset) <= CENTRE_TOLERANCE_DEG:
-            break
+    # One reading is enough: the bearing is absolute and turning in place does
+    # not move the depth it measured. Asking again from a few metres often
+    # fails because the object fills the whole frame.
+    localization = client.localize_target(nearest(description))
+    bearing = _image_bearing(localization)
+    depth = localization.get('depth_at_capture') or {}
+    near, median = depth.get('p10_optical_z_m'), depth.get('median_optical_z_m')
+    span = (localization.get('bearing_deg') or {}).get('image_span_relative')
+    if bearing is None or not _finite(near, median) or not isinstance(span, list) or not _finite(*span):
+        return None, localization
+    if abs((bearing - _heading_deg(client) + 180) % 360 - 180) > CENTRE_TOLERANCE_DEG:
         turned = executor.execute('face_heading', {'heading_deg': round(bearing % 360, 1)})
         if turned.get('status') != 'SUCCEEDED':
             return None, localization
@@ -185,7 +184,11 @@ def depth_approach(executor, description, standoff_m, target_id=None, maximum_gr
     if fix is None:
         return {'status': 'FAILED', 'message': 'Depth could not range the object in view.',
                 'evidence': {'target_localization': localization}}
+    if target_id is None and registered(executor.client, localization):
+        target_id = localization['target_id']
     evidence = {'target_id': target_id, 'depth_fix': fix, 'standoff_measured_by': 'forward_depth_camera'}
+    if target_id is None:
+        evidence['next_step'] = 'To orbit it, use orbit with destination visible_object and the same visual_query.'
     if fix['near_depth_m'] <= standoff_m + DEPTH_CLOSE_MARGIN_M:
         return {'status': 'SUCCEEDED', 'evidence': evidence,
                 'message': f"Close enough: the object's nearest depth is {fix['near_depth_m']} m."}

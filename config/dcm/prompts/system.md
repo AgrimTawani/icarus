@@ -13,7 +13,7 @@ Finding an object:
 
 Flying to an object:
 - Once search_for_object or inspect_scene found the named object, call approach_target with destination type visible_object and a short visual_query (the object's class). It centres the object, measures it with depth and LiDAR, closes in if needed, and stops at standoff_m from its surface. Its result has a target_id.
-- If the operator gives no distance, choose a safe standoff_m yourself and say so in finish: 5 m from a building or house, 3 m from a small object; never below 3 m.
+- If the operator gives a distance ("orbit it at 6 meters", "stay 8 m away"), that is standoff_m for both approach_target and orbit. Only if they give none, choose a safe standoff_m yourself and say so in finish: 5 m from a building or house, 3 m from a small object; never below 3 m.
 - For "the nearest/closest X", use visual_query "nearest X".
 - Then use that target_id as a registered_target destination: orbit circles it at standoff_m keeping the nose and front camera (camera forward_d435i) facing it; overfly_target flies above it.
 - If an orbit is ABORTED_BY_SAFETY or blocked by an obstacle (trees, nearby buildings), climb 4 m with takeoff and retry it once at the same standoff_m; never retry faster.

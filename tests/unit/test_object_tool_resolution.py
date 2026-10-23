@@ -54,7 +54,8 @@ def test_description_localizes_then_real_controller_refreshes_and_moves():
     client = DescribedClient()
     result = executor(client).execute('approach_target', {'description': 'grey object', 'standoff_m': 3})
     assert result['status'] == 'SUCCEEDED'
-    assert client.localized == ['nearest grey object']  # acquisition grounds the nearest instance
+    # depth first (no depth here), then LiDAR acquisition; both ground the nearest instance
+    assert client.localized == ['nearest grey object', 'nearest grey object']
     assert set(client.refreshed) == {'measured_123'}
     assert client.north == pytest.approx(7)
     assert result['evidence']['target_localization']['target_id'] == 'measured_123'
@@ -120,7 +121,7 @@ class StripClient(DescribedClient):
 
     def localize_target(self, description):
         self.localized.append(description)
-        if len(self.localized) > 1:
+        if len(self.localized) > 2:  # after the depth try and the far LiDAR fix
             self.measurement = {'found': True, 'target_id': 'house'}
         return self.measurement
 
@@ -137,7 +138,7 @@ def test_lost_far_fix_is_measured_again_once_and_the_approach_continues():
     assert result['status'] == 'SUCCEEDED'
     assert result['evidence']['target_id'] == 'house'
     assert 'remeasured_after_target_lost' in result['evidence']
-    assert client.localized == ['nearest house', 'nearest house']
+    assert client.localized == ['nearest house'] * 3  # depth try, LiDAR fix, re-measure
 
 
 def test_orbit_falls_back_to_depth_when_lidar_geometry_is_partial():
