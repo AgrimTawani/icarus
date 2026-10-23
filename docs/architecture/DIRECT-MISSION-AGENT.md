@@ -41,22 +41,37 @@ cancellation and autopilot protections.
 ## Prompt and tools
 
 `config/dcm/prompts/system.md` is the whole prompt: follow the request in order
-with its exact quantities, use only requested motion, measure an object with
-`localize_target` before flying to it, and finish with measured results.
+with its exact quantities and the listed defaults, use only requested motion,
+search with `search_for_object`, fly to objects with `approach_target`, and
+finish with measured results.
 
 The catalogue is fixed (`AGENT_TOOLS` in `agent_tools.py`): flight primitives,
-`goto`, `orbit`, `approach_target`, `overfly_target`, `fly_pattern`, `detect`,
-`inspect_scene`, `localize_target`, `assess_landing_zone`, `ask_user`, `finish`.
-Scan and route workflows remain available to Python callers, not the agent.
-Handle-bound schemas enumerate exact registered target IDs and waypoint names.
-The pinned llama.cpp cannot compile a grammar for a parameterless object, so
-such tools advertise one optional log-only `reason` field, dropped before dispatch.
+`goto`, `orbit`, `search_for_object`, `approach_target`, `overfly_target`,
+`fly_pattern`, `detect`, `inspect_scene`, `localize_target`,
+`assess_landing_zone`, `ask_user`, `finish`. Scan and route workflows remain
+available to Python callers, not the agent. Handle-bound schemas enumerate exact
+registered target IDs and waypoint names. The pinned llama.cpp cannot compile a
+grammar for a parameterless object, so such tools advertise one optional
+log-only `reason` field, dropped before dispatch.
+
+Skills (`skills.py`) are short bounded loops over ordinary executor actions, so
+the model makes one call where a mission step needs several sensor/motion turns:
+
+- `search_for_object(visual_query, clockwise, step_deg, rate_deg_s,
+  max_sweep_deg)`: inspect the view with a VLM yes/no question, turn one step,
+  repeat until found or the sweep is used. A failed turn is retried once.
+- Visible-object acquisition, inside `approach_target`/`overfly_target` with a
+  `visible_object` destination: localize; if the box is more than 8 degrees off
+  centre, face its bearing; if it is centred but LiDAR cannot range it, step up
+  to 4 m forward (never within 7 m of anything ahead); localize again; at most
+  five cycles. The resulting `target_id` is then flown to.
 
 Visual objects: `inspect_scene` question_type=condition asks the VLM a yes/no
 question; its grammar makes it describe the image before giving `found`. A VLM
-answer is not a measurement. `localize_target` associates the image region with
-depth/LiDAR and returns a `target_id`, which `approach_target` (surface
-standoff) and `orbit` (circle at standoff, nose facing it) consume.
+answer is not a measurement. `localize_target` grounds one box in the image and
+associates it with depth/LiDAR, returning a `target_id` that `approach_target`
+(surface standoff) and `orbit` (circle at standoff, nose facing it) consume. The
+transit to an object's side view flies short arcs facing the object.
 
 Same-view gate (`viewpoint_gate.py`): when localization finds nothing after a
 positive visual answer, dispatch refuses `inspect_scene`, `localize_target` and

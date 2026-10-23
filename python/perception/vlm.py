@@ -24,12 +24,14 @@ from pathlib import Path
 SCHEMA = "icarus.vision.qualitative.v1"
 GROUNDING_SCHEMA = "icarus.vision.grounding.v1"
 MAX_QUESTION_CHARS = 240
-# answer precedes found: the model describes the image before committing to a verdict.
+# seen precedes found: the model names what it sees before the verdict. A
+# field called "answer" first made the 3B VLM write the verdict there and
+# leave found null; found first made it agree with the question.
 CONDITION_SCHEMA = {
     "type": "object", "properties": {
-        "answer": {"type": "string", "maxLength": 300},
+        "seen": {"type": "string", "maxLength": 300},
         "found": {"type": ["boolean", "null"]}},
-    "required": ["answer", "found"], "additionalProperties": False,
+    "required": ["seen", "found"], "additionalProperties": False,
 }
 COUNT_SCHEMA = {
     "type": "object", "properties": {
@@ -66,22 +68,23 @@ def decode_measurement(answer, result_type="boolean"):
     if result_type not in {"boolean", "count", "description"}:
         raise ValueError("VLM result_type must be boolean, count or description")
     key = {"boolean":"found", "count":"count", "description":"answerable"}[result_type]
+    explanation = "seen" if result_type == "boolean" else "answer"
     base = {"result_type": result_type, key: None, "value": None}
     if result_type == "count":
         base["count_scope"] = "visible_frame"
     try:
         value = json.loads(answer)
-        if not isinstance(value, dict) or set(value) != {key, "answer"}:
+        if not isinstance(value, dict) or set(value) != {key, explanation}:
             raise ValueError("missing or unexpected measurement fields")
         measured = value[key]
-        if not isinstance(value["answer"], str) or len(value["answer"]) > 300:
+        if not isinstance(value[explanation], str) or len(value[explanation]) > 300:
             raise ValueError("measurement explanation must be bounded text")
         if measured is not None and not (
                 type(measured) is bool if key in ("found", "answerable") else
                 type(measured) is int and measured >= 0):
             raise ValueError("incorrect measurement type")
         return dict(base, **{key: measured, "value": measured,
-                            "answer": value["answer"],
+                            "answer": value[explanation],
                             "validity": "unknown" if measured is None or key == "answerable" and measured is False else "valid"})
     except (ValueError, TypeError):
         return dict(base, validity="unknown", error_code="malformed_output",
@@ -214,9 +217,8 @@ def inspection_prompt(question, structured=False, result_type="description"):
             'answerable means the image supports answering this question. A negative presence answer can be answerable. An attribute of an unseen subject is not answerable.')
     elif structured and result_type == "boolean":
         output = (
-            'Return JSON only: {"answer":"<the main things actually visible in this image>","found":true or false or null}. '
-            'First write what you see, then set found: true only if the asked subject is clearly visible in what you described. '
-            'Sky, ground, grass and roads alone mean false. Use null when the image cannot decide it.')
+            'Return JSON only, with two fields in this order. seen: name the main objects in this image. '
+            'found: true if the asked subject is among them and clearly visible, otherwise false. Use null only if the image is unusable.')
     elif structured:
         output = (
             'Count only individually visible instances in this single image. Return JSON only: '
@@ -471,33 +473,36 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
     with _GroundingServer(executable, artifact, gpu_layers,
                           started + timeout_s) as server:
         loaded = time.monotonic()
-        presence = server.complete(
-            image_b64, f"The requested target is: {description}. "
-            "Can you identify the physical object referred to in the image? "
-            "Answer yes or no.", "", 4).strip()
-        first_word = presence.lower().replace('.', ' ').replace(',', ' ').split()
-        if not first_word or first_word[0] not in ('yes', 'no'):
-            raise VlmInferenceError('invalid_presence',
-                'VLM did not provide a usable yes/no observation; presence is unknown')
-        present = presence_answer_is_yes(presence)
         grounding = None
-        if present and grounding_format == 'json_pixel_xyxy':
+        if grounding_format == 'json_pixel_xyxy':
+            # One question: where is it, or null. A separate yes/no step could
+            # contradict the box and blocked objects plainly in view.
             from PIL import Image
             with Image.open(image_path) as image:
                 width, height = image.size
             if input_transform:
                 width, height = input_transform['model_width'], input_transform['model_height']
             raw = server.complete(image_b64,
-                f'Locate the physical object referred to as: {description}. '
-                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] in the supplied image pixel coordinates '
-                f'({width} wide, {height} high). Use bbox=null if the object is not visible.',
+                f'Find the {description} in this image. '
+                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] around it in image pixel coordinates '
+                f'({width} wide, {height} high). Use bbox=null if no {description} is visible.',
                 '', 96, grammar=measurement_grammar('pixel_box'))
             pixel_box, normalized = decode_pixel_box(raw, width, height)
-            if normalized is None:
-                raise VlmInferenceError('inconsistent_presence',
-                    'Positive presence did not produce a measured image box')
-            grounding = f'({normalized[0]},{normalized[1]}),({normalized[2]},{normalized[3]})'
-        elif present:
+            present = normalized is not None
+            presence = 'Yes.' if present else 'No.'
+            if present:
+                grounding = f'({normalized[0]},{normalized[1]}),({normalized[2]},{normalized[3]})'
+        else:
+            presence = server.complete(
+                image_b64, f"The requested target is: {description}. "
+                "Can you identify the physical object referred to in the image? "
+                "Answer yes or no.", "", 4).strip()
+            first_word = presence.lower().replace('.', ' ').replace(',', ' ').split()
+            if not first_word or first_word[0] not in ('yes', 'no'):
+                raise VlmInferenceError('invalid_presence',
+                    'VLM did not provide a usable yes/no observation; presence is unknown')
+            present = presence_answer_is_yes(presence)
+        if present and grounding_format != 'json_pixel_xyxy':
             grounding = "(" + server.complete(
                 image_b64, f"Locate the physical object referred to as: {description}.",
                 f"<|object_ref_start|>the {description}<|object_ref_end|>"
@@ -527,11 +532,16 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
     }
 
 
+EDGE_OVERSHOOT = 0.10
+
+
 def decode_pixel_box(answer, width, height):
     """Validate source-image coordinates before conversion to the existing API.
 
-    Null alone means an observed absence. Malformed, inverted, nonfinite or
-    off-image coordinates are unknown measurements, never clipped successes.
+    Null alone means an observed absence. Malformed, inverted or nonfinite
+    coordinates are unknown measurements. The VLM often overshoots a frame
+    edge slightly when an object runs off it; up to EDGE_OVERSHOOT of the
+    image size is clipped to the edge, anything further is rejected.
     """
     try:
         if any(type(size) is not int or size <= 0 for size in (width, height)):
@@ -545,9 +555,11 @@ def decode_pixel_box(answer, width, height):
         if (not isinstance(box, list) or len(box) != 4 or
                 any(type(v) not in (int, float) or not math.isfinite(v) for v in box)):
             raise ValueError('Expected four finite pixel coordinates')
-        x1, y1, x2, y2 = box
-        if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
+        slack_x, slack_y = EDGE_OVERSHOOT * width, EDGE_OVERSHOOT * height
+        if not (-slack_x <= box[0] < box[2] <= width + slack_x
+                and -slack_y <= box[1] < box[3] <= height + slack_y):
             raise ValueError(f'Bounding box {box} is inverted or outside source image {width}x{height}')
+        box = [min(max(v, 0), size) for v, size in zip(box, (width, height, width, height))]
         normalized = tuple(round(1000 * v / size) for v, size in
                            zip(box, (width, height, width, height)))
         if normalized[0] >= normalized[2] or normalized[1] >= normalized[3]:

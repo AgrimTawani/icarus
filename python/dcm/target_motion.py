@@ -247,11 +247,8 @@ class TargetMotion:
                 history.append(step)
                 if self.interrupted():
                     return fail('Operator interrupted before orbit measurement movement.')
-                result = self.flight('goto', {'north_m': view['north_m'], 'east_m': view['east_m'],
-                    'altitude_agl_m': state['relative_altitude_m'],
-                    'heading_deg': view['face_observed_midpoint_heading_deg'],
-                    'maximum_ground_speed_mps': maximum_ground_speed_mps},
-                    runtime_target=True, acceptance_radius_m=0.2, expected_origin_id=origin)
+                result = self._facing_transit(target, view, state['relative_altitude_m'],
+                                              maximum_ground_speed_mps, origin)
                 step['status'] = result['status']
                 if self.interrupted():
                     return fail('Operator interrupted orbit geometry measurement.')
@@ -284,6 +281,38 @@ class TargetMotion:
             return target, history, None
         except (ValueError, KeyError, RuntimeError, OSError) as error:
             return fail('Orbit geometry measurement failed: ' + str(error))
+
+    def _facing_transit(self, target, view, altitude, speed, origin, max_arc_deg=20.0):
+        """Fly to a side view along an arc round the target, nose on its centre.
+
+        One long goto holds the destination heading from the start, pointing the
+        camera away. Short arc legs each carry the heading toward the centre.
+        """
+        geometry = target['geometry']
+        center = point_xy(geometry.get('orbit_center') or geometry['center'])
+        _, north, east = pose(self.client.state())
+        start = math.atan2(east - center[1], north - center[0])
+        end = math.atan2(view['east_m'] - center[1], view['north_m'] - center[0])
+        r0 = math.hypot(north - center[0], east - center[1])
+        r1 = math.hypot(view['north_m'] - center[0], view['east_m'] - center[1])
+        sweep = math.remainder(end - start, 2 * math.pi)
+        legs = max(1, math.ceil(abs(math.degrees(sweep)) / max_arc_deg))
+        result = {'status': 'SUCCEEDED'}
+        for leg in range(1, legs + 1):
+            last = leg == legs
+            fraction = leg / legs
+            angle, radius = start + sweep * fraction, r0 + (r1 - r0) * fraction
+            point_n = view['north_m'] if last else center[0] + radius * math.cos(angle)
+            point_e = view['east_m'] if last else center[1] + radius * math.sin(angle)
+            heading = (view['face_observed_midpoint_heading_deg'] if last else
+                       math.degrees(math.atan2(center[1] - point_e, center[0] - point_n)) % 360)
+            result = self.flight('goto', {'north_m': point_n, 'east_m': point_e, 'altitude_agl_m': altitude,
+                                          'heading_deg': heading, 'maximum_ground_speed_mps': speed},
+                                 runtime_target=True, acceptance_radius_m=0.2 if last else 0.5,
+                                 expected_origin_id=origin)
+            if result['status'] != 'SUCCEEDED' or self.interrupted():
+                return result
+        return result
 
     def orbit_target(self, target_id, standoff_m, revolutions=1.0, clockwise=True,
                      maximum_ground_speed_mps=1.0, camera=None):

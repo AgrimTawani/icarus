@@ -11,7 +11,7 @@ import time
 
 from python.dcm.agent_context import capture_context, system_prompt
 from python.dcm.agent_tools import (
-    FLIGHT, TARGET_FLIGHT, WORKFLOW_FLIGHT, ToolExecutor, decision_tools, drop_padding, message_dict, validate_call)
+    FLIGHT, SKILLS, TARGET_FLIGHT, WORKFLOW_FLIGHT, ToolExecutor, decision_tools, drop_padding, message_dict, validate_call)
 from python.dcm.operator_control import OperatorInterrupt
 from python.dcm.viewpoint_gate import ViewpointGate
 
@@ -110,8 +110,13 @@ def brief(result):
     return summary
 
 
-def vehicle_state(context):
-    """One line of current measured state for the model."""
+DEFAULT_LABELS = {'takeoff_altitude_agl_m': 'takeoff altitude {} m', 'object_standoff_m': 'object standoff {} m',
+                  'overflight_clearance_m': 'overflight clearance {} m', 'yaw_rate_deg_s': 'turn rate {} deg/s',
+                  'maximum_ground_speed_mps': 'ground speed {} m/s'}
+
+
+def vehicle_state(context, with_defaults=False):
+    """One line of current measured state for the model; operating defaults on the first step."""
     state = context.get("state", {})
     parts = [str(state.get("flight_phase", "unknown")).replace("FLIGHT_PHASE_", "").lower(),
              "armed" if state.get("armed") else "disarmed"]
@@ -129,7 +134,12 @@ def vehicle_state(context):
     waypoints = [point['name'] for point in context.get("registered_waypoints", {}).get("entries", [])]
     if waypoints:
         parts.append("saved waypoints: " + ", ".join(waypoints))
-    return "Vehicle state: " + "; ".join(parts) + "."
+    line = "Vehicle state: " + "; ".join(parts) + "."
+    defaults = context.get("defaults", {})
+    if with_defaults and defaults:
+        line += "\nDefaults: " + ", ".join(label.format(defaults[key]) for key, label in DEFAULT_LABELS.items()
+                                         if isinstance(defaults.get(key), (int, float))) + "."
+    return line
 
 
 def drop_oldest_exchange(messages):
@@ -175,7 +185,9 @@ def fly_mission(
             from python.dcm.destinations import catalogue_context
             context['registered_waypoints'] = catalogue_context(True)  # names only; tools resolve poses
             tools = decision_tools(context)
-            session.messages[-1]["content"] = (session.messages[-1].get("content") or "") + "\n" + vehicle_state(context)
+            first = not any(m.get("role") == "assistant" for m in session.messages)
+            session.messages[-1]["content"] = ((session.messages[-1].get("content") or "") + "\n"
+                                               + vehicle_state(context, with_defaults=first))
             if show_prompts:
                 echo(json.dumps({"messages": session.messages, "tools": tools}, indent=2))
             started = time.monotonic()
@@ -261,6 +273,11 @@ def fly_mission(
             from python.dcm.observation_feedback import observation_feedback
             for line in observation_feedback(name, result, args):
                 echo("  " + line)
+            for view in (result.get("evidence") or {}).get("views", []) if name == "search_for_object" else []:
+                echo(f"  view at {view['heading_deg']} deg: found={view['found']} — {view.get('answer') or view['status']}")
+            for step in (result.get("evidence") or {}).get("acquisition") or []:
+                echo(f"  acquire: found={step.get('found')} reason={step.get('reason')} range={step.get('surface_range_m')}"
+                     + (f" then {step['then']['action']} {step['then']['status']}" if step.get('then') else ""))
             if result.get("status") != "SUCCEEDED":
                 echo(f"  Tool result: {result.get('status')} — {result.get('message', '')}")
             session.messages.append({"role": "tool", "tool_call_id": call_id,
@@ -297,7 +314,7 @@ def fly_mission(
 
 
 def executor_flight_names():
-    return {**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT}
+    return {**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT, **SKILLS}
 
 
 def hold_on_error(client, echo=print):

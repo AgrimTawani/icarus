@@ -4,8 +4,8 @@
     "source_sha256": "d5a82fff5d611abd1198ff27c328b20376ffe9f110b4771d579c8bd20c70541f"
   },
   "boolean": {
-    "schema_sha256": "6db41a52e9698be984d1d696d9a584f6995b6fc918c2602664bf1a59986f2f0c",
-    "grammar": "answer ::= \"\\\"\" char{0,300} \"\\\"\"\nanswer-kv ::= \"\\\"answer\\\"\" space \":\" space answer\nboolean ::= (\"true\" | \"false\")\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\nfound ::= boolean | null\nfound-kv ::= \"\\\"found\\\"\" space \":\" space found\nnull ::= \"null\"\nroot ::= \"{\" space answer-kv \",\" space found-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
+    "schema_sha256": "2e5fcc4724e144a8c1afbd32860e063e897c294cb0759c38decd4b7c5e8927f4",
+    "grammar": "boolean ::= (\"true\" | \"false\")\nchar ::= [^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})\nfound ::= boolean | null\nfound-kv ::= \"\\\"found\\\"\" space \":\" space found\nnull ::= \"null\"\nroot ::= \"{\" space seen-kv \",\" space found-kv space \"}\"\nseen ::= \"\\\"\" char{0,300} \"\\\"\"\nseen-kv ::= \"\\\"seen\\\"\" space \":\" space seen\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
   },
   "count": {
     "schema_sha256": "62fe66e59e049b664444dfbb1d10de5d25046d9d5e3ca0c31d7f18de6fe7f2f3",

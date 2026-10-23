@@ -163,12 +163,25 @@ WORKFLOW_FLIGHT["fly_pattern"] = obj({
     if name not in {"observation", "camera", "observation_count", "question", "question_type",
                     "classes", "stop_on_detection", "minimum_count", "return_on", "exit_policy"}
 }, ["shape", "coverage"])
-SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT})
+# Bounded multi-step behaviours in skills.py, built from the tools above.
+SKILLS = {
+    "search_for_object": obj({
+        "visual_query": {**TEXT, "maxLength": 120,
+                         "description": "What to look for, e.g. its class: building, tree, red car."},
+        "clockwise": {**BOOL, "default": True},
+        "step_deg": {"type": "number", "minimum": 5, "maximum": 90, "default": 30},
+        "rate_deg_s": {"type": "number", "minimum": 5, "maximum": 60, "default": 30},
+        "max_sweep_deg": {"type": "number", "minimum": 0, "maximum": 1080, "default": 360,
+                          "description": "Total turning allowed; 360 is one full turn."},
+        "camera": CAMERA,
+    }, ["visual_query"]),
+}
+SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT, **SKILLS})
 # The fixed live catalogue for the mission agent. Scan/route workflows and
 # get_context stay available to Python callers, not to per-step decisions.
 AGENT_TOOLS = (
     'arm', 'disarm', 'takeoff', 'land', 'return_home', 'hold', 'cancel',
-    'yaw', 'face_heading', 'move_relative', 'goto', 'orbit',
+    'yaw', 'face_heading', 'move_relative', 'goto', 'orbit', 'search_for_object',
     'approach_target', 'overfly_target', 'fly_pattern',
     'detect', 'inspect_scene', 'localize_target', 'assess_landing_zone',
     'ask_user', 'finish')
@@ -203,11 +216,12 @@ SCHEMAS.update(
     }
 )
 DESCRIPTIONS = {
+    'search_for_object': 'Look for an object by turning in place: inspect the current view, then turn step_deg in the given direction and inspect again, until the VLM sees it or max_sweep_deg is used. Returns found and the heading. Use the operator\'s requested direction, step and rate.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Fly a circular path around a center; face it by default. Object destinations use standoff_m from measured hull; coordinate/home/launch destinations use radius_m and altitude_agl_m. Select camera explicitly; none requests heading-only flight. Cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
     'resume_heading_scan': 'Resume a saved angular scan, completing any pending observation before turning again. Use its scan_id.',
-    'yaw': 'One airborne relative turn without observation: positive clockwise, negative counterclockwise. Compass headings use face_heading; turn/observe cycles use scan_heading.',
+    'yaw': 'One airborne relative turn, with no observation. Compass headings use face_heading. To turn while looking for an object, use search_for_object instead.',
     'goto': 'Fly to coordinates, home, launch or a saved navigation pose. Arrival geometry belongs inside destination. Object-relative movement uses approach_target for surface standoff or overfly_target for above-object travel.',
     'arm': 'Enable motors without takeoff. Detection works disarmed: satisfy pre-arming conditions first. takeoff already arms if needed.',
     'takeoff': 'Reach the requested altitude above home. From landed, arm if needed and take off. If already flying, change height vertically with native goto while holding current horizontal position. Explicit maximum_climb_rate_mps applies only to ground departure.',
@@ -217,10 +231,10 @@ DESCRIPTIONS = {
     'fly_pattern': 'ArduPilot geometric flight without observations, anchored at current position. Square needs width; rectangle width extends right, length forward; circle center lies one radius forward; area needs lane_spacing_m. Heading defaults current; clockwise=false starts rightward. Perimeters return to start. repetitions repeats; hold_time_s dwells; camera_heading_deg fixes heading.',
     'scan_area': 'Geometric flight plus sampled camera stations, anchored at current position. Rectangle width extends right, length forward; square needs width, circle radius, area lane_spacing_m. observation defaults scene, camera downward_brio, observation_count4. Select exit_policy explicitly: each_observation for arbitrary branching, finish_at_match to end at a detector match, pause_at_match for nested branches that resume, complete_coverage for unconditional scans. Resume with resume_scan.',
     'resume_scan': 'Resume a saved area scan with its original anchor and remaining stations.',
-    'detect': 'Detect/count supported class enum labels in a current image, including while disarmed. Unsupported objects use inspect_scene/localize_target. Counts are thresholded detections, not guaranteed totals; default camera forward_d435i.',
+    'detect': 'Count objects of the fixed detector classes (people, vehicles, animals, household items) in the current image. It cannot see buildings, trees, walls or other structures: look for those with search_for_object. Counts are thresholded detections, not guaranteed totals; default camera forward_d435i.',
     'inspect_scene': 'Ask the onboard VLM one question about the current camera image. VLM prose is qualitative evidence, not metric geometry or measured counts.',
     'localize_target': 'Associate a visible object with measured LiDAR/depth. Returns surface range, footprint quality and reusable target_id; another viewpoint may be needed. Reuse the query to accumulate views.',
-    'approach_target': 'Move to a measured surface standoff from a visible or registered object destination. Recede only if already closer. This does not establish being above it. Another viewpoint may be needed to measure its geometry.',
+    'approach_target': 'Fly to standoff_m from a measured object surface. With a visible_object destination it turns to centre the object, measures it with depth and LiDAR, steps closer if it is too far to measure, and returns its target_id. Recedes only if already closer.',
     'orbit_target': 'Circle a measured object with nose facing it. Supply target_id or visual_query. standoff_m is minimum distance from its observed hull, not center radius or global obstacle clearance; wall distance varies for non-round shapes. Partial geometry may require two measured side views first. Select camera for visual intent.',
     'overfly_target': 'Fly ABOVE a physical object: climb above its measured top, then move over its footprint center. destination selects visible_object with visual_query and view, or registered_target with target_id. An observation waypoint is not above the object. Requires measured height/footprint. Does not land; assess_landing_zone before landing.',
     'get_context': 'Refresh state/health/perception; include_geometry adds obstacle bounds. Normally refreshed automatically.',
@@ -379,8 +393,9 @@ def decision_tools(context, names=AGENT_TOOLS):
             function['parameters']['required'].append('question_type')
         if function['name'] == 'yaw':
             function['parameters'] = directional_yaw_schema(function['parameters'])
-            function['description'] = ('Turn by the angle magnitude in the explicit direction. '
-                                       'This is relative, not an absolute compass heading.')
+            function['description'] = ('Turn by the angle magnitude in the explicit direction, with no observation. '
+                                       'This is relative, not an absolute compass heading. '
+                                       'To turn while looking for an object, use search_for_object instead.')
         if function['name'] == 'fly_pattern':
             function['parameters']['properties'].pop('altitude_agl_m', None)
             function['description'] += (' This horizontal pattern retains current altitude; '
@@ -646,9 +661,10 @@ class ToolExecutor:
                         self.client._takeoff_reference = launch
             elif name in TARGET_FLIGHT:
                 from python.dcm.target_motion import TargetMotion
-                localization = None
+                localization = acquisition = None
                 if 'description' in arguments:
-                    localization = self.client.localize_target(arguments.pop('description'))
+                    from python.dcm.skills import acquire
+                    localization, acquisition = acquire(self, arguments.pop('description'))
                     target_id = localization.get('target_id')
                     registered = (isinstance(target_id, str) and bool(target_id)
                                   and localization.get('found') is True
@@ -657,13 +673,17 @@ class ToolExecutor:
                     if not registered:
                         return {'status': 'FAILED',
                                 'message': 'No measured registered target was localized; no flight action executed.',
-                                'evidence': {'target_localization': localization}}
+                                'evidence': {'target_localization': localization, 'acquisition': acquisition}}
                     arguments['target_id'] = target_id
                 if self.interrupted():
                     return {'status': 'CANCELLED', 'message': 'Operator interrupted target localization.'}
                 result = TargetMotion(self.client, self._flight, self.interrupted).execute(name, arguments)
                 if localization is not None:
-                    result.setdefault('evidence', {})['target_localization'] = localization
+                    result.setdefault('evidence', {}).update(target_localization=localization,
+                                                             acquisition=acquisition)
+            elif name in SKILLS:
+                from python.dcm import skills
+                result = getattr(skills, name)(self, **arguments)
             elif name in WORKFLOW_FLIGHT:
                 from python.dcm.scan_workflow import ScanWorkflow
                 from python.dcm.angular_scan import AngularScan

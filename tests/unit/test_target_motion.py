@@ -30,7 +30,11 @@ class Client:
                 'footprint': {'height_m': 6, 'height_clipped': False}}
 
     def flight(self, name, args, **kw):
-        self.calls.append((name, deepcopy(args), kw))
+        # Intermediate target-facing arc legs (0.5 m acceptance) are kept apart
+        # so call sequences still show each meaningful move once.
+        legs = self.__dict__.setdefault('arc_legs', [])
+        (legs if name == 'goto' and kw.get('acceptance_radius_m') == 0.5 else self.calls).append(
+            (name, deepcopy(args), kw))
         if name == 'goto':
             self.north, self.east, self.alt = args['north_m'], args['east_m'], args['altitude_agl_m']
         return {'status': 'SUCCEEDED', 'state': self.state()}
@@ -523,3 +527,15 @@ def test_overhead_point_is_outside_level_front_camera_but_in_downward_view():
     assert views['forward_d435i']['in_frame'] is False
     assert views['downward_brio']['in_frame'] is True
     assert not views['downward_brio']['image_proof']
+
+
+def test_side_view_transit_keeps_the_nose_on_the_target_centre(monkeypatch):
+    fake_measured_orbit(monkeypatch)
+    c = AcquisitionClient()
+    TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
+    geometry = c.refresh_target('a')['geometry']
+    centre = geometry.get('orbit_center') or geometry['center']
+    assert c.arc_legs, 'a side-view move should be flown as short arc legs'
+    for _, leg, _ in c.arc_legs:
+        bearing = math.degrees(math.atan2(centre['east_m'] - leg['east_m'], centre['north_m'] - leg['north_m'])) % 360
+        assert abs((leg['heading_deg'] - bearing + 180) % 360 - 180) < 1e-6

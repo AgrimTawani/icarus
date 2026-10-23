@@ -11,6 +11,10 @@ def test_pixel_boxes_scale_each_source_dimension_independently():
     assert decode_pixel_box('{"bbox":null}',80,40)==(None,None)
 
 
+def test_a_slight_edge_overshoot_is_clipped_to_the_frame():
+    assert decode_pixel_box('{"bbox":[60,4,84,42]}',80,40)[0]==[60,4,80,40]
+
+
 @pytest.mark.parametrize('payload',[
     '{}','{"bbox":[0,0,90,30]}','{"bbox":[8,4,2,9]}',
     '{"bbox":[false,0,10,10]}','{"bbox":[0,0,NaN,10]}',
@@ -38,22 +42,16 @@ def observe(tmp_path,answers):
     return result,calls
 
 
-def test_explicit_format_uses_measured_image_size_and_constrained_json(tmp_path):
-    result,calls=observe(tmp_path,['Yes','{"bbox":[8,4,72,36]}'])
+def test_explicit_format_asks_once_for_a_box_in_measured_image_size(tmp_path):
+    result,calls=observe(tmp_path,['{"bbox":[8,4,72,36]}'])
     assert result['present'] is True and result['grounding_text']=='(100,100),(900,900)'
     assert result['pixel_box_xyxy']==[8,4,72,36]
     assert result['grounding_format']=='json_pixel_xyxy'
-    assert len(calls)==2 and '80 wide, 40 high' in calls[1][0]
-    assert 'grammar' in calls[1][2] and calls[1][1]==''
+    assert len(calls)==1 and '80 wide, 40 high' in calls[0][0]
+    assert 'grammar' in calls[0][2] and calls[0][1]==''
 
 
-def test_negative_presence_never_requests_a_box(tmp_path):
-    result,calls=observe(tmp_path,['No'])
+def test_null_box_is_an_observed_absence_from_the_same_single_call(tmp_path):
+    result,calls=observe(tmp_path,['{"bbox":null}'])
     assert result['present'] is False and result['grounding_text'] is None
     assert len(calls)==1
-
-
-def test_conflicting_presence_and_null_box_remain_unknown(tmp_path):
-    with pytest.raises(VlmInferenceError) as error:
-        observe(tmp_path,['Yes','{"bbox":null}'])
-    assert error.value.code=='inconsistent_presence'

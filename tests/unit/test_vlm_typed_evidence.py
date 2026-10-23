@@ -212,10 +212,10 @@ def test_viewing_pose_stays_in_receipt_and_cannot_change_the_pixel_question(tmp_
                        view_context={'camera':'forward_d435i','aircraft_heading_deg':float('nan')})
 
 
-@pytest.mark.parametrize('kind,payload',[('boolean',{'found':False,'answer':'Visible object is grey.'}),
+@pytest.mark.parametrize('kind,payload',[('boolean',{'seen':'Visible object is grey.','found':False}),
                                        ('count',{'count':0,'answer':'No visible instances.'})])
 def test_structured_answer_is_plain_evidence_not_a_second_encoded_json_document(tmp_path,kind,payload):
     result, _ = run_inspection(tmp_path, SimpleNamespace(returncode=0,
         stdout=json.dumps(payload),stderr=''), result_type=kind)
-    assert result['answer'] == payload['answer']
+    assert result['answer'] == payload.get('seen', payload.get('answer'))
     assert result['value'] == payload.get('found',payload.get('count'))

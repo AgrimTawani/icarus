@@ -33,9 +33,10 @@ class VlmContractTests(unittest.TestCase):
     def test_scene_prompt_keeps_negative_and_count_contracts_distinct(self):
         boolean = inspection_prompt("Is the subject visible?", True, "boolean")
         count = inspection_prompt("How many are visible?", True, "count")
-        self.assertIn('"found":true or false or null', boolean)
-        self.assertIn("First write what you see", boolean)
-        self.assertLess(boolean.index('"answer"'), boolean.index('"found"'))
+        # Fields are described in prose: a small VLM copies example values verbatim.
+        self.assertNotIn('"seen":"', boolean)
+        self.assertLess(boolean.index('seen:'), boolean.index('found:'))
+        self.assertIn("null only if the image is unusable", boolean)
         self.assertIn("individually visible instances", count)
         self.assertIn("never infer invisible instances", count)
 

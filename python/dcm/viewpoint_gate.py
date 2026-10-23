@@ -10,6 +10,8 @@ VIEW_CHANGES = frozenset({
     'takeoff', 'goto', 'move_relative', 'execute_route', 'yaw', 'face_heading', 'orbit',
     'return_home', 'land', 'approach_target', 'orbit_target', 'land_on_target', 'overfly_target',
     'fly_pattern', 'scan_heading', 'resume_heading_scan', 'scan_area', 'resume_scan'})
+# search_for_object is absent on purpose: its own yaws and inspections update
+# the gate as they run, and its final positive answer must survive.
 
 
 def _visible_object(arguments):

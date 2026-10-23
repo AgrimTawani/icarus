@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v19-simple-loop'
-DIRECT_TOOL_VERSION = 'direct-tools-v28-fixed-catalogue'
+DIRECT_PROMPT_VERSION = 'direct-agent-v21-search-rule'
+DIRECT_TOOL_VERSION = 'direct-tools-v30-search-descriptions'
 
 
 class DeadlineExceeded(Exception):
