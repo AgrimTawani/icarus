@@ -189,3 +189,54 @@ def test_acquisition_grounds_the_nearest_instance_by_default():
     assert skills.nearest('house') == 'nearest house'
     assert skills.nearest('closest red car') == 'closest red car'
     assert skills.nearest('Nearest tree') == 'Nearest tree'
+
+
+class DepthClient(Client):
+    def state(self):
+        return {'attitude': {'yaw_rad': math.radians(self.heading)}, 'relative_altitude_m': 10,
+                'local_position_ned': {'north_m': 0, 'east_m': 0, 'origin_id': 'o'}}
+
+
+def depth_view(near, median=None, bearing=0.0, span=(-20.0, 20.0)):
+    return {'found': False, 'reason': 'target_association_ambiguous',
+            'bearing_deg': {'image_absolute': bearing, 'image_span_relative': list(span)},
+            'depth_at_capture': {'p10_optical_z_m': near, 'median_optical_z_m': median or near + 4}}
+
+
+class FlightExecutor(Executor):
+    def _flight(self, name, args, **kw):
+        self.calls.append((name, dict(args)))
+        return {'status': 'SUCCEEDED', 'message': name}
+
+
+def test_depth_orbit_circles_the_depth_centre_facing_it():
+    executor = FlightExecutor(DepthClient([depth_view(12.0, 14.0)]))
+    result = skills.depth_orbit(executor, 'house', standoff_m=5)
+    assert result['status'] == 'SUCCEEDED'
+    (_, goto), (_, orbit) = executor.calls
+    half = 14.0 * math.tan(math.radians(20))
+    assert orbit['center_north_m'] == pytest.approx(12.0 + half)
+    assert orbit['radius_m'] == pytest.approx(half + 5, abs=0.01)
+    assert orbit['face_center'] and orbit['revolutions'] == 1.0
+    # onto the circle along the bearing, nose on the centre
+    assert goto['north_m'] == pytest.approx(12.0 + half - (half + 5), abs=0.01) and goto['heading_deg'] == 0
+
+
+def test_depth_approach_is_close_enough_without_moving():
+    executor = FlightExecutor(DepthClient([depth_view(7.0)]))
+    result = skills.depth_approach(executor, 'house', standoff_m=5, target_id='t')
+    assert result['status'] == 'SUCCEEDED' and executor.calls == []
+    assert result['evidence']['target_id'] == 't'
+
+
+def test_depth_fix_centres_an_off_centre_object_first():
+    executor = FlightExecutor(DepthClient([depth_view(20.0, bearing=40.0), depth_view(20.0, bearing=41.0)]))
+    fix, _ = skills.depth_fix(executor, 'house')
+    assert names(executor) == ['face_heading'] and fix['bearing_deg'] == 41.0
+
+
+def test_no_depth_means_no_motion():
+    view = depth_view(10.0); view['depth_at_capture'] = {}
+    executor = FlightExecutor(DepthClient([view]))
+    assert skills.depth_orbit(executor, 'house', standoff_m=5)['status'] == 'FAILED'
+    assert executor.calls == []

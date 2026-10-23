@@ -123,6 +123,98 @@ def acquire(executor, description):
     return localization, attempts
 
 
+
+# Depth fallback: when LiDAR cannot hold a target's identity (sparse beams,
+# ambiguous clusters), the VLM box gives the bearing and the forward depth
+# inside that box gives how far the object is, wherever it sits in the view
+# (in front, below or diagonal). Its centre is past the near face by half
+# the object's measured width.
+HALF_SIZE_M = (3.0, 12.0)
+DEPTH_CLOSE_MARGIN_M = 3.0
+
+
+def _finite(*values):
+    return all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values)
+
+
+def depth_fix(executor, description):
+    """Return (fix, localization): the object's centre from box bearing and depth, or None."""
+    from python.dcm.agent_tools import message_dict
+    client = executor.client
+    localization = {}
+    for _ in range(2):
+        localization = client.localize_target(nearest(description))
+        bearing = _image_bearing(localization)
+        depth = localization.get('depth_at_capture') or {}
+        near, median = depth.get('p10_optical_z_m'), depth.get('median_optical_z_m')
+        span = (localization.get('bearing_deg') or {}).get('image_span_relative')
+        if bearing is None or not _finite(near, median) or not isinstance(span, list) or not _finite(*span):
+            return None, localization
+        offset = (bearing - _heading_deg(client) + 180) % 360 - 180
+        if abs(offset) <= CENTRE_TOLERANCE_DEG:
+            break
+        turned = executor.execute('face_heading', {'heading_deg': round(bearing % 360, 1)})
+        if turned.get('status') != 'SUCCEEDED':
+            return None, localization
+    width = 2 * median * math.tan(math.radians(abs(span[1] - span[0]) / 2))
+    half = min(max(width / 2, HALF_SIZE_M[0]), HALF_SIZE_M[1])
+    state = message_dict(client.state())
+    position = state['local_position_ned']
+    b = math.radians(bearing)
+    return {'center_north_m': position['north_m'] + (near + half) * math.cos(b),
+            'center_east_m': position['east_m'] + (near + half) * math.sin(b),
+            'half_size_m': round(half, 2), 'near_depth_m': round(near, 2), 'bearing_deg': round(bearing, 1),
+            'north_m': position['north_m'], 'east_m': position['east_m'],
+            'altitude_agl_m': state['relative_altitude_m'], 'origin_id': position['origin_id']}, localization
+
+
+def _onto_circle(executor, fix, radius, speed):
+    """Fly along the bearing to the point `radius` from the centre, nose on the centre."""
+    dn, de = fix['center_north_m'] - fix['north_m'], fix['center_east_m'] - fix['east_m']
+    distance = math.hypot(dn, de)
+    if abs(distance - radius) < 0.5:
+        return {'status': 'SUCCEEDED'}
+    scale = (distance - radius) / distance
+    return executor._flight('goto', {'north_m': fix['north_m'] + dn * scale, 'east_m': fix['east_m'] + de * scale,
+        'altitude_agl_m': fix['altitude_agl_m'], 'heading_deg': round(math.degrees(math.atan2(de, dn)) % 360, 1),
+        'maximum_ground_speed_mps': speed}, runtime_target=True, expected_origin_id=fix['origin_id'])
+
+
+def depth_approach(executor, description, standoff_m, target_id=None, maximum_ground_speed_mps=1.0):
+    fix, localization = depth_fix(executor, description)
+    if fix is None:
+        return {'status': 'FAILED', 'message': 'Depth could not range the object in view.',
+                'evidence': {'target_localization': localization}}
+    evidence = {'target_id': target_id, 'depth_fix': fix, 'standoff_measured_by': 'forward_depth_camera'}
+    if fix['near_depth_m'] <= standoff_m + DEPTH_CLOSE_MARGIN_M:
+        return {'status': 'SUCCEEDED', 'evidence': evidence,
+                'message': f"Close enough: the object's nearest depth is {fix['near_depth_m']} m."}
+    moved = _onto_circle(executor, fix, fix['half_size_m'] + standoff_m, min(maximum_ground_speed_mps, 1.5))
+    if moved.get('status') != 'SUCCEEDED':
+        return {**moved, 'evidence': {**moved.get('evidence', {}), **evidence}}
+    return {'status': 'SUCCEEDED', 'evidence': evidence,
+            'message': f"Approached to about {standoff_m} m from the object's near face by depth."}
+
+
+def depth_orbit(executor, description, standoff_m, revolutions=1.0, clockwise=True, maximum_ground_speed_mps=1.0):
+    """One continuous native orbit round the depth-measured centre, nose on it."""
+    fix, localization = depth_fix(executor, description)
+    if fix is None:
+        return {'status': 'FAILED', 'message': 'Depth could not range the object in view; no orbit started.',
+                'evidence': {'target_localization': localization}}
+    radius = fix['half_size_m'] + standoff_m
+    speed = min(maximum_ground_speed_mps, 1.5)
+    moved = _onto_circle(executor, fix, radius, speed)
+    if moved.get('status') != 'SUCCEEDED':
+        return {**moved, 'evidence': {**moved.get('evidence', {}), 'depth_fix': fix}}
+    result = executor._flight('orbit', {'center_north_m': fix['center_north_m'], 'center_east_m': fix['center_east_m'],
+        'radius_m': round(radius, 2), 'altitude_agl_m': fix['altitude_agl_m'], 'clockwise': clockwise,
+        'revolutions': revolutions, 'maximum_ground_speed_mps': speed, 'face_center': True},
+        runtime_target=True, expected_origin_id=fix['origin_id'])
+    result.setdefault('evidence', {}).update(depth_fix=fix, orbit_radius_m=round(radius, 2),
+                                             orbit_centre_measured_by='vlm_box_bearing_and_forward_depth')
+    return result
+
 MERGE_RADIUS_M = 8.0
 SURVEY_LANE_OVERLAP = 0.8  # lane spacing as a fraction of the camera's ground swath
 

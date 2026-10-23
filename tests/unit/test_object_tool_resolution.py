@@ -138,3 +138,29 @@ def test_lost_far_fix_is_measured_again_once_and_the_approach_continues():
     assert result['evidence']['target_id'] == 'house'
     assert 'remeasured_after_target_lost' in result['evidence']
     assert client.localized == ['nearest house', 'nearest house']
+
+
+def test_orbit_falls_back_to_depth_when_lidar_geometry_is_partial():
+    client = DescribedClient()
+    client.partial = True
+    client.target_feedback = lambda: [{'target_id': 'measured_123', 'description': 'house'}]
+    client.measurement = {'found': False, 'reason': 'target_association_ambiguous',
+                          'bearing_deg': {'image_absolute': 0.0, 'image_span_relative': [-20.0, 20.0]},
+                          'depth_at_capture': {'p10_optical_z_m': 6.0, 'median_optical_z_m': 9.0}}
+    result = executor(client).execute('orbit_target', {'target_id': 'measured_123', 'standoff_m': 5, 'camera': 'none'})
+    assert result['status'] == 'SUCCEEDED'
+    assert result['evidence']['orbit_centre_measured_by'] == 'vlm_box_bearing_and_forward_depth'
+    assert 'lidar_measurement_failed' in result['evidence']
+    orbit = [args for name, args, kw in client.calls if name == 'orbit'][-1]
+    assert orbit['face_center'] and orbit['revolutions'] == 1.0
+
+
+def test_safety_abort_never_falls_back_to_depth():
+    client = DescribedClient()
+    def blocked(name, args, **kw):
+        client.calls.append((name, args, kw))
+        return {'status': 'ABORTED_BY_SAFETY', 'reason_code': 'REASON_CODE_OBSTACLE', 'message': 'blocked'}
+    client.flight = blocked
+    result = executor(client).execute('approach_target', {'target_id': 'measured_123', 'standoff_m': 3})
+    assert result['status'] == 'ABORTED_BY_SAFETY'
+    assert client.localized == []
