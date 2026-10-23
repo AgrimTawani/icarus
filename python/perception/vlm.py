@@ -617,6 +617,11 @@ def decode_pixel_box(answer, width, height):
             # A zero-area box (often a single image corner) marks nothing:
             # the model found no bounded region, e.g. the object fills the frame.
             return None, None
+        if box[0] < box[2] and box[1] < box[3] and (
+                box[2] <= 0 or box[3] <= 0 or box[0] >= width or box[1] >= height):
+            # A well-formed box with no overlap with the picture (anchored at a
+            # corner and run off the frame) bounds no region of the image either.
+            return None, None
         slack_x, slack_y = EDGE_OVERSHOOT * width, EDGE_OVERSHOOT * height
         if not (-slack_x <= box[0] < box[2] <= width + slack_x
                 and -slack_y <= box[1] < box[3] <= height + slack_y):

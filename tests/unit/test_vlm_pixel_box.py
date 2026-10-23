@@ -25,6 +25,13 @@ def test_bad_boxes_never_become_clipped_successes_or_absence(payload):
         decode_pixel_box(payload,80,40)
 
 
+def test_a_box_wholly_outside_the_frame_marks_nothing():
+    # The model anchors a "nothing here" box at a frame corner and runs it
+    # off the image: no region of the picture is bounded, like a zero-area box.
+    assert decode_pixel_box('{"bbox":[80,40,86,46]}',80,40)==(None,None)
+    assert decode_pixel_box('{"bbox":[-9,-9,-1,-1]}',80,40)==(None,None)
+
+
 def observe(tmp_path,answers):
     image=tmp_path/'image.png';Image.new('RGB',(80,40)).save(image)
     binary=tmp_path/'llama-server';binary.touch()
