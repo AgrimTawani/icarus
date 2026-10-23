@@ -457,7 +457,11 @@ class TargetMotion:
                 evidence['angular_coverage_deg'] < revolutions*360 - 8):
             result = {**result, 'status': 'FAILED', 'message': 'Orbit ended without measured requested angular coverage.'}
         elif result['status'] == 'SUCCEEDED':
-            result = {**result, 'message': 'Completed the measured static-reference orbit. ' + result.get('message', '')}
+            basis = (f'; its unseen side was assumed as deep as the {2*envelope["measured_enclosure_radius_m"]/math.sqrt(2):.0f} m face the LiDAR measured'
+                     if assumption else '')
+            result = {**result, 'message': (
+                f'Circled the measured object once at {radius:.1f} m from its centre, at least {standoff_m} m '
+                f'from its measured surface{basis}. ' + result.get('message', ''))}
         return {**result, 'evidence': evidence}
 
     def overfly_target(self, target_id, clearance_above_m=None, maximum_ground_speed_mps=1.0):
