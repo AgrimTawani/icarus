@@ -603,3 +603,41 @@ def test_approach_stops_if_remeasurement_jumps_implausibly_closer():
     assert 'implausibly closer' in result['message']
     goto_calls = [call for call in c.calls if call[0] == 'goto']
     assert len(goto_calls) == 1  # stopped before compounding a second unsafe move
+
+
+class DepthClient(Client):
+    """LiDAR loses the far strip after the first leg; depth sees the face."""
+    def __init__(self, depth):
+        super().__init__()
+        self.depth = depth
+
+    def refresh_target(self, target_id):
+        self.lost = bool(self.calls)
+        target = super().refresh_target(target_id)
+        target['reason'] = 'target_not_observed' if self.lost else ''
+        return target
+
+    def depth_feedback(self):
+        return {'fresh': True, 'center': {'p10_optical_z_m': self.depth}}
+
+
+def test_lost_lidar_but_close_depth_counts_as_reached():
+    c = DepthClient(depth=6.5)
+    result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 5})
+    assert result['status'] == 'SUCCEEDED'
+    assert result['evidence']['standoff_measured_by'] == 'forward_depth_camera'
+
+
+def test_lost_lidar_and_far_depth_still_fails():
+    c = DepthClient(depth=20.0)
+    result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 5})
+    assert result['status'] == 'FAILED'
+    assert result['evidence']['target_measurement']['reason'] == 'target_not_observed'
+
+
+def test_depth_nearer_than_standoff_stops_the_approach():
+    c = Client()
+    c.depth_feedback = lambda: {'fresh': True, 'center': {'p10_optical_z_m': 1.5}}
+    result = TargetMotion(c, c.flight).execute('approach_target', {'target_id': 'a', 'standoff_m': 3})
+    assert result['status'] == 'SUCCEEDED'
+    assert result['evidence']['final_depth_range_m'] == 1.5

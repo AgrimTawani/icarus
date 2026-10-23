@@ -55,3 +55,7 @@ def test_null_box_is_an_observed_absence_from_the_same_single_call(tmp_path):
     result,calls=observe(tmp_path,['{"bbox":null}'])
     assert result['present'] is False and result['grounding_text'] is None
     assert len(calls)==1
+
+
+def test_zero_area_corner_box_means_nothing_found():
+    assert decode_pixel_box('{"bbox":[80,40,80,40]}',80,40)==(None,None)

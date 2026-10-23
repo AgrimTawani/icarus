@@ -690,6 +690,22 @@ class ToolExecutor:
                 if self.interrupted():
                     return {'status': 'CANCELLED', 'message': 'Operator interrupted target localization.'}
                 result = TargetMotion(self.client, self._flight, self.interrupted).execute(name, arguments)
+                lost = result.get('evidence', {}).get('target_measurement', {}).get('reason') == 'target_not_observed'
+                if lost and result.get('status') == 'FAILED' and not self.interrupted():
+                    # A far first fix can be a strip in front of the object (a
+                    # hedge or fence) that drops out of the beams up close.
+                    # Measure the object again from here, once, and continue.
+                    from python.dcm.skills import acquire, registered
+                    description = next((item.get('description') for item in self.client.target_feedback()
+                                        if item.get('target_id') == arguments['target_id']), None)
+                    if isinstance(description, str) and description.strip():
+                        relocalization, reacquisition = acquire(self, description)
+                        if registered(self.client, relocalization) and not self.interrupted():
+                            arguments['target_id'] = relocalization['target_id']
+                            retry = TargetMotion(self.client, self._flight, self.interrupted).execute(name, arguments)
+                            retry.setdefault('evidence', {})['remeasured_after_target_lost'] = {
+                                'first_attempt': result.get('message'), 'acquisition': reacquisition}
+                            result = retry
                 if localization is not None:
                     result.setdefault('evidence', {}).update(target_localization=localization,
                                                              acquisition=acquisition)

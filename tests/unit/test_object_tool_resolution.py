@@ -108,3 +108,33 @@ def test_object_alternatives_have_complete_typed_grammar_branches():
             assert not Draft202012Validator(branch).is_valid({})
             if name != 'overfly_target':
                 assert 'standoff_m' in branch['required']
+
+
+class StripClient(DescribedClient):
+    """The far fix ('strip') is lost up close; the house is measured again from there."""
+    def __init__(self):
+        super().__init__({'found': True, 'target_id': 'strip'})
+
+    def target_feedback(self):
+        return [{'target_id': 'strip', 'description': 'house'}, {'target_id': 'house'}]
+
+    def localize_target(self, description):
+        self.localized.append(description)
+        if len(self.localized) > 1:
+            self.measurement = {'found': True, 'target_id': 'house'}
+        return self.measurement
+
+    def refresh_target(self, target_id):
+        target = super().refresh_target(target_id)
+        if target_id == 'strip' and len(self.refreshed) > 1:
+            target.update(found=False, reason='target_not_observed')
+        return target
+
+
+def test_lost_far_fix_is_measured_again_once_and_the_approach_continues():
+    client = StripClient()
+    result = executor(client).execute('approach_target', {'description': 'house', 'standoff_m': 3})
+    assert result['status'] == 'SUCCEEDED'
+    assert result['evidence']['target_id'] == 'house'
+    assert 'remeasured_after_target_lost' in result['evidence']
+    assert client.localized == ['nearest house', 'nearest house']

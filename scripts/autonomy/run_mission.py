@@ -941,7 +941,15 @@ class MissionClient:
 
     def _depth_source(self):
         if getattr(self, "depth_source", None) is None:
-            if not self.simulation_session or self.simulation_session.get("simulator") != "gazebo":
+            simulator = (self.simulation_session or {}).get("simulator")
+            if simulator == "airsim":
+                from python.perception.depth_feedback import AirSimDepthSource
+                settings = self._airsim_settings_path()
+                if settings is None or not settings.is_file():
+                    return None
+                self.depth_source = AirSimDepthSource(settings)
+                return self.depth_source
+            if simulator != "gazebo":
                 return None
             from python.perception.depth_feedback import GazeboDepthSource
             self.depth_source = GazeboDepthSource(self.simulation_session,

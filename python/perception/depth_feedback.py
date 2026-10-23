@@ -259,3 +259,62 @@ class GazeboDepthSource:
         self._node.unsubscribe(self.topic)
         with self._callback_lock:
             self.cache.invalidate("Depth source closed.")
+
+
+class AirSimDepthSource:
+    """AirSim forward planar depth, captured on demand over RPC (no subscriber).
+
+    AirSim ImageType 1 (DepthPlanar) is optical-z metres, the same quantity
+    the Gazebo source publishes, so regions and summaries are shared.
+    """
+
+    def __init__(self, settings_path, *, host="127.0.0.1", port=41451,
+                 vehicle=None, camera="0", maximum_depth_m=100.0):
+        settings = json.loads(Path(settings_path).read_text())
+        vehicles = settings.get("Vehicles", {})
+        self.vehicle = vehicle or next(iter(vehicles))
+        mount = vehicles[self.vehicle]["Cameras"][camera]
+        capture = next((c for c in mount.get("CaptureSettings", []) if c.get("ImageType") == 1), None)
+        if capture is None:
+            raise ValueError(f"AirSim camera {camera} has no depth capture settings")
+        self.camera, self.host, self.port = camera, host, port
+        width, height = int(capture["Width"]), int(capture["Height"])
+        hfov = float(capture.get("FOV_Degrees", 90))
+        vfov = math.degrees(2 * math.atan(math.tan(math.radians(hfov) / 2) * height / width))
+        self.cache = DepthFrameCache(
+            source="airsim_depth_planar_rpc", simulation_only=True,
+            horizontal_fov_deg=hfov, vertical_fov_deg=vfov,
+            minimum_depth_m=0.2, maximum_depth_m=maximum_depth_m,
+            calibration="airsim_settings_capture", sensor_id="airsim_forward_depth",
+            maximum_age_ms=1500, sensor_clock="simulator")
+        self._rpc = None
+
+    def _capture(self):
+        from python.simulation.airsim_rpc import MsgpackRpcClient
+        if self._rpc is None:
+            self._rpc = MsgpackRpcClient(self.host, self.port, timeout=10)
+        request = {"camera_name": self.camera, "image_type": 1,
+                   "pixels_as_float": True, "compress": False}
+        response = (self._rpc.images([request], self.vehicle) or [{}])[0]
+        width, height = int(response.get("width", 0)), int(response.get("height", 0))
+        values = np.asarray(response.get("image_data_float") or [], dtype=np.float32)
+        if width <= 0 or height <= 0 or values.size != width * height:
+            raise RuntimeError("AirSim returned an empty or malformed depth image")
+        self.cache.update(values.reshape(height, width))
+
+    def snapshot(self):
+        try:
+            self._capture()
+        except (OSError, RuntimeError, ValueError) as error:
+            self._rpc = None
+            self.cache.invalidate(error)
+        return self.cache.snapshot()
+
+    def summary(self, now_unix_ms=None):
+        self.snapshot()
+        return self.cache.summary(now_unix_ms)
+
+    def close(self):
+        rpc, self._rpc = self._rpc, None
+        if rpc is not None and hasattr(rpc, "close"):
+            rpc.close()

@@ -613,6 +613,10 @@ def decode_pixel_box(answer, width, height):
         if (not isinstance(box, list) or len(box) != 4 or
                 any(type(v) not in (int, float) or not math.isfinite(v) for v in box)):
             raise ValueError('Expected four finite pixel coordinates')
+        if box[0] == box[2] or box[1] == box[3]:
+            # A zero-area box (often a single image corner) marks nothing:
+            # the model found no bounded region, e.g. the object fills the frame.
+            return None, None
         slack_x, slack_y = EDGE_OVERSHOOT * width, EDGE_OVERSHOOT * height
         if not (-slack_x <= box[0] < box[2] <= width + slack_x
                 and -slack_y <= box[1] < box[3] <= height + slack_y):

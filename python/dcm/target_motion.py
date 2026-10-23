@@ -107,6 +107,26 @@ def _aim_height(target, state):
 
 REFRESH_ATTEMPTS = 3
 REFRESH_WAIT_S = 0.3  # LiDAR publishes at 10 Hz
+# The forward depth camera sees the whole face the nose points at, where a
+# sparse LiDAR may only catch a strip of it. Depth within this margin of the
+# requested standoff counts as close enough; nearer than the standoff, stop.
+DEPTH_CLOSE_MARGIN_M = 3.0
+
+
+def depth_ahead_m(client):
+    """Near (10th percentile) depth in the forward camera's central patch, or None."""
+    feedback = getattr(client, 'depth_feedback', None)
+    if not callable(feedback):
+        return None
+    try:
+        summary = feedback()
+    except (OSError, RuntimeError, ValueError, KeyError):
+        return None
+    centre = summary.get('center', {}) if isinstance(summary, dict) else {}
+    value = centre.get('p10_optical_z_m')
+    if not summary.get('fresh', True) or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if math.isfinite(value) else None
 
 
 class TargetMeasurementError(ValueError):
@@ -165,8 +185,20 @@ class TargetMotion:
         for _ in range(24):
             if self.interrupted():
                 return self._stop('Operator interrupted target approach.', measurements=history)
-            target = self._target(target_id)
+            try:
+                target = self._target(target_id)
+            except TargetMeasurementError as error:
+                depth = depth_ahead_m(self.client)
+                if history and depth is not None and depth <= standoff_m + DEPTH_CLOSE_MARGIN_M:
+                    return self._depth_reached(target_id, standoff_m, depth, history,
+                                               'LiDAR lost the target surface')
+                raise error
             distance = float(target['surface_range_m'])
+            depth = depth_ahead_m(self.client)
+            if history and depth is not None and depth <= standoff_m and depth < distance - 1.0:
+                # Something the nose faces is already nearer than LiDAR says.
+                return self._depth_reached(target_id, standoff_m, depth, history + [distance],
+                                           'depth is nearer than the LiDAR surface')
             # A clean re-measurement should not jump far closer than the last
             # commanded step could explain. In a cluttered scene, LiDAR
             # association can drift onto a different nearby surface; treat an
@@ -211,6 +243,14 @@ class TargetMotion:
             if len(history) >= 4 and max(history[-3:]) - min(history[-3:]) < 0.08:
                 return self._stop('No measurable progress toward target distance.', measurements=history)
         return self._stop('Target approach did not converge within its bounded execution.', measurements=history)
+
+    def _depth_reached(self, target_id, standoff_m, depth, history, why):
+        self.flight('hold', {'duration_s': 0.5})
+        return {'status': 'SUCCEEDED',
+                'message': f'Close enough: forward depth {depth:.1f} m ({why}).',
+                'evidence': {'target_id': target_id, 'requested_standoff_m': standoff_m,
+                             'final_depth_range_m': round(depth, 2),
+                             'standoff_measured_by': 'forward_depth_camera', 'measurements_m': history}}
 
     def _acquire_target_geometry(self, target_id, target, standoff_m, maximum_ground_speed_mps, require_height=False):
         """Measure at most two new face-edge views, preserving target identity.
