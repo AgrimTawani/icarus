@@ -30,11 +30,16 @@ class Client:
                 'footprint': {'height_m': 6, 'height_clipped': False}}
 
     def flight(self, name, args, **kw):
-        # Intermediate target-facing arc legs (0.5 m acceptance) are kept apart
-        # so call sequences still show each meaningful move once.
-        legs = self.__dict__.setdefault('arc_legs', [])
-        (legs if name == 'goto' and kw.get('acceptance_radius_m') == 0.5 else self.calls).append(
-            (name, deepcopy(args), kw))
+        # Target-facing transit arcs are kept apart so call sequences still
+        # show each meaningful move once.
+        arcs = self.__dict__.setdefault('arcs', [])
+        transit = name == 'orbit' and args.get('revolutions', 1) < 1
+        (arcs if transit else self.calls).append((name, deepcopy(args), kw))
+        if transit:
+            angle = math.atan2(self.east - args['center_east_m'], self.north - args['center_north_m'])
+            angle += (1 if args['clockwise'] else -1) * args['revolutions'] * 2 * math.pi
+            self.north = args['center_north_m'] + args['radius_m'] * math.cos(angle)
+            self.east = args['center_east_m'] + args['radius_m'] * math.sin(angle)
         if name == 'goto':
             self.north, self.east, self.alt = args['north_m'], args['east_m'], args['altitude_agl_m']
         return {'status': 'SUCCEEDED', 'state': self.state()}
@@ -246,7 +251,7 @@ def test_blocked_orbit_does_not_claim_acquisition_movement_never_happened(monkey
     fake_measured_orbit(monkeypatch)
     c = AcquisitionClient()
     def flight(name, args, **kwargs):
-        if name == 'orbit':
+        if name == 'orbit' and args.get('revolutions', 1) >= 1:  # the full orbit, not a transit arc
             return {'status': 'FAILED', 'requires_user_choice': True, 'question': 'Choose another camera?',
                     'evidence': {'no_flight_executed': True}}
         return c.flight(name, args, **kwargs)
@@ -313,7 +318,7 @@ def test_measurement_move_failure_does_not_capture_or_orbit():
     result = TargetMotion(c, fail_move).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
     assert result['status'] == 'FAILED'
     assert result['message'] == 'clearance unavailable'
-    assert [call[0] for call in c.calls] == ['goto']
+    assert [call[0] for call in c.calls] == ['orbit']  # the smooth transit arc to the first view
     assert not c.captures
 
 
@@ -535,10 +540,10 @@ def test_side_view_transit_keeps_the_nose_on_the_target_centre(monkeypatch):
     TargetMotion(c, c.flight).execute('orbit_target', {'target_id': 'a', 'standoff_m': 3})
     geometry = c.refresh_target('a')['geometry']
     centre = geometry.get('orbit_center') or geometry['center']
-    assert c.arc_legs, 'a side-view move should be flown as short arc legs'
-    for _, leg, _ in c.arc_legs:
-        bearing = math.degrees(math.atan2(centre['east_m'] - leg['east_m'], centre['north_m'] - leg['north_m'])) % 360
-        assert abs((leg['heading_deg'] - bearing + 180) % 360 - 180) < 1e-6
+    assert c.arcs, 'a side-view move should be flown as one smooth arc'
+    for _, arc, _ in c.arcs:
+        assert arc['face_center'] is True and 0 < arc['revolutions'] < 1
+        assert (arc['center_north_m'], arc['center_east_m']) == (centre['north_m'], centre['east_m'])
 
 
 def test_a_single_missed_lidar_scan_does_not_lose_the_target(monkeypatch):

@@ -205,6 +205,39 @@ def project_point(state, target, camera='forward_d435i'):
         return {'available': False, 'in_frame': None, 'image_proof': False, 'reason': str(error)}
 
 
+def _rotate(matrix, vector):
+    return tuple(sum(matrix[i][j]*vector[j] for j in range(3)) for i in range(3))
+
+
+def ground_point(state, camera, pixel_x, pixel_y, image_width=None, image_height=None):
+    """Where an image pixel's ray meets flat ground at home level (inverse of project_point).
+
+    Approximate: objects above the ground (e.g. roofs) land slightly off their
+    footprint for off-nadir pixels. Returns None when the ray does not hit ground.
+    """
+    cal = _calibration(camera)
+    local = _local(state)
+    scale_x = cal['width'] / image_width if image_width else 1.0
+    scale_y = cal['height'] / image_height if image_height else 1.0
+    u, v = pixel_x * scale_x, pixel_y * scale_y
+    focal = cal['width']/(2*math.tan(cal['horizontal_fov_rad']/2))
+    pose = cal['pose_flu']
+    flu = _rotate(_rotation(*pose[3:]), (1.0, -(u - cal['width']/2)/focal, -(v - cal['height']/2)/focal))
+    attitude = state.get('attitude', {})
+    rotation = _rotation(*(_number(attitude.get(k)) for k in ('roll_rad', 'pitch_rad', 'yaw_rad')))
+    ray = _rotate(rotation, (flu[0], -flu[1], -flu[2]))
+    mount = _rotate(rotation, (pose[0], -pose[1], -pose[2]))
+    camera_ned = tuple(local[k] + mount[i] for i, k in enumerate(('north_m', 'east_m', 'down_m')))
+    ground_down = local['down_m'] + _number(state.get('relative_altitude_m'))
+    if ray[2] <= 1e-6:
+        return None
+    distance = (ground_down - camera_ned[2]) / ray[2]
+    if distance <= 0:
+        return None
+    return {'north_m': camera_ned[0] + distance*ray[0], 'east_m': camera_ned[1] + distance*ray[1],
+            'origin_id': local['origin_id']}
+
+
 def orbit_camera_feasibility(radius_m, altitude_agl_m, target_altitude_agl_m=0, camera='forward_d435i'):
     """Level, center-facing orbit geometry, not a guarantee during banking/occlusion.
 

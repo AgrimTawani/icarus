@@ -40,7 +40,8 @@ struct ClusterOptions {
   double cell_m = 0.5;
   double maximum_range_m = 40.0;
   std::uint32_t minimum_points = 3;
-  std::size_t maximum_clusters = 16;
+  // Cities hold many small objects; too low a cap drops a farther building.
+  std::size_t maximum_clusters = 64;
   std::size_t maximum_hull_vertices = 24;
   // Returns lower than this height above the terrain reference passed to
   // Ingest are treated as terrain.  The reference assumes locally level ground

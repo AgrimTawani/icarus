@@ -219,6 +219,8 @@ void ObstacleMap::Ingest(const RangeScan& scan, double north, double east,
   transformed.reserve(scan.points.size());
   std::vector<ClusterPoint> structure;
   structure.reserve(scan.points.size());
+  std::vector<ClusterPoint> returns;
+  returns.reserve(scan.points.size());
   const bool elevation_known = std::isfinite(scan.maximum_elevation_rad);
   for (const auto& point : scan.points) {
     Point3 local;
@@ -264,10 +266,35 @@ void ObstacleMap::Ingest(const RangeScan& scan, double north, double east,
         relative_down <= kMaximumDownwardReturnM) {
       transformed.push_back(local);
     }
-    // Object proposals use every above-terrain return, including structure
-    // below or well above the collision slice, so heights can be measured.
-    if (local.z_m <= terrain_down - cluster_options_.ground_clearance_m) {
-      structure.push_back({local, on_top_ring});
+    returns.push_back({local, on_top_ring});
+  }
+  // Object proposals use every above-terrain return, including structure
+  // below or well above the collision slice, so heights can be measured.
+  // Terrain is the deeper of home level and the lowest return within about
+  // 12 m: ground slopes, and a wall standing on lower ground is not terrain.
+  // On level ground this equals the home reference.
+  constexpr double kGroundCellM = 4.0;
+  const auto cell_key = [](double north_m, double east_m) {
+    const auto row = static_cast<std::int64_t>(std::floor(north_m / kGroundCellM));
+    const auto col = static_cast<std::int64_t>(std::floor(east_m / kGroundCellM));
+    return (row << 32) ^ (col & 0xffffffff);
+  };
+  std::unordered_map<std::int64_t, double> lowest;
+  for (const auto& item : returns) {
+    auto [entry, added] = lowest.emplace(cell_key(item.point.x_m, item.point.y_m), item.point.z_m);
+    if (!added) entry->second = std::max(entry->second, item.point.z_m);
+  }
+  for (const auto& item : returns) {
+    double local_terrain = terrain_down;
+    for (int dn = -1; dn <= 1; ++dn) {
+      for (int de = -1; de <= 1; ++de) {
+        const auto found = lowest.find(cell_key(item.point.x_m + dn * kGroundCellM,
+                                                item.point.y_m + de * kGroundCellM));
+        if (found != lowest.end()) local_terrain = std::max(local_terrain, found->second);
+      }
+    }
+    if (item.point.z_m <= local_terrain - cluster_options_.ground_clearance_m) {
+      structure.push_back(item);
     }
   }
   std::uint32_t total = 0;

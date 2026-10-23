@@ -298,9 +298,9 @@ void TestClusterTopClippingAndBounds() {
     scan.points.push_back({3.0, left, 3.0 * std::tan(0.5), 1.0});
     scan.points.push_back({3.0, left, 0.0, 1.0});
   }
-  // Twenty separated poles plus one beyond the 40 m proposal range.
-  for (int index = 0; index < 20; ++index) {
-    const double angle = index * 2.0 * 3.14159265358979323846 / 20.0;
+  // Seventy separated poles plus one beyond the 40 m proposal range.
+  for (int index = 0; index < 70; ++index) {
+    const double angle = index * 2.0 * 3.14159265358979323846 / 70.0;
     for (int sample = 0; sample < 3; ++sample) {
       scan.points.push_back({20.0 * std::cos(angle), 20.0 * std::sin(angle),
                              -0.5 * sample, 1.0});
@@ -312,10 +312,10 @@ void TestClusterTopClippingAndBounds() {
   icarus::perception::ObstacleMap map(750);
   map.Ingest(scan, 0.0, 0.0, -5.0, 0.0, 0.0, 0.0);
   const auto summary = map.Summary(1'100, 0.0, 0.0, 0.0);
-  Require(summary.obstacle_cluster_total() == 21,
+  Require(summary.obstacle_cluster_total() == 71,
           "all in-range clusters must be counted");
-  Require(summary.nearby_obstacles_size() == 16,
-          "published proposals must be bounded to the nearest sixteen");
+  Require(summary.nearby_obstacles_size() == 64,
+          "published proposals must be bounded to the nearest sixty-four");
   Require(summary.nearby_obstacles(0).top_clipped() &&
               std::abs(summary.nearby_obstacles(0).distance_m() - 3.0) < 1e-6,
           "a return on the top beam must mark the top as clipped");
@@ -357,6 +357,31 @@ void TestClusterTerrainReferenceFollowsHomeAltitude() {
   home_map.Ingest(scan, 0.0, 0.0, -3.6, 0.0, 0.0, 0.0, -1.6);
   Require(home_map.Summary(1'100, 0.0, 0.0, 0.0).nearby_obstacles_size() == 0,
           "terrain at the home reference must not become an object proposal");
+}
+
+void TestWallOnLowerGroundIsStructure() {
+  // Cities slope: a wall standing on ground 5 m below home is entirely below
+  // the home reference, yet it is an object, not terrain.
+  icarus::perception::RangeScan scan;
+  scan.captured_at_unix_ms = 1'000;
+  scan.frame = icarus::perception::SensorFrame::kBodyFlu;
+  scan.maximum_elevation_rad = 0.9;
+  // Vehicle 5 m above home; FLU z of -10 is 5 m below home.
+  for (int index = 0; index < 12; ++index) {
+    scan.points.push_back({16.0 + 0.25 * index, 0.0, -10.0, 1.0});  // low ground
+  }
+  for (double left = -2.0; left <= 2.0; left += 0.5) {
+    for (double up = -9.0; up <= -6.5; up += 0.5) {
+      scan.points.push_back({20.0, left, up, 1.0});  // wall, top still below home
+    }
+  }
+  icarus::perception::ObstacleMap map(750);
+  map.Ingest(scan, 0.0, 0.0, -5.0, 0.0, 0.0, 0.0, 0.0);
+  const auto summary = map.Summary(1'100, 0.0, 0.0, 0.0);
+  Require(summary.nearby_obstacles_size() == 1,
+          "a wall on lower ground must be one object proposal");
+  Require(std::abs(summary.nearby_obstacles(0).distance_m() - 20.0) < 0.6,
+          "the proposal must be the wall, not the low ground before it");
 }
 
 void TestClusterReturnsIsDeterministic() {
@@ -460,6 +485,7 @@ int main() {
     TestClustersExposeMeasuredObjects();
     TestClusterTopClippingAndBounds();
     TestClusterTerrainReferenceFollowsHomeAltitude();
+    TestWallOnLowerGroundIsStructure();
     TestClusterReturnsIsDeterministic();
     std::cout << "Phase 9 perception and planning tests passed\n";
     return 0;

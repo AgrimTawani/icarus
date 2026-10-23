@@ -16,7 +16,7 @@ from python.dcm.operator_control import OperatorInterrupt
 from python.dcm.viewpoint_gate import ViewpointGate
 
 MAX_CONSECUTIVE_FAILURES = 3
-EVIDENCE_KEYS = ('found', 'answer', 'validity', 'counts', 'count', 'target_id', 'reason', 'surface_range_m',
+EVIDENCE_KEYS = ('found', 'answer', 'validity', 'counts', 'count', 'objects', 'target_id', 'reason', 'surface_range_m',
                  'final_surface_range_m', 'bearing_deg', 'requested_standoff_m', 'error_code')
 
 

@@ -5,8 +5,8 @@ import json
 import math
 from pathlib import Path
 
-DIRECT_PROMPT_VERSION = 'direct-agent-v21-search-rule'
-DIRECT_TOOL_VERSION = 'direct-tools-v30-search-descriptions'
+DIRECT_PROMPT_VERSION = 'direct-agent-v23-blocked-orbit'
+DIRECT_TOOL_VERSION = 'direct-tools-v31-survey-arc'
 
 
 class DeadlineExceeded(Exception):

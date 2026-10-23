@@ -54,6 +54,15 @@ PIXEL_BOX_SCHEMA = {
     "required": ["bbox"], "additionalProperties": False,
 }
 
+# Every visible instance; an empty list is an observed absence.
+PIXEL_BOXES_SCHEMA = {
+    "type": "object", "properties": {
+        "bboxes": {"type": "array", "maxItems": 24,
+                   "items": {"type": "array", "items": {"type": "number"},
+                             "minItems": 4, "maxItems": 4}}},
+    "required": ["bboxes"], "additionalProperties": False,
+}
+
 
 class VlmInferenceError(RuntimeError):
     """Inference failed before producing usable visual evidence."""
@@ -105,7 +114,8 @@ def measurement_grammar(result_type):
     Regenerate with scripts/autonomy/generate_vlm_grammars.py after schema edits.
     """
     schemas = {"boolean": CONDITION_SCHEMA, "count": COUNT_SCHEMA,
-               "description": DESCRIPTION_SCHEMA, "pixel_box": PIXEL_BOX_SCHEMA}
+               "description": DESCRIPTION_SCHEMA, "pixel_box": PIXEL_BOX_SCHEMA,
+               "pixel_boxes": PIXEL_BOXES_SCHEMA}
     if result_type not in schemas:
         raise ValueError("VLM result_type must be boolean, count or description")
     artifact = json.loads(Path(__file__).with_name("vlm_grammars.json").read_text())
@@ -433,6 +443,54 @@ def normalize_description(description: str) -> str:
 def presence_answer_is_yes(answer: str) -> bool:
     words = answer.strip().lower().replace(".", " ").replace(",", " ").split()
     return bool(words) and words[0] == "yes"
+
+
+def ground_all(image_path: Path, description: str, manifest_path: Path,
+               binary: Path | None = None, timeout_s: float = 90.0, gpu_layers: int = 0) -> dict:
+    """Every visible instance of a description as source-image pixel boxes.
+
+    One constrained VLM call. Boxes slightly past a frame edge are clipped as
+    in decode_pixel_box; malformed boxes are dropped. Empty means none seen.
+    """
+    description = normalize_description(description)
+    image_path = Path(image_path)
+    artifact = load_vlm(manifest_path)
+    if artifact.get('grounding_format') != 'json_pixel_xyxy':
+        raise ValueError('Multi-object grounding needs a json_pixel_xyxy VLM artifact')
+    executable = binary or (Path(__file__).resolve().parents[2]
+                            / "third_party/llama.cpp/build/bin/llama-server")
+    if not executable.is_file():
+        raise FileNotFoundError("llama-server is unavailable")
+    from PIL import Image
+    from python.perception.visual_coordinates import prepare_grounding_image, source_pixel_box
+    with Image.open(image_path) as image:
+        source_width, source_height = image.size
+    image_b64, input_transform = prepare_grounding_image(image_path, artifact)
+    width, height = ((input_transform['model_width'], input_transform['model_height'])
+                     if input_transform else (source_width, source_height))
+    started = time.monotonic()
+    with _GroundingServer(executable, artifact, gpu_layers, started + timeout_s) as server:
+        raw = server.complete(image_b64,
+            f'Find every {description} in this image. Return JSON with '
+            f'bboxes=[[xmin,ymin,xmax,ymax], ...], one box per {description}, in image pixel '
+            f'coordinates ({width} wide, {height} high). Use bboxes=[] if no {description} is visible.',
+            '', 512, grammar=measurement_grammar('pixel_boxes'))
+    try:
+        listed = json.loads(raw)['bboxes']
+    except (ValueError, KeyError, TypeError) as error:
+        raise VlmInferenceError('invalid_pixel_boxes', str(error)) from error
+    boxes = []
+    for box in listed:
+        try:
+            pixel, _ = decode_pixel_box(json.dumps({'bbox': box}), width, height)
+        except VlmInferenceError:
+            continue
+        if pixel is not None:
+            boxes.append(source_pixel_box(pixel, input_transform))
+    return {"schema": GROUNDING_SCHEMA, "description": description, "boxes": boxes,
+            "source_width": source_width, "source_height": source_height,
+            "latency_ms": round((time.monotonic() - started) * 1000, 3),
+            "image": {"sha256": _sha256(image_path)}, "flight_authority": False}
 
 
 def ground_description(image_path: Path, description: str, manifest_path: Path,

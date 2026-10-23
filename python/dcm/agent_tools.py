@@ -175,13 +175,24 @@ SKILLS = {
                           "description": "Total turning allowed; 360 is one full turn."},
         "camera": CAMERA,
     }, ["visual_query"]),
+    "survey_count": obj({
+        "visual_query": {**TEXT, "maxLength": 120,
+                         "description": "What to count, e.g. its class: house, car, tree."},
+        "shape": {"enum": ["rectangle", "square", "circle"]},
+        "width_m": {**POSITIVE, "description": "Rectangle/square: extends to the right of the drone."},
+        "length_m": {**POSITIVE, "description": "Rectangle: extends forward of the drone."},
+        "radius_m": {**POSITIVE, "description": "Circle: its centre is one radius ahead of the drone."},
+        "altitude_agl_m": {**POSITIVE, "description": "Survey height; higher sees a wider strip."},
+        "maximum_ground_speed_mps": {"type": "number", "minimum": 0.5, "maximum": 5, "default": 2},
+        "camera": {**CAMERA, "default": "downward_brio"},
+    }, ["visual_query", "shape"]),
 }
 SCHEMAS = copy.deepcopy({**FLIGHT, **TARGET_FLIGHT, **WORKFLOW_FLIGHT, **SKILLS})
 # The fixed live catalogue for the mission agent. Scan/route workflows and
 # get_context stay available to Python callers, not to per-step decisions.
 AGENT_TOOLS = (
     'arm', 'disarm', 'takeoff', 'land', 'return_home', 'hold', 'cancel',
-    'yaw', 'face_heading', 'move_relative', 'goto', 'orbit', 'search_for_object',
+    'yaw', 'face_heading', 'move_relative', 'goto', 'orbit', 'search_for_object', 'survey_count',
     'approach_target', 'overfly_target', 'fly_pattern',
     'detect', 'inspect_scene', 'localize_target', 'assess_landing_zone',
     'ask_user', 'finish')
@@ -216,6 +227,7 @@ SCHEMAS.update(
     }
 )
 DESCRIPTIONS = {
+    'survey_count': 'Fly over an area (rectangle, square or circle, anchored at the drone) once and count a kind of object while flying; nothing stops to look. Returns count, approximate object positions and the distance from each to its nearest neighbour.',
     'search_for_object': 'Look for an object by turning in place: inspect the current view, then turn step_deg in the given direction and inspect again, until the VLM sees it or max_sweep_deg is used. Returns found and the heading. Use the operator\'s requested direction, step and rate.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Fly a circular path around a center; face it by default. Object destinations use standoff_m from measured hull; coordinate/home/launch destinations use radius_m and altitude_agl_m. Select camera explicitly; none requests heading-only flight. Cameras cannot tilt.',

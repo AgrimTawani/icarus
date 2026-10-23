@@ -60,7 +60,7 @@ def destination_schema(operation, legacy):
             variants.append(ref('coordinates',fields,required))
         variants += [ref('home'),ref('launch'),ref('named_waypoint',{'waypoint_name':text},['waypoint_name'])]
     object_variants = [
-        ref('visible_object',{'visual_query':{**text,'description':'Object class, visual description or image-relative referent. A class alone can begin acquisition; direction uses view.'},
+        ref('visible_object',{'visual_query':{**text,'description':'Object class, visual description or image-relative referent. A class alone can begin acquisition; direction uses view. Write "nearest X" when the operator asks for the nearest or closest one.'},
             'view':copy.deepcopy(VIEW_SCHEMA)},['visual_query','view']),
         ref('registered_target',{'target_id':text},['target_id'])]
     if operation != 'goto':

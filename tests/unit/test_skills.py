@@ -1,5 +1,6 @@
 """Drone skills: bounded loops over ordinary executor actions."""
 import math
+import pytest
 
 from python.dcm import skills
 
@@ -132,3 +133,59 @@ def test_acquire_is_bounded():
     _, attempts = skills.acquire(executor, 'building')
     assert len(attempts) == skills.ACQUIRE_ATTEMPTS
     assert names(executor).count('move_relative') == skills.ACQUIRE_ATTEMPTS
+
+
+def test_survey_counts_while_flying_and_merges_repeat_sightings(monkeypatch):
+    import threading
+    import python.dcm.camera_geometry as geometry
+    calls = []
+    houses = iter([(5.0, 5.0), (5.5, 5.2), (20.0, 5.0), (300.0, 300.0)])  # 2nd repeats the 1st; last is outside
+
+    class SurveyClient:
+        def state(self):
+            return {'attitude': {'yaw_rad': 0.0}, 'relative_altitude_m': 20.0,
+                    'local_position_ned': {'north_m': 0, 'east_m': 0, 'down_m': -20, 'origin_id': 'o'}}
+
+        def capture_view(self, camera):
+            return {'capture_pose': self.state()}
+
+        def locate_all(self, query, view):
+            try:
+                calls.append(next(houses))
+            except StopIteration:
+                flying.wait(5)
+                return {'boxes': [], 'source_width': 640, 'source_height': 360}
+            return {'boxes': [[0, 0, 2, 2]], 'source_width': 640, 'source_height': 360}
+
+    flying = threading.Event()
+
+    class SurveyExecutor:
+        client = SurveyClient()
+        def interrupted(self):
+            return False
+        def execute(self, name, args):
+            assert name == 'fly_pattern' and args['coverage'] == 'area' and args['lane_spacing_m'] > 0
+            while len(calls) < 4:  # the worker looks while the route is still flying
+                threading.Event().wait(0.01)
+            flying.set()
+            return {'status': 'SUCCEEDED', 'evidence': {'anchor': {'north_m': 0, 'east_m': 0, 'heading_deg': 0}}}
+
+    monkeypatch.setattr(geometry, 'camera_calibration', lambda camera: {'available': True, 'vertical_fov_rad': 1.0})
+    monkeypatch.setattr(geometry, 'ground_point', lambda pose, camera, u, v, w, h: dict(zip(('north_m', 'east_m'), calls[-1])))
+    result = skills.survey_count(SurveyExecutor(), 'house', shape='rectangle', width_m=40, length_m=40)
+    evidence = result['evidence']
+    assert result['status'] == 'SUCCEEDED'
+    assert evidence['count'] == 2 and evidence['sightings'] == 4 and evidence['sightings_inside_area'] == 3
+    assert [o['nearest_neighbour_m'] for o in evidence['objects']] == [pytest.approx(14.8, abs=0.2)] * 2
+
+
+def test_circle_survey_area_is_centred_one_radius_ahead():
+    anchor = {'north_m': 0, 'east_m': 0, 'heading_deg': 90}  # facing east
+    assert skills._in_area({'north_m': 0, 'east_m': 10}, anchor, 'circle', None, None, 10)
+    assert not skills._in_area({'north_m': 0, 'east_m': -1}, anchor, 'circle', None, None, 10)
+
+
+def test_acquisition_grounds_the_nearest_instance_by_default():
+    assert skills.nearest('house') == 'nearest house'
+    assert skills.nearest('closest red car') == 'closest red car'
+    assert skills.nearest('Nearest tree') == 'Nearest tree'

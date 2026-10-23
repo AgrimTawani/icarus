@@ -19,7 +19,8 @@ constexpr std::array<std::uint8_t, 4> kMagic{'I', 'C', 'A', 'R'};
 constexpr std::uint16_t kVersion = 1;
 constexpr std::size_t kHeaderSize = 24;
 constexpr std::size_t kPointSize = 12;
-constexpr std::uint16_t kMaximumPoints = 4096;
+// Largest scan that fits one UDP datagram (24 B header + 12 B per point).
+constexpr std::uint16_t kMaximumPoints = 5400;
 
 template <typename T>
 T ReadLittleEndian(const std::uint8_t* data) {

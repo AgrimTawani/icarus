@@ -16,7 +16,7 @@ from python.simulation.airsim_rpc import MsgpackRpcClient
 
 MAGIC = b"ICAR"
 VERSION = 1
-MAX_POINTS = 4096
+MAX_POINTS = 5400  # one UDP datagram; must match the C++ adapter
 HEADER = struct.Struct("<4sHHqQ")
 POINT = struct.Struct("<fff")
 
@@ -28,8 +28,10 @@ def encode_packet(point_cloud, captured_at_unix_ms, sequence):
         if all(type(value) in (int, float) and math.isfinite(value)
                for value in point):
             triples.append(point)
-        if len(triples) == MAX_POINTS:
-            break
+    if len(triples) > MAX_POINTS:
+        # Keep the whole sweep at lower density rather than dropping a sector.
+        step = len(triples) / MAX_POINTS
+        triples = [triples[int(i * step)] for i in range(MAX_POINTS)]
     header = HEADER.pack(MAGIC, VERSION, len(triples),
                          captured_at_unix_ms, sequence)
     return header + b"".join(POINT.pack(*point) for point in triples)

@@ -121,7 +121,7 @@ def test_live_body_describes_hardware_but_not_world_content():
     body = client.capability_profile()
     assert body["autopilot_version"] == "4.6.2"
     assert body["airframe"]["gazebo_airframe_equivalent"] is False
-    assert body["sensors"] == ["Gps", "Imu", "Lidar1"]
+    assert body["sensors"] == ["Gps", "IcarusLidar", "Imu", "Lidar1"]
     assert "0" in body["cameras"]
     assert body["autopilot_parameter_overrides"]["SCHED_LOOP_RATE"] == "150"
     assert "environment" not in body

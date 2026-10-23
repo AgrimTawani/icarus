@@ -50,6 +50,15 @@ arguments = [
 run_dir = root / Path(session["runtime_home"]).parent
 bridge_log = run_dir / "sensor-bridge.log"
 bridge_command = [str(root / "scripts/airsim-sensor-bridge")]
+# A perception-only LiDAR (not forwarded to ArduPilot) can be denser than the
+# one ArduPilot receives; AirSim's ArduCopter link stalls on large scans.
+settings_file = root / session["runtime_home"] / "Documents/AirSim/settings.json"
+try:
+    sensors = next(iter(json.loads(settings_file.read_text())["Vehicles"].values())).get("Sensors", {})
+except (OSError, ValueError, KeyError, StopIteration):
+    sensors = {}
+if "IcarusLidar" in sensors:
+    bridge_command += ["--lidar", "IcarusLidar"]
 with bridge_log.open("w", encoding="utf-8") as log:
     bridge = subprocess.Popen(
         bridge_command, cwd=root, start_new_session=True,

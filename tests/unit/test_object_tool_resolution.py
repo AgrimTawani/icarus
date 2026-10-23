@@ -54,7 +54,7 @@ def test_description_localizes_then_real_controller_refreshes_and_moves():
     client = DescribedClient()
     result = executor(client).execute('approach_target', {'description': 'grey object', 'standoff_m': 3})
     assert result['status'] == 'SUCCEEDED'
-    assert client.localized == ['grey object']
+    assert client.localized == ['nearest grey object']  # acquisition grounds the nearest instance
     assert set(client.refreshed) == {'measured_123'}
     assert client.north == pytest.approx(7)
     assert result['evidence']['target_localization']['target_id'] == 'measured_123'

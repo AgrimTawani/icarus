@@ -765,6 +765,32 @@ class MissionClient:
                 "captured_at_unix_ms": metadata.get("captured_at_unix_ms", int(time.time() * 1000))}
 
     @_exclusive_inference
+    def locate_all(self, description, *, view):
+        """Pixel boxes for every visible instance in a frame from ``capture_view``; consumes it."""
+        if self.episode is None or not self.episode.session:
+            raise RuntimeError("visual location requires an active simulator episode")
+        from python.perception.vlm import ground_all
+        try:
+            if self.vision_profile == "edge-vision":
+                from python.perception.edge_vision import RateLimiter
+                if self.edge_vlm_limiter is None:
+                    self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
+                self.edge_vlm_limiter.admit()
+                manifest = self._edge_manifest()
+            else:
+                manifest = Path.home() / "models/vision/MANIFEST.json"
+            lease = getattr(self, 'visual_inference', lambda: nullcontext(0))
+            with lease() as gpu_layers:
+                result = ground_all(Path(view["path"]), description, manifest,
+                                    timeout_s=90.0, gpu_layers=gpu_layers)
+        finally:
+            shutil.rmtree(view["directory"], ignore_errors=True)
+        result["image"].update(source=view["source"], captured_at_unix_ms=view["captured_at_unix_ms"],
+                               camera=view["camera"])
+        self.episode.record("semantic_visual_location", result)
+        return result
+
+    @_exclusive_inference
     def inspect_scene(self, question, *, view=None, structured=False, result_type=None):
         """Run the pinned VLM on one ephemeral simulator camera frame.
 

@@ -18,5 +18,9 @@
   "pixel_box": {
     "schema_sha256": "a5a8e8d2408ed342c766d592ff94f962eb4d2101366f2ed90aa8b5cca8f9733a",
     "grammar": "bbox ::= bbox-0 | null\nbbox-0 ::= \"[\" space number (\",\" space number){3,3} space \"]\"\nbbox-kv ::= \"\\\"bbox\\\"\" space \":\" space bbox\ndecimal-part ::= [0-9]{1,16}\nintegral-part ::= [0] | [1-9] [0-9]{0,15}\nnull ::= \"null\"\nnumber ::= (\"-\"? integral-part) (\".\" decimal-part)? ([eE] [-+]? integral-part)?\nroot ::= \"{\" space bbox-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
+  },
+  "pixel_boxes": {
+    "schema_sha256": "3b8e1b4d12c479f1c6b9752106931a8528f9d6a6587c14f35ac50576e65799a9",
+    "grammar": "bboxes ::= \"[\" space (bboxes-item (\",\" space bboxes-item){0,23})? space \"]\"\nbboxes-item ::= \"[\" space number (\",\" space number){3,3} space \"]\"\nbboxes-kv ::= \"\\\"bboxes\\\"\" space \":\" space bboxes\ndecimal-part ::= [0-9]{1,16}\nintegral-part ::= [0] | [1-9] [0-9]{0,15}\nnumber ::= (\"-\"? integral-part) (\".\" decimal-part)? ([eE] [-+]? integral-part)?\nroot ::= \"{\" space bboxes-kv space \"}\"\nspace ::= | \" \" | \"\\n\"{1,2} [ \\t]{0,20}\n"
   }
 }
