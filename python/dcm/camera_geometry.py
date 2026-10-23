@@ -3,6 +3,7 @@
 State uses NED and autopilot FRD Euler attitude. SDF cameras use FLU with
 optical forward +X, image right -Y, image down -Z. Unknown inputs stay unknown.
 """
+import json
 import math
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +11,31 @@ import xml.etree.ElementTree as ET
 
 _MODEL = Path(__file__).resolve().parents[2] / 'simulation/models/akshu_compact_sitl/model.sdf'
 _NAMES = {'forward_d435i': 'd435i', 'downward_brio': 'brio_down'}
+_AIRSIM_CAMERAS = {'forward_d435i': '0', 'downward_brio': '3'}
+_airsim_settings = None  # set once per process when the active simulator is AirSim
+
+
+def use_airsim_settings(path):
+    """Take camera calibration from the AirSim settings the simulator runs with."""
+    global _airsim_settings
+    _airsim_settings = None if path is None else str(path)
+    _calibration.cache_clear()
+
+
+def airsim_camera(settings_path, camera='forward_d435i'):
+    """Scene camera from AirSim settings: AirSim pose is FRD metres/degrees."""
+    settings = json.loads(Path(settings_path).read_text())
+    vehicle = next(iter(settings['Vehicles'].values()))
+    mount = vehicle.get('Cameras', {}).get(_AIRSIM_CAMERAS.get(camera, ''))
+    if mount is None:
+        raise ValueError(f'AirSim settings define no {camera} camera')
+    scene = next(item for item in mount['CaptureSettings'] if item.get('ImageType', 0) == 0)
+    # FRD -> FLU flips y, z, pitch and yaw; AirSim Pitch<0 looks down.
+    return {'width': int(scene['Width']), 'height': int(scene['Height']),
+            'horizontal_fov_deg': float(scene.get('FOV_Degrees', 90)),
+            'pose_flu': (float(mount.get('X', 0)), -float(mount.get('Y', 0)), -float(mount.get('Z', 0)),
+                         math.radians(float(mount.get('Roll', 0))), -math.radians(float(mount.get('Pitch', 0))),
+                         -math.radians(float(mount.get('Yaw', 0))))}
 
 
 def _number(value):
@@ -97,6 +123,13 @@ def resolve_reference(state, reference='home', launch_state=None):
 def _calibration(camera):
     if camera not in _NAMES:
         raise ValueError('Unsupported camera calibration')
+    if _airsim_settings is not None:
+        mount = airsim_camera(_airsim_settings, camera)
+        hfov = math.radians(mount['horizontal_fov_deg'])
+        return {'camera': camera, 'pose_flu': mount['pose_flu'], 'width': mount['width'], 'height': mount['height'],
+                'horizontal_fov_rad': hfov, 'vertical_fov_rad': 2*math.atan(math.tan(hfov/2)*mount['height']/mount['width']),
+                'near_m': 0.1, 'far_m': 1000.0, 'fixed_mount': True, 'tilt_control_available': False,
+                'source': _airsim_settings, 'simulation_only': True}
     sensor = ET.parse(_MODEL).find(f".//sensor[@name='{_NAMES[camera]}']")
     pose = tuple(float(v) for v in sensor.findtext('pose').split())
     width, height = int(sensor.findtext('camera/image/width')), int(sensor.findtext('camera/image/height'))
@@ -110,7 +143,7 @@ def _calibration(camera):
 def camera_calibration(camera='forward_d435i'):
     try:
         return {'available': True, **_calibration(camera)}
-    except (ValueError, OSError, ET.ParseError, AttributeError) as error:
+    except (ValueError, KeyError, StopIteration, OSError, ET.ParseError, AttributeError) as error:
         return {'available': False, 'reason': str(error)}
 
 
@@ -168,7 +201,7 @@ def project_point(state, target, camera='forward_d435i'):
             result['yaw_alone_can_resolve'] = True
         return {**result, 'in_frame': inside, 'pixel_x': u, 'pixel_y': v,
                 'reason': 'Geometrically in RGB frustum; image evidence still required' if inside else result.get('yaw_limit_reason', 'Target is outside RGB field of view or clipping range')}
-    except (ValueError, TypeError, OSError, ET.ParseError, AttributeError) as error:
+    except (ValueError, TypeError, KeyError, StopIteration, OSError, ET.ParseError, AttributeError) as error:
         return {'available': False, 'in_frame': None, 'image_proof': False, 'reason': str(error)}
 
 

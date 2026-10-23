@@ -196,6 +196,8 @@ class MissionClient:
             session = candidate
             break
         self.simulation_session = session
+        from python.dcm.camera_geometry import use_airsim_settings
+        use_airsim_settings(self._airsim_settings_path())
         self.episode = Episode(ROOT, self.mission_name, self.endpoint, session)
         self.action_api = ActionRecorder(self.action_api, self.episode, self)
         self.episode.start_sampling(self)
@@ -404,6 +406,13 @@ class MissionClient:
                 report["reasons"].append("requested return home did not complete")
         report["success"] = not report["reasons"]
         return report
+
+    def _airsim_settings_path(self):
+        """The settings file the running AirSim read (its private runtime HOME)."""
+        session = self.simulation_session or {}
+        if session.get("simulator") != "airsim" or not session.get("runtime_home"):
+            return None
+        return ROOT / session["runtime_home"] / "Documents/AirSim/settings.json"
 
     def _capture_rgb(self, output, *, camera="0"):
         """Capture one ephemeral frame from the active simulator."""
@@ -974,11 +983,12 @@ class MissionClient:
         """
         if self.episode is None or not self.episode.session:
             raise RuntimeError("target localization requires an active simulator episode")
-        if self.simulation_session.get("simulator") != "gazebo":
-            raise RuntimeError("target localization camera calibration is defined "
-                               "only for the Gazebo D435i")
+        simulator = self.simulation_session.get("simulator")
+        if simulator not in ("gazebo", "airsim"):
+            raise RuntimeError("target localization has camera calibration only for Gazebo and AirSim")
         from python.perception.target_localization import (
             TargetLocalizer,
+            airsim_localization_config,
             load_localization_config,
             normalize_description,
             visual_grounding_description,
@@ -988,8 +998,14 @@ class MissionClient:
         description = normalize_description(description)
         grounding_target = visual_grounding_description(description)
         if getattr(self, "target_localizer", None) is None:
-            self.target_localizer = TargetLocalizer(load_localization_config(
-                ROOT / "config/perception/target_localization.json"))
+            config = load_localization_config(ROOT / "config/perception/target_localization.json")
+            if simulator == "airsim":
+                from python.dcm.camera_geometry import airsim_camera
+                settings = self._airsim_settings_path()
+                if settings is None or not settings.is_file():
+                    raise RuntimeError("AirSim camera calibration needs the session's runtime settings.json")
+                config = airsim_localization_config(config, airsim_camera(settings))
+            self.target_localizer = TargetLocalizer(config)
         if new_target:
             self.target_localizer.reset(description)
         camera = self.target_localizer.config["camera"]
@@ -997,7 +1013,7 @@ class MissionClient:
                     if self.vision_profile == "edge-vision"
                     else Path.home() / "models/vision/MANIFEST.json")
         with tempfile.TemporaryDirectory(prefix="icarus-target-") as temporary:
-            output = Path(temporary) / "frame.ppm"
+            output = Path(temporary) / ("frame.png" if simulator == "airsim" else "frame.ppm")
             # The pose and LiDAR snapshot bracket the frame so geometry refers
             # to the moment the pixels were taken, not the end of VLM inference.
             state = MessageToDict(self.state(), preserving_proto_field_name=True)

@@ -102,6 +102,21 @@ def load_localization_config(path) -> dict:
     return config
 
 
+def airsim_localization_config(config: dict, mount: dict) -> dict:
+    """Swap in the AirSim forward camera; association policy stays the same.
+
+    ``mount`` is camera_geometry.airsim_camera(): FLU pose, so pitch>0 looks
+    down (this model's pitch_offset sign) and yaw>0 looks left.
+    """
+    camera = {**config["camera"], "sensor_id": "airsim_camera_0",
+              "width_px": mount["width"], "height_px": mount["height"],
+              "horizontal_fov_deg": mount["horizontal_fov_deg"],
+              "yaw_offset_deg": -math.degrees(mount["pose_flu"][5]),
+              "pitch_offset_deg": math.degrees(mount["pose_flu"][4]),
+              "calibration": "AirSim settings.json camera 0 capture settings and mount pose"}
+    return {**config, "camera": camera, "lidar": {**config["lidar"], "sensor_id": "airsim_lidar1"}}
+
+
 def _wrap_deg(value: float) -> float:
     return (value + 180.0) % 360.0 - 180.0
 

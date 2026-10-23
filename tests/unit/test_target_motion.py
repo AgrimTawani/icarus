@@ -539,3 +539,38 @@ def test_side_view_transit_keeps_the_nose_on_the_target_centre(monkeypatch):
     for _, leg, _ in c.arc_legs:
         bearing = math.degrees(math.atan2(centre['east_m'] - leg['east_m'], centre['north_m'] - leg['north_m'])) % 360
         assert abs((leg['heading_deg'] - bearing + 180) % 360 - 180) < 1e-6
+
+
+def test_a_single_missed_lidar_scan_does_not_lose_the_target(monkeypatch):
+    import python.dcm.target_motion as target_motion
+    monkeypatch.setattr(target_motion, 'REFRESH_WAIT_S', 0)
+    seen = iter([{'found': False, 'reason': 'target_not_observed'}, {'found': True, 'target_id': 't'}])
+
+    class Client:
+        def refresh_target(self, target_id):
+            return next(seen)
+
+    assert target_motion.TargetMotion(Client(), None)._target('t')['found'] is True
+
+
+def test_a_lost_target_still_fails_after_bounded_rescans(monkeypatch):
+    import python.dcm.target_motion as target_motion
+    monkeypatch.setattr(target_motion, 'REFRESH_WAIT_S', 0)
+    calls = []
+
+    class Client:
+        def refresh_target(self, target_id):
+            calls.append(target_id)
+            return {'found': False, 'reason': 'target_not_observed'}
+
+    with pytest.raises(target_motion.TargetMeasurementError):
+        target_motion.TargetMotion(Client(), None)._target('t')
+    assert len(calls) == target_motion.REFRESH_ATTEMPTS
+
+
+def test_orbit_camera_aims_level_when_the_target_top_was_not_measured():
+    from python.dcm.target_motion import _aim_height
+    state = {'relative_altitude_m': 5.0}
+    assert _aim_height({'footprint': {'height_m': 6.5}}, state) == 6.5
+    assert _aim_height({'footprint': {'height_m': None, 'height_clipped': True}}, state) == 5.0
+    assert _aim_height({}, state) == 5.0

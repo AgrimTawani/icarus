@@ -107,15 +107,16 @@ def test_localize_target_separates_forward_view_from_visual_subject():
 
 def test_localize_target_refuses_uncalibrated_simulators():
     module = _module()
-    client, patcher = _client(module, _grounding(True, "(1,1),(2,2)"))
-    client.simulation_session = {"simulator": "airsim"}
-    with patcher:
-        try:
-            client.localize_target("building")
-        except RuntimeError as error:
-            assert "calibration" in str(error)
-        else:
-            raise AssertionError("AirSim camera calibration is not defined")
+    for session in ({"simulator": "carla"}, {"simulator": "airsim"}):  # AirSim without its settings file
+        client, patcher = _client(module, _grounding(True, "(1,1),(2,2)"))
+        client.simulation_session = session
+        with patcher:
+            try:
+                client.localize_target("building")
+            except RuntimeError as error:
+                assert "calibration" in str(error)
+            else:
+                raise AssertionError("uncalibrated camera was used for localization")
 
 
 def test_localization_retains_sensor_to_model_coordinate_provenance():

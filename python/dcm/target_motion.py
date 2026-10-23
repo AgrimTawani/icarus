@@ -93,6 +93,22 @@ class OrbitMeasurements:
                 'maximum_center_radius_m': round(max(self.radii), 3) if self.radii else None}
 
 
+def _aim_height(target, state):
+    """Height the orbit camera should frame: the measured top, else our own height.
+
+    An unmeasured top (e.g. a roof above the LiDAR's upper beam) still means the
+    wall spans the camera's altitude, so the camera aims level at it.
+    """
+    height = target.get('footprint', {}).get('height_m')
+    if isinstance(height, (int, float)) and not isinstance(height, bool) and math.isfinite(height):
+        return height
+    return state['relative_altitude_m']
+
+
+REFRESH_ATTEMPTS = 3
+REFRESH_WAIT_S = 0.3  # LiDAR publishes at 10 Hz
+
+
 class TargetMeasurementError(ValueError):
     def __init__(self, measurement):
         super().__init__('Target measurement unavailable: ' + measurement.get('reason', 'target lost'))
@@ -110,7 +126,14 @@ class TargetMotion:
             if not target.get('reference_available'):
                 raise TargetMeasurementError(target)
             return target
-        target = self.client.refresh_target(target_id)
+        # One scan can miss a sparse surface (AirSim's 8-channel LiDAR splits a
+        # house face differently each sweep); a few fresh scans settle it.
+        for attempt in range(REFRESH_ATTEMPTS):
+            target = self.client.refresh_target(target_id)
+            if target.get('found') or target.get('reason') != 'target_not_observed':
+                break
+            if attempt + 1 < REFRESH_ATTEMPTS:
+                time.sleep(REFRESH_WAIT_S)
         if not target.get('found'):
             raise TargetMeasurementError(target)
         return target
@@ -346,7 +369,7 @@ class TargetMotion:
                 'altitude_agl_m': state['relative_altitude_m'],
                 'clockwise': clockwise, 'revolutions': revolutions,
                 'maximum_ground_speed_mps': maximum_ground_speed_mps, 'face_center': True,
-                **({'camera': camera, 'target_altitude_agl_m': target.get('footprint', {}).get('height_m')}
+                **({'camera': camera, 'target_altitude_agl_m': _aim_height(target, state)}
                    if camera and camera != 'none' else {})},
                 runtime_target=True, expected_origin_id=target["origin_id"])
         finally:
