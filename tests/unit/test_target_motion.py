@@ -504,6 +504,21 @@ def test_approach_stops_if_remeasurement_jumps_farther():
     assert [n for n, a, kw in c.calls] == ['goto', 'hold']
 
 
+def test_depth_already_measured_is_not_assumed_again():
+    """A 20 m x 10 m hull seen from a corner has its depth measured; only the
+    remainder up to the visible width is assumed, not a 22 m square."""
+    from python.dcm.target_motion import single_face_enclosure
+    hull = [{'north_m': n, 'east_m': e} for n, e in ((-20, -3), (-20, 7), (-40, 7), (-40, -3))]
+    geometry = {'center': {'north_m': -30, 'east_m': 2}, 'radius_m': 11.2, 'observed_hull': hull}
+    viewer = (-30, 30)  # due east, looking west along the 10 m side
+    enclosure = single_face_enclosure(geometry, viewer)
+    # across = north span 20 m (the width seen); along = east span 10 m already observed.
+    # unseen depth assumed up to the width: far edge at 20 m behind the near face.
+    assert enclosure['center']['east_m'] == pytest.approx(7 - 10)
+    assert enclosure['center']['north_m'] == pytest.approx(-30)
+    assert enclosure['radius_m'] == pytest.approx(math.hypot(10, 10))
+
+
 def test_single_face_orbit_encloses_an_assumed_square_footprint(monkeypatch):
     """One measured face: the circle must also clear a building as deep as it is wide."""
     fake_measured_orbit(monkeypatch)

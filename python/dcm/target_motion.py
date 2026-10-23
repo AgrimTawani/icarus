@@ -119,17 +119,25 @@ def single_face_enclosure(geometry, viewer_xy):
     away from the viewer by half the visible width and enclose the square.
     """
     center = point_xy(geometry.get('orbit_center') or geometry['center'])
-    hull = [point_xy(p) for p in geometry.get('observed_hull') or []]
-    width = max((math.dist(a, b) for a in hull for b in hull), default=0.0)
-    width = max(width, 2 * float(geometry.get('orbit_radius_m', geometry['radius_m'])))
-    half = width / 2
     away = math.dist(viewer_xy, center)
     if away < 0.05:
         raise ValueError('Target direction is not measurable at this position')
-    pushed = (center[0] + half * (center[0] - viewer_xy[0]) / away,
-              center[1] + half * (center[1] - viewer_xy[1]) / away)
+    u = ((center[0] - viewer_xy[0]) / away, (center[1] - viewer_xy[1]) / away)  # viewer -> object
+    v = (-u[1], u[0])                                                           # across the view
+    hull = [point_xy(p) for p in geometry.get('observed_hull') or []]
+    if not hull:
+        r = float(geometry.get('orbit_radius_m', geometry['radius_m']))
+        hull = [(center[0] + s * r * a[0], center[1] + s * r * a[1]) for a in (u, v) for s in (-1, 1)]
+    along = [(p[0] - viewer_xy[0]) * u[0] + (p[1] - viewer_xy[1]) * u[1] for p in hull]
+    across = [(p[0] - viewer_xy[0]) * v[0] + (p[1] - viewer_xy[1]) * v[1] for p in hull]
+    width = max(across) - min(across)
+    near, far_seen = min(along), max(along)
+    depth = max(width, far_seen - near)  # unseen depth assumed up to the visible width
+    mid_along, mid_across = near + depth / 2, (min(across) + max(across)) / 2
+    pushed = (viewer_xy[0] + mid_along * u[0] + mid_across * v[0],
+              viewer_xy[1] + mid_along * u[1] + mid_across * v[1])
     return {'center': {'north_m': pushed[0], 'east_m': pushed[1]},
-            'radius_m': math.hypot(half, half),
+            'radius_m': math.hypot(depth / 2, width / 2),
             'observed_hull': geometry.get('observed_hull') or []}
 
 

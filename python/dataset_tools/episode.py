@@ -301,6 +301,7 @@ class Episode:
 
         def sample():
             interval = 1 / maximum_rate_hz
+            consecutive_failures = 0
             while not self.stop.wait(interval):
                 for kind, call, request in (
                     ("state", client.state_api.GetState, state_request),
@@ -308,9 +309,15 @@ class Episode:
                 ):
                     try:
                         self.record(kind, _safe_message(call(request, timeout=2)))
+                        consecutive_failures = 0
                     except grpc.RpcError as error:
+                        # One slow reply under load must not end the record of
+                        # the whole flight; only a dead endpoint does.
                         self.failed_streams.append(kind + ":" + str(error.code()))
-                        return
+                        consecutive_failures += 1
+                        if (consecutive_failures >= 10
+                                or error.code() == grpc.StatusCode.UNAVAILABLE):
+                            return
 
         def events():
             request = drone_api_pb2.WatchEventsRequest(
