@@ -6,6 +6,7 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/RotatingMovementComponent.h"
 #include "PIPCamera.h"
+#include "UObject/ConstructorHelpers.h"
 #include "UObject/UObjectGlobals.h"
 
 namespace
@@ -65,7 +66,19 @@ AIcarus7AirSimPawn::AIcarus7AirSimPawn()
     AutoPossessPlayer = EAutoReceiveInput::Disabled;
     AutoPossessAI = EAutoPossessAI::Disabled;
 
-    VehicleRoot = CreateDefaultSubobject<USceneComponent>(TEXT("VehicleRoot"));
+    // AirSim moves the pawn with a swept SetActorLocationAndRotation on the
+    // root component and takes ground/obstacle contact from that sweep, so the
+    // root must itself be a blocking primitive (BP_FlyingPawn's root is its
+    // body mesh). A plain USceneComponent root falls through the world.
+    UBoxComponent* RootBox = CreateDefaultSubobject<UBoxComponent>(TEXT("VehicleRoot"));
+    RootBox->SetBoxExtent(FVector(11.5f, 8.0f, 4.5f));
+    RootBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    RootBox->SetCollisionObjectType(ECC_Pawn);
+    RootBox->SetCollisionResponseToAllChannels(ECR_Block);
+    RootBox->SetNotifyRigidBodyCollision(true);
+    RootBox->SetGenerateOverlapEvents(false);
+    RootBox->SetSimulatePhysics(false);
+    VehicleRoot = RootBox;
     SetRootComponent(VehicleRoot);
 
     // The Unreal mesh origin is the modeled frame origin. AirSim physics acts
@@ -136,9 +149,15 @@ UChildActorComponent* AIcarus7AirSimPawn::AddCamera(const TCHAR* ComponentName,
                                                     const FVector& LocationCm,
                                                     const FRotator& Rotation)
 {
+    // APIPCamera's constructor requires the capture components that only the
+    // AirSim blueprint BP_PIPCamera defines (same class BP_FlyingPawn uses);
+    // the bare C++ class aborts with "Cast of nullptr to SceneCaptureComponent2D".
+    static ConstructorHelpers::FClassFinder<APIPCamera> PipCameraClass(
+        TEXT("/AirSim/Blueprints/BP_PIPCamera"));
     UChildActorComponent* Camera = CreateDefaultSubobject<UChildActorComponent>(ComponentName);
     Camera->SetupAttachment(VehicleRoot);
-    Camera->SetChildActorClass(APIPCamera::StaticClass());
+    Camera->SetChildActorClass(PipCameraClass.Succeeded() ? PipCameraClass.Class.Get()
+                                                          : APIPCamera::StaticClass());
     Camera->SetRelativeLocation(LocationCm);
     Camera->SetRelativeRotation(Rotation);
     return Camera;
