@@ -174,8 +174,15 @@ def survey_count(executor, visual_query, shape='rectangle', width_m=None, length
     import threading
     from python.dcm.agent_tools import message_dict
     from python.dcm.camera_geometry import camera_calibration, ground_point
+    from python.dcm.target_motion import operating_defaults
     client = executor.client
     state = message_dict(client.state())
+    defaults = operating_defaults()
+    assumed = None
+    if width_m is None and radius_m is None:
+        # No area given: survey the default square ahead and say so.
+        shape, width_m, length_m = 'square', float(defaults['survey_area_side_m']), None
+        assumed = f'{width_m:g} m square ahead (operating default; no size given)'
     altitude = altitude_agl_m or state['relative_altitude_m']
     calibration = camera_calibration(camera)
     if not calibration.get('available'):
@@ -220,6 +227,7 @@ def survey_count(executor, visual_query, shape='rectangle', width_m=None, length
                 'frames_inspected': len(frames), 'sightings': len(sightings),
                 'sightings_inside_area': len(inside), 'lane_spacing_m': pattern['lane_spacing_m'],
                 'altitude_agl_m': altitude, 'camera': camera, 'path_completed': flight['status'] == 'SUCCEEDED',
+                **({'area_assumed': assumed} if assumed else {}),
                 'method': 'VLM boxes projected to flat ground, merged within %.0f m; positions approximate' % MERGE_RADIUS_M,
                 **({'frame_errors': errors[:3]} if errors else {})}
     status = flight['status'] if flight['status'] != 'SUCCEEDED' or frames else 'OBSERVATION_UNAVAILABLE'

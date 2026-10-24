@@ -88,6 +88,20 @@ def test_three_consecutive_failures_stop_with_the_reason():
     assert result['message'].startswith('Stopped after 3 unsuccessful calls in a row.')
 
 
+def test_the_same_failing_call_stops_even_with_holds_in_between():
+    """Live run: approach_target on a lost target failed eight times with a
+    successful hold between each; the consecutive-failure stop never fired."""
+    client = airborne()
+    client.fail = 'Yaw'
+    turn = call('yaw', angle_deg=30, direction='clockwise')
+    pause = call('hold', duration_s=1)
+    result = run(client, Runtime(turn, pause, turn, pause, turn, pause, turn,
+                                 call('finish', outcome='completed', message='x')))
+    assert result['status'] == 'incomplete'
+    assert 'same call failed 3 times' in result['message']
+    assert [name for name, _ in client.sent].count('Yaw') == 3
+
+
 def test_every_advertised_tool_has_a_property_for_the_grammar_compiler():
     # The pinned llama-server rejects grammars for objects without properties.
     for tool in decision_tools({}):

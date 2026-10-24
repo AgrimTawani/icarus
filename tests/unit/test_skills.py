@@ -179,6 +179,36 @@ def test_survey_counts_while_flying_and_merges_repeat_sightings(monkeypatch):
     assert [o['nearest_neighbour_m'] for o in evidence['objects']] == [pytest.approx(14.8, abs=0.2)] * 2
 
 
+def test_survey_without_a_size_uses_the_default_square_ahead(monkeypatch):
+    import python.dcm.camera_geometry as geometry
+    monkeypatch.setattr('python.dcm.target_motion.operating_defaults',
+                        lambda: {'survey_area_side_m': 50.0})
+    monkeypatch.setattr(geometry, 'camera_calibration', lambda camera: {'available': True, 'vertical_fov_rad': 1.0})
+    seen = {}
+
+    class Client:
+        def state(self):
+            return {'attitude': {'yaw_rad': 0.0}, 'relative_altitude_m': 3.0,
+                    'local_position_ned': {'north_m': 0, 'east_m': 0, 'down_m': -3, 'origin_id': 'o'}}
+        def capture_view(self, camera):
+            return {'capture_pose': self.state()}
+        def locate_all(self, query, view):
+            return {'boxes': [], 'source_width': 640, 'source_height': 360}
+
+    class Exec:
+        client = Client()
+        def interrupted(self):
+            return False
+        def execute(self, name, args):
+            seen.update(args)
+            return {'status': 'SUCCEEDED', 'evidence': {'anchor': {'north_m': 0, 'east_m': 0, 'heading_deg': 0}}}
+
+    result = skills.survey_count(Exec(), 'car')
+    assert result['status'] == 'SUCCEEDED'
+    assert seen['shape'] == 'square' and seen['width_m'] == 50.0 and seen['altitude_agl_m'] == 3.0
+    assert result['evidence']['area_assumed'] == '50 m square ahead (operating default; no size given)'
+
+
 def test_circle_survey_area_is_centred_one_radius_ahead():
     anchor = {'north_m': 0, 'east_m': 0, 'heading_deg': 90}  # facing east
     assert skills._in_area({'north_m': 0, 'east_m': 10}, anchor, 'circle', None, None, 10)

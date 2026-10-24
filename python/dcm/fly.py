@@ -112,7 +112,7 @@ def brief(result):
 
 DEFAULT_LABELS = {'takeoff_altitude_agl_m': 'takeoff altitude {} m', 'object_standoff_m': 'object standoff {} m',
                   'overflight_clearance_m': 'overflight clearance {} m', 'yaw_rate_deg_s': 'turn rate {} deg/s',
-                  'maximum_ground_speed_mps': 'ground speed {} m/s'}
+                  'maximum_ground_speed_mps': 'ground speed {} m/s', 'survey_area_side_m': 'survey area {} m square'}
 
 
 def vehicle_state(context, with_defaults=False):
@@ -177,6 +177,7 @@ def fly_mission(
     from python.dcm.llama_runtime import IncompleteModelResponse
     from python.dcm.runtime_config import ContextBudgetExceeded
     failures = 0
+    repeated_failures = {}  # identical call -> failures, whatever ran in between
     try:
         while session.decisions < max_decisions:
             if interrupt.sequence():
@@ -293,6 +294,12 @@ def fly_mission(
             if failures >= MAX_CONSECUTIVE_FAILURES:
                 return session.result("incomplete", f"Stopped after {failures} unsuccessful calls in a row. "
                                       + result.get("message", "Check the latest tool result."))
+            if result.get("status") != "SUCCEEDED":
+                key = name + json.dumps(args, sort_keys=True)
+                repeated_failures[key] = repeated_failures.get(key, 0) + 1
+                if repeated_failures[key] >= MAX_CONSECUTIVE_FAILURES:
+                    return session.result("incomplete", f"Stopped: the same call failed {repeated_failures[key]} times "
+                                          f"({name}). " + result.get("message", "Check the latest tool result."))
         return session.result("incomplete", f"Reached {max_decisions} decisions; remaining work was not executed.")
     except InterruptedError:
         while interrupt.latest():
