@@ -27,10 +27,13 @@ The module never changes the DCM or control authority. The custom pawn is still
 an `ArduCopter`; Icarus commands continue through the Drone API, ArduPilot SITL
 and AirSim's actuator/sensor boundary.
 
-Current runtime status: the source integration and AirLib physics test are
-complete, but this pawn has not yet been compiled by Unreal Engine or flown.
-The successful realistic AirVLN mission used that packaged executable's
-generic pawn. See the
+Current runtime status (2026-10-24): the pawn compiles under UE 4.27, is
+cooked into the Blocks environment, spawns, rests on the ground and flies
+(`docs/simulation/images/icarus7-blocks-*.png`). Build AirLib with
+`scripts/simulation/airsim/build_airlib_libcxx.sh` first; GCC-built AirLib
+fails at the plugin link. The successful realistic AirVLN mission used that
+packaged executable's generic pawn, because a compiled city cannot take a new
+native pawn. See the
 [end-to-end readiness report](../../../../docs/simulation/AIRSIM-ICARUS7-READINESS.md)
 for the precise remaining acceptance gates.
 

@@ -21,6 +21,26 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+AIRLIB_LIBS = ("libAirLib.a", "libMavLinkCom.a", "librpc.a")
+
+
+def check_airlib_abi(libraries) -> None:
+    """Unreal links with its bundled clang + libc++ (std::__1 symbols).
+
+    AirLib built with the system GCC carries std::__cxx11 symbols; it compiles
+    and then fails at the final plugin link, an hour into the build. Rebuild
+    with scripts/simulation/airsim/build_airlib_libcxx.sh.
+    """
+    for library in libraries:
+        library = Path(library)
+        if not library.is_file():
+            raise SystemExit(f"AirLib static library missing: {library}")
+        if b"St7__cxx11" in library.read_bytes():
+            raise SystemExit(
+                f"{library} was built against libstdc++ (std::__cxx11); Unreal needs "
+                "libc++. Run scripts/simulation/airsim/build_airlib_libcxx.sh first")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ue-root", type=Path, required=True,
@@ -43,6 +63,8 @@ def main() -> None:
         "--environment-project", str(project),
         "--airsim-source", str(args.airsim_source.resolve()),
     ], check=True)
+    airlib_lib_dir = project.parent / "Plugins/AirSim/Source/AirLib/lib/x64/Release"
+    check_airlib_abi(airlib_lib_dir / name for name in AIRLIB_LIBS)
 
     output.mkdir(parents=True, exist_ok=True)
     command = [

@@ -71,6 +71,17 @@ def check_pawn_abi() -> None:
         fail("native pawn rotor order is not FR, RL, FL, RR")
 
 
+def check_pawn_runtime_contract(text: str) -> None:
+    """Rules learned from the first packaged Blocks run (2026-10-24)."""
+    if 'CreateDefaultSubobject<UBoxComponent>(TEXT("VehicleRoot"))' not in text:
+        fail("native pawn root must be a blocking UBoxComponent: AirSim sweeps "
+             "the root on every move and a scene-component root falls through "
+             "the world")
+    if "/AirSim/Blueprints/BP_PIPCamera" not in text:
+        fail("native pawn cameras must spawn BP_PIPCamera: bare APIPCamera has "
+             "no capture components and aborts at spawn")
+
+
 def check_physics(manifest: dict) -> None:
     physics = manifest["physics"]
     mass_properties = json.loads((ROOT / physics["source"]).read_text())
@@ -153,6 +164,7 @@ def main() -> None:
     manifest = json.loads(MANIFEST.read_text())
     check_settings(manifest)
     check_pawn_abi()
+    check_pawn_runtime_contract(PAWN_CPP.read_text())
     check_physics(manifest)
     if args.asset_project:
         check_asset_project(args.asset_project, manifest)

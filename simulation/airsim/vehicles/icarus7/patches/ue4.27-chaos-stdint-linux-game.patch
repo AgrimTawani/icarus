@@ -1,0 +1,12 @@
+diff --git a/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/PBDRigidDynamicSpringConstraints.h b/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/PBDRigidDynamicSpringConstraints.h
+index 861402568..e065e5a34 100644
+--- a/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/PBDRigidDynamicSpringConstraints.h
++++ b/Engine/Source/Runtime/Experimental/Chaos/Public/Chaos/PBDRigidDynamicSpringConstraints.h
+@@ -1,6 +1,7 @@
+ // Copyright Epic Games, Inc. All Rights Reserved.
+ #pragma once
+ 
++#include <stdint.h>
+ #include "Chaos/Array.h"
+ #include "Chaos/ConstraintHandle.h"
+ #include "Chaos/ParticleHandle.h"

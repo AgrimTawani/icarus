@@ -8,6 +8,15 @@ ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "simulation/airsim/vehicles/icarus7"
 VALIDATOR = ROOT / "scripts/simulation/airsim/validate_icarus7_module.py"
 START = ROOT / "scripts/simulation/airsim/start_icarus7.py"
+PAWN_CPP = MODULE / "Plugins/Icarus7AirSim/Source/Icarus7AirSim/Private/Icarus7AirSimPawn.cpp"
+
+
+def _load_validator():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("validate_icarus7_module", VALIDATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class Icarus7AirSimModuleTests(unittest.TestCase):
@@ -48,6 +57,46 @@ class Icarus7AirSimModuleTests(unittest.TestCase):
         self.assertLess(source.index('TEXT("FR")'), source.index('TEXT("RL")'))
         self.assertLess(source.index('TEXT("RL")'), source.index('TEXT("FL")'))
         self.assertLess(source.index('TEXT("FL")'), source.index('TEXT("RR")'))
+
+    def test_native_pawn_root_is_a_blocking_primitive(self):
+        # AirSim moves the pawn with a swept SetActorLocationAndRotation on the
+        # root component; a plain USceneComponent root falls through the world.
+        validator = _load_validator()
+        source = PAWN_CPP.read_text()
+        validator.check_pawn_runtime_contract(source)
+        broken = source.replace(
+            'CreateDefaultSubobject<UBoxComponent>(TEXT("VehicleRoot"))',
+            'CreateDefaultSubobject<USceneComponent>(TEXT("VehicleRoot"))')
+        with self.assertRaises(SystemExit):
+            validator.check_pawn_runtime_contract(broken)
+
+    def test_native_pawn_cameras_use_the_airsim_blueprint(self):
+        # Bare APIPCamera has no capture components and aborts at spawn with
+        # "Cast of nullptr to SceneCaptureComponent2D failed".
+        validator = _load_validator()
+        source = PAWN_CPP.read_text()
+        broken = source.replace("/AirSim/Blueprints/BP_PIPCamera", "/AirSim/Blueprints/Missing")
+        with self.assertRaises(SystemExit):
+            validator.check_pawn_runtime_contract(broken)
+
+    def test_packager_rejects_airlib_built_against_libstdcxx(self):
+        # Unreal links with its bundled clang + libc++ (std::__1). AirLib built
+        # with GCC (std::__cxx11) compiles fine and fails only at link time,
+        # an hour into the build. Catch it before RunUAT starts.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "package_icarus7_environment",
+            ROOT / "scripts/simulation/airsim/package_icarus7_environment.py")
+        packager = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(packager)
+        with tempfile.TemporaryDirectory() as temp:
+            gcc_lib = Path(temp) / "libAirLib.a"
+            gcc_lib.write_bytes(b"!<arch>\n_ZN3msr6airlib3FooENSt7__cxx1112basic_stringE")
+            with self.assertRaises(SystemExit):
+                packager.check_airlib_abi([gcc_lib])
+            clang_lib = Path(temp) / "libMavLinkCom.a"
+            clang_lib.write_bytes(b"!<arch>\n_ZN3msr6airlib3FooENSt3__112basic_stringE")
+            packager.check_airlib_abi([clang_lib])
 
     def test_launcher_refuses_an_unverified_package(self):
         with tempfile.TemporaryDirectory() as temp:

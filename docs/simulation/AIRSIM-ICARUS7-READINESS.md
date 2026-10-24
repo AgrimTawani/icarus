@@ -1,16 +1,18 @@
 # AirSim Icarus7 End-to-End Readiness
 
-Last updated: 2026-09-27
+Last updated: 2026-10-24
 
 ## Bottom line
 
 Icarus can already run its complete prompt-to-flight and visual-perception
 pipeline in a packaged AirVLN city using that executable's **generic AirSim
-drone**. The custom Icarus7 vehicle is implemented and its AirLib physics have
-been compiled and tested, but the custom Unreal pawn has not yet been compiled,
-cooked or flown. The current host has no Unreal Engine 4.27 toolchain, and the
-downloaded AirVLN cities are packaged executables rather than editable Unreal
-projects.
+drone**. As of 2026-10-24 the custom Icarus7 pawn has also been **compiled by a
+source-built Unreal Engine 4.27, cooked into the Blocks environment, spawned,
+and flown** (SimpleFlight takeoff/hover, ground contact, camera imagery; see
+`docs/simulation/images/icarus7-blocks-*.png`). What is still missing for the
+custom drone is a *realistic* world: the downloaded AirVLN cities are packaged
+executables, and a compiled executable cannot take a new native pawn, so the
+Icarus7 currently flies only in Blocks.
 
 Therefore the following combined claim is **not yet true**:
 
@@ -62,18 +64,48 @@ Verification currently recorded:
 - Physics patch against the pinned clean AirSim revision: passed.
 - Patched AirLib build and executable parameter test: passed.
 - Project unit suite after integration: 273 tests and 161 subtests passed.
-- Custom pawn compiled by Unreal Engine: **not run**.
-- Custom pawn flight in AirSim: **not run**.
+- Custom pawn compiled by Unreal Engine 4.27 (Blocks, Linux Development): **passed 2026-10-24**.
+- Custom pawn spawn, ground contact, SimpleFlight takeoff, camera `0`/`3`
+  imagery in the cooked Blocks executable: **passed 2026-10-24**.
+- Custom pawn under ArduPilot SITL via `start-airsim-icarus7`: pending.
+
+## Verified build procedure (2026-10-24)
+
+Host: Ubuntu, UE 4.27 source build at `third_party/UnrealEngine`, AirSim
+v1.8.0 at `third_party/airsim/source-v1.8.0`, Blocks as the environment.
+
+1. `scripts/simulation/airsim/build_airlib_libcxx.sh third_party/UnrealEngine third_party/airsim/source-v1.8.0 third_party/airsim/source-v1.8.0/Unreal/Environments/Blocks`
+   — AirLib/MavLinkCom/rpc must be built with Unreal's bundled clang + libc++.
+   Libraries built by AirSim's `build.sh` with GCC compile but fail at the
+   plugin link (`std::__cxx11` vs `std::__1`). The packager now refuses them
+   up front.
+2. Apply `simulation/airsim/vehicles/icarus7/patches/ue4.27-chaos-stdint-linux-game.patch`
+   inside `third_party/UnrealEngine` (one `#include <stdint.h>`; the monolithic
+   Linux game build of Chaos otherwise fails with `unknown type name 'uint64_t'`).
+   Note: this header is included by the Engine module, so the first editor
+   build after applying it recompiles ~1 600 actions.
+3. `./scripts/install-airsim-icarus7-module --asset-project <Icarus7_FlightControl_Review> --environment-project .../Blocks/Blocks.uproject --airsim-source third_party/airsim/source-v1.8.0`
+4. `./scripts/package-airsim-icarus7-environment --ue-root third_party/UnrealEngine --environment-project .../Blocks/Blocks.uproject --airsim-source third_party/airsim/source-v1.8.0`
+   (~2 h cold; ~8 min incremental after a pawn-only change). Run it outside
+   any sandbox that blocks writes to `~/Library/Logs`.
+5. `./scripts/start-airsim-icarus7 [--gui]` (ArduCopter + SITL on port 41451;
+   refuses to start while another AirSim session is recorded).
+
+Pawn rules enforced by the validator since this build: the root component
+must be a blocking `UBoxComponent` (AirSim sweeps the root on every move; a
+scene-component root falls through the world) and camera child actors must be
+`BP_PIPCamera` (bare `APIPCamera` aborts at spawn). Icarus7 LiDAR profiles
+were reduced from 40 ch / 200 k pts/s to 16 ch / 50 k pts/s, matching the
+proven realistic-city profile.
 
 ## Work remaining before Gazebo-equivalent end-to-end testing
 
-The final four gates remain open:
-
-7. **Build a realistic custom environment.** Obtain an editable UE4.27 AirSim
-   environment, not only a packaged `.pak`, and establish its license. Install
-   a source-built Unreal Engine 4.27 toolchain, install the Icarus7 module into
-   that project, compile it and cook a Linux executable. The exact public
-   AirVLN binary already used cannot be modified in place.
+7. **Build a realistic custom environment — partially complete.** The
+   toolchain, module install, compile and cook now work (Blocks). A realistic
+   world still needs editable source: the AirVLN `env_6` scene is the
+   Marketplace *Modular Neighborhood Pack* demo map, which can be added to
+   Blocks from an Epic Games Launcher/Fab download and re-cooked. The packaged
+   AirVLN binary itself cannot be modified in place.
 8. **Perform custom-pawn runtime acceptance.** Verify that the Icarus7 spawns,
    rotors map FR/RL/FL/RR correctly, collision and centre-of-gravity behavior
    are sensible, ArduPilot can arm/take off/hold/land, and every camera,
