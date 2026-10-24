@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_INSTALL = ROOT / "third_party/airsim/environments/icarus7/packaged"
 HEADLESS_SETTINGS = ROOT / "config/simulation/airsim/settings.icarus7.json"
 GUI_SETTINGS = ROOT / "config/simulation/airsim/settings.icarus7.gui.json"
+# Hover/vertical-gain tuning for the Icarus7 thrust model (T/W 4.15); without
+# it ArduPilot's altitude loop cannot settle (see the file's header).
+SITL_PARAMS = ROOT / "config/simulation/airsim/icarus7-sitl.parm"
 
 
 def sha256(path: Path) -> str:
@@ -54,6 +57,7 @@ def main() -> None:
         "--environment-license", "user-supplied-unreviewed",
         "--environment-source", "Icarus7_FlightControl_Review",
         "--startup-timeout", str(args.startup_timeout),
+        "--sitl-param-file", str(SITL_PARAMS),
         "--binary-arg=-NoSound", "--binary-arg=-NoVSync",
         f"--binary-arg=-GraphicsAdapter={args.graphics_adapter}",
     ]

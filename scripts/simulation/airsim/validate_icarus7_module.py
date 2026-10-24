@@ -53,6 +53,73 @@ def check_settings(manifest: dict) -> None:
         for camera in ("0", "3"):
             if camera not in vehicle.get("Cameras", {}):
                 fail(f"{path} missing camera {camera}")
+        check_external_sensor_load(value, str(path))
+
+
+MAX_EXTERNAL_LIDAR_POINTS_PER_SECOND = 10000
+
+
+def check_external_sensor_load(settings: dict, label: str = "settings") -> None:
+    """Sensors with ExternalController are serialised into every SITL packet.
+
+    The proven realistic-city profile streams at most an 8 ch / 10 k pts/s
+    LiDAR to ArduPilot; the perception LiDAR stays local and is read over RPC.
+    AirSim always writes a "lidar" section when any LiDAR exists and ArduPilot's
+    JSON parser aborts at an empty point cloud, dropping the rc/rng keys that
+    follow it; so the streamed LiDAR must exist and stay light (2026-10-24).
+    """
+    for vehicle in settings.get("Vehicles", {}).values():
+        for name, sensor in vehicle.get("Sensors", {}).items():
+            if sensor.get("SensorType") != 6 or not sensor.get("ExternalController"):
+                continue
+            if sensor.get("PointsPerSecond", 0) > MAX_EXTERNAL_LIDAR_POINTS_PER_SECOND:
+                fail(f"{label}: LiDAR {name} streams {sensor.get('PointsPerSecond')} pts/s "
+                     f"to ArduPilot; keep ExternalController false for the perception "
+                     f"LiDAR or stay <= {MAX_EXTERNAL_LIDAR_POINTS_PER_SECOND} pts/s")
+
+
+SITL_PARAMS = ROOT / "config/simulation/airsim/icarus7-sitl.parm"
+# Icarus7 physics overlay (ArduCopterParams.hpp, setupFrameIcarus7): mass
+# 4.4745 kg against 4 rotors of 45.6 N (C_T 0.1321, 15606 rpm, 0.254 m).
+ICARUS7_MASS_KG = 4.4745
+ICARUS7_ROTOR_MAX_THRUST_N = 0.1321402534 * 1.225 * (15606.0 / 60) ** 2 * 0.254 ** 4
+ICARUS7_HOVER_PWM_FRACTION = ICARUS7_MASS_KG * 9.80665 / (4 * ICARUS7_ROTOR_MAX_THRUST_N)
+ARDUPILOT_HOVER_THROTTLE_FLOOR = 0.125
+
+
+def load_sitl_params(path: Path) -> dict:
+    params = {}
+    for line in path.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            name, value = line.split()
+            params[name] = float(value)
+    return params
+
+
+def check_sitl_hover_tuning(params: dict) -> None:
+    """AirSim rotor thrust is linear in the PWM fraction (MOT_THST_EXPO 0).
+
+    ArduPilot maps throttle t to PWM fraction SPIN_MIN + t * (1 - SPIN_MIN) and
+    clamps MOT_THST_HOVER at 0.125. With T/W 4.15 the Icarus7 hovers at a PWM
+    fraction of 0.24, below that floor under the default SPIN_MIN 0.15: a 5 m
+    GUIDED takeoff climbed to 57 m with throttle at 0 (2026-10-24).
+    """
+    for name in ("MOT_SPIN_MIN", "MOT_THST_HOVER", "PSC_ACCZ_P", "PSC_ACCZ_I"):
+        if name not in params:
+            fail(f"icarus7-sitl.parm must set {name}")
+    spin_min = params["MOT_SPIN_MIN"]
+    hover = (ICARUS7_HOVER_PWM_FRACTION - spin_min) / (1.0 - spin_min)
+    if hover < ARDUPILOT_HOVER_THROTTLE_FLOOR:
+        fail(f"MOT_SPIN_MIN {spin_min} puts the Icarus7 hover throttle at {hover:.3f}, "
+             f"below ArduPilot's MOT_THST_HOVER floor {ARDUPILOT_HOVER_THROTTLE_FLOOR}")
+    if not math.isclose(params["MOT_THST_HOVER"], hover, abs_tol=0.01):
+        fail(f"MOT_THST_HOVER {params['MOT_THST_HOVER']} does not match the Icarus7 "
+             f"thrust model hover throttle {hover:.3f}")
+    if not math.isclose(params["PSC_ACCZ_P"], params["MOT_THST_HOVER"], abs_tol=1e-6):
+        fail("PSC_ACCZ_P must equal MOT_THST_HOVER (ArduPilot tuning guide)")
+    if not math.isclose(params["PSC_ACCZ_I"], 2 * params["MOT_THST_HOVER"], abs_tol=1e-6):
+        fail("PSC_ACCZ_I must equal 2 x MOT_THST_HOVER (ArduPilot tuning guide)")
 
 
 def check_pawn_abi() -> None:
@@ -166,6 +233,7 @@ def main() -> None:
     check_pawn_abi()
     check_pawn_runtime_contract(PAWN_CPP.read_text())
     check_physics(manifest)
+    check_sitl_hover_tuning(load_sitl_params(SITL_PARAMS))
     if args.asset_project:
         check_asset_project(args.asset_project, manifest)
     if args.environment_project:

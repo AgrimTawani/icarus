@@ -79,6 +79,55 @@ class Icarus7AirSimModuleTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             validator.check_pawn_runtime_contract(broken)
 
+    def test_settings_do_not_stream_the_perception_lidar_to_ardupilot(self):
+        # Mirror the proven realistic-city layout: a light externally streamed
+        # LiDAR for ArduPilot plus a separate perception LiDAR. ArduPilot's
+        # JSON parser aborts at an empty "lidar" point cloud and drops the
+        # rc/rng keys that follow it, so the perception LiDAR must not be the
+        # only one, and the streamed one must stay light.
+        validator = _load_validator()
+        for path in validator.SETTINGS:
+            settings = json.loads(path.read_text())
+            validator.check_external_sensor_load(settings)
+            heavy = json.loads(path.read_text())
+            lidar = heavy["Vehicles"]["Icarus"]["Sensors"]["Lidar1"]
+            lidar["ExternalController"] = True
+            lidar["PointsPerSecond"] = 50000
+            with self.assertRaises(SystemExit):
+                validator.check_external_sensor_load(heavy)
+
+    def test_sitl_hover_tuning_matches_the_icarus7_thrust_model(self):
+        # Icarus7: 4 x 45.6 N against 4.4745 kg (T/W 4.15). AirSim thrust is
+        # linear in the PWM fraction, so hover is a PWM fraction of 0.241; the
+        # ArduPilot throttle for that must clear the MOT_THST_HOVER floor of
+        # 0.125, and PSC_ACCZ_P/I must scale with it (ArduPilot tuning guide).
+        # Untuned, a 5 m GUIDED takeoff climbed to 57 m with throttle at 0.
+        validator = _load_validator()
+        params = validator.load_sitl_params(validator.SITL_PARAMS)
+        validator.check_sitl_hover_tuning(params)
+        hover_pwm = validator.ICARUS7_HOVER_PWM_FRACTION
+        self.assertAlmostEqual(hover_pwm, 0.2407, places=3)
+        spin_min = params["MOT_SPIN_MIN"]
+        expected = (hover_pwm - spin_min) / (1.0 - spin_min)
+        self.assertAlmostEqual(params["MOT_THST_HOVER"], expected, places=2)
+        self.assertGreaterEqual(params["MOT_THST_HOVER"], 0.125)
+        self.assertEqual(params["PSC_ACCZ_P"], params["MOT_THST_HOVER"])
+        self.assertEqual(params["PSC_ACCZ_I"], 2 * params["MOT_THST_HOVER"])
+        for broken in (
+            {**params, "MOT_SPIN_MIN": 0.15},                       # hover < floor
+            {**params, "PSC_ACCZ_P": 0.5},                          # untuned gain
+            {k: v for k, v in params.items() if k != "MOT_THST_HOVER"},
+        ):
+            with self.assertRaises(SystemExit):
+                validator.check_sitl_hover_tuning(broken)
+
+    def test_launcher_passes_the_icarus7_sitl_params(self):
+        text = START.read_text()
+        self.assertIn("icarus7-sitl.parm", text)
+        self.assertIn("--sitl-param-file", text)
+        stack = (ROOT / "scripts/simulation/airsim/start_stack.py").read_text()
+        self.assertIn("--sitl-param-file", stack)
+
     def test_packager_rejects_airlib_built_against_libstdcxx(self):
         # Unreal links with its bundled clang + libc++ (std::__1). AirLib built
         # with GCC (std::__cxx11) compiles fine and fails only at link time,

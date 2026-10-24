@@ -35,7 +35,13 @@ def main():
     parser.add_argument("--no-render-offscreen", action="store_true",
                         help="Open the Unreal viewport instead of using off-screen rendering.")
     parser.add_argument("--rebuild-sitl", action="store_true")
+    parser.add_argument("--sitl-param-file", type=Path, action="append", default=[],
+                        help="Extra ArduPilot parameter file loaded after the defaults "
+                             "(repeatable; e.g. a vehicle-specific hover tuning)")
     args = parser.parse_args()
+    for param_file in args.sitl_param_file:
+        if not param_file.is_file():
+            raise SystemExit(f"SITL parameter file not found: {param_file}")
     if args.rebuild_sitl or not SITL.is_file():
         environment = dict(os.environ)
         environment["PATH"] = str(ARDUPILOT / ".venv/bin") + os.pathsep + environment["PATH"]
@@ -60,6 +66,7 @@ def main():
         str(ARDUPILOT / "Tools/autotest/default_params/copter.parm"),
         str(ARDUPILOT / "Tools/autotest/default_params/airsim-quadX.parm"),
         str(ROOT / "config/simulation/airsim/icarus-sitl.parm"),
+        *(str(path.resolve()) for path in args.sitl_param_file),
     ))
     command = [str(SITL), "--model", "airsim-copter", "--speedup", "1",
                "--slave", "0", "--serial0=udpclient:127.0.0.1:14550",

@@ -1,0 +1,18 @@
+# Icarus7 ArduCopter SITL tuning (AirSim "Model": "Icarus7").
+# Loaded after copter.parm, airsim-quadX.parm and icarus-sitl.parm.
+#
+# Icarus7 max thrust is 4 x 45.6 N = 182.4 N against 4.4745 kg (43.9 N):
+# thrust-to-weight 4.15. AirSim rotor thrust is linear in the PWM fraction
+# (MOT_THST_EXPO 0 from airsim-quadX.parm), so hover sits at a PWM fraction
+# of 0.241. ArduPilot maps throttle t to SPIN_MIN + t * (1 - SPIN_MIN) and
+# clamps MOT_THST_HOVER at 0.125: with the default MOT_SPIN_MIN 0.15 hover
+# would be a throttle of 0.107, which the altitude loop can never settle on
+# (verified 2026-10-24: 5 m GUIDED takeoff climbed to 57 m with throttle 0).
+# Lowering the spin floor puts hover at 0.20; PSC_ACCZ_P/I follow the
+# ArduPilot tuning guide (P = hover throttle, I = 2 x hover throttle).
+# Verified: 5 m takeoff peaks at 5.5 m, holds 5.00 m at 20 % throttle.
+MOT_SPIN_ARM     0.03
+MOT_SPIN_MIN     0.05
+MOT_THST_HOVER   0.20
+PSC_ACCZ_P       0.20
+PSC_ACCZ_I       0.40
