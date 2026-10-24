@@ -9,7 +9,10 @@ pipeline in a packaged AirVLN city using that executable's **generic AirSim
 drone**. As of 2026-10-24 the custom Icarus7 pawn has also been **compiled by a
 source-built Unreal Engine 4.27, cooked into the Blocks environment, spawned,
 and flown** (SimpleFlight takeoff/hover, ground contact, camera imagery; see
-`docs/simulation/images/icarus7-blocks-*.png`). What is still missing for the
+`docs/simulation/images/icarus7-blocks-*.png`), and later the same day it
+**held altitude under ArduCopter SITL** (GUIDED takeoff to 5 m: peak 5.5 m,
+steady 5.00 m at 20 % throttle, land, disarm; see
+`icarus7-arducopter-hover.png`). What is still missing for the
 custom drone is a *realistic* world: the downloaded AirVLN cities are packaged
 executables, and a compiled executable cannot take a new native pawn, so the
 Icarus7 currently flies only in Blocks.
@@ -97,6 +100,36 @@ scene-component root falls through the world) and camera child actors must be
 `BP_PIPCamera` (bare `APIPCamera` aborts at spawn). Icarus7 LiDAR profiles
 were reduced from 40 ch / 200 k pts/s to 16 ch / 50 k pts/s, matching the
 proven realistic-city profile.
+
+### ArduCopter acceptance (2026-10-24, evening)
+
+Setup: packaged Icarus7 Blocks + `arducopter --model airsim-copter` on
+isolated ports (41460 / `-I1`) while the AirVLN session kept port 41451;
+same binary, settings content and parameter chain as `start-airsim-icarus7`.
+
+| Configuration | 5 m GUIDED takeoff | Hover throttle |
+|---|---|---|
+| Generic AirSim quadrotor, stock params | peak 5.9 m, holds 5.00 m | 54 % |
+| Icarus7, stock params | **peak 57 m with throttle 0**, descends 3 m/s | n/a |
+| Icarus7 + `icarus7-sitl.parm` | peak 5.5 m, holds 5.00 m, lands, disarms | 20 % |
+
+Cause: the Icarus7 thrust model (4 × 45.6 N on 4.47 kg, T/W 4.15) hovers at
+a PWM fraction of 0.24. ArduPilot maps throttle to
+`MOT_SPIN_MIN + t·(1 − MOT_SPIN_MIN)` and clamps `MOT_THST_HOVER` at 0.125;
+under the default spin floor 0.15 the hover throttle is 0.107, which the
+altitude loop can never settle on. `config/simulation/airsim/icarus7-sitl.parm`
+lowers `MOT_SPIN_MIN` to 0.05 (hover 0.20) and sets `PSC_ACCZ_P/I` to
+hover / 2 × hover per the ArduPilot tuning guide. The launcher passes the file
+through `start_stack.py --sitl-param-file`; the validator recomputes the hover
+throttle from the thrust model and rejects a mismatch. The physics overlay
+itself is unchanged.
+
+Two findings disproved along the way: the LiDAR payload streamed to ArduPilot
+did not cause the overshoot, and the apparent ~6 s EKF lag was a MAVLink
+reader that did not drain its queue. One real constraint remains: ArduPilot's
+JSON parser aborts at an empty `lidar` point cloud and drops the `rc`/`rng`
+keys after it, so a light LiDAR (`Lidar1`, 8 ch / 10 k pts/s) must stay
+`ExternalController: true` while the perception `IcarusLidar` stays local.
 
 ## Work remaining before Gazebo-equivalent end-to-end testing
 
