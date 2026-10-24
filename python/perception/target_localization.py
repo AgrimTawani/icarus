@@ -308,14 +308,18 @@ def _iou(a, b):
     return inter / union if union > 0 else 0.0
 
 
-def associate(box_px, candidates, pose, camera: CameraModel, association: dict):
+def associate(box_px, candidates, pose, camera: CameraModel, association: dict,
+              box_nearest_depth_m=None):
     """Pick the LiDAR cluster whose projected image box best matches the VLM box.
 
     Returns (best, ranked) where ``best`` is None when no cluster meets the
     configured geometric overlap.  Ranked entries are kept as evidence.
+    ``box_nearest_depth_m`` is the camera's nearest depth inside the box: a
+    cluster well nearer than that is in front of the boxed object, not it.
     """
     ranked = []
     box_width = max(box_px[2] - box_px[0], 1e-6)
+    tolerance = association.get("depth_consistency_tolerance_m", 2.0)
     for candidate in candidates:
         projection = project_candidate(candidate, pose, camera)
         if projection is None:
@@ -323,12 +327,18 @@ def associate(box_px, candidates, pose, camera: CameraModel, association: dict):
         cluster_box = projection["box_px"]
         overlap = max(0.0, min(box_px[2], cluster_box[2]) -
                       max(box_px[0], cluster_box[0]))
+        nearer = (isinstance(box_nearest_depth_m, (int, float))
+                  and not isinstance(box_nearest_depth_m, bool)
+                  and math.isfinite(box_nearest_depth_m)
+                  and projection["surface_range_m"] < box_nearest_depth_m - tolerance)
         ranked.append({"candidate": candidate, "projection": projection,
                        "image_iou": _iou(box_px, cluster_box),
-                       "bearing_overlap": overlap / box_width})
+                       "bearing_overlap": overlap / box_width,
+                       "nearer_than_box_depth": bool(nearer)})
     ranked.sort(key=lambda item: (-item["image_iou"], -item["bearing_overlap"]))
     best = next((item for item in ranked
-                 if item["image_iou"] >= association["minimum_image_iou"]
+                 if not item["nearer_than_box_depth"]
+                 and item["image_iou"] >= association["minimum_image_iou"]
                  and item["bearing_overlap"] >= association["minimum_bearing_overlap"]
                  and item["candidate"]["point_count"] >=
                  association["minimum_lidar_returns"]), None)
@@ -456,9 +466,11 @@ class TargetLocalizer:
             self.history.pop(normalize_description(description), None)
 
     def observe(self, description, *, vlm_text, state, perception,
-                image_captured_at_unix_ms, provenance=(), refreshed_perception=None):
+                image_captured_at_unix_ms, provenance=(), refreshed_perception=None,
+                box_nearest_depth_m=None):
         """Fuse one view.  ``vlm_text`` is the grounding answer, or None when
-        the VLM's presence gate reported no match in this image."""
+        the VLM's presence gate reported no match in this image.
+        ``box_nearest_depth_m`` is the camera's nearest depth inside the box."""
         description = normalize_description(description)
         now_ms = int(self.clock() * 1000)
         pose = vehicle_pose(state)
@@ -493,10 +505,11 @@ class TargetLocalizer:
                            "quality": {"method": METHOD, "viewpoints": 0}}
         candidates = candidates_from_perception(perception)
         best, ranked = associate(box_px, candidates, pose, self.camera,
-                                 self.config["association"])
+                                 self.config["association"], box_nearest_depth_m)
         evidence = [{"id": item["candidate"]["id"],
                      "image_iou": _round(item["image_iou"], 3),
                      "bearing_overlap": _round(item["bearing_overlap"], 3),
+                     "nearer_than_box_depth": item["nearer_than_box_depth"],
                      "lidar_returns": item["candidate"]["point_count"],
                      "surface_range_m": _round(item["projection"]["surface_range_m"])}
                     for item in ranked[:4]]

@@ -1068,12 +1068,21 @@ class MissionClient:
                 grounding = ground_description(
                     output, grounding_target["visual_query"], manifest,
                     timeout_s=90.0, gpu_layers=gpu_layers, view_context=_visual_view_context(state))
+        box_depth = None
+        if depth_frame is not None and grounding["present"]:
+            from python.perception.target_localization import parse_grounding_box
+            box = parse_grounding_box(grounding["grounding_text"])
+            if box is not None:
+                box_depth = depth_frame.region(list(box), now_unix_ms=captured_ms)
         estimate = self.target_localizer.observe(
             description,
             vlm_text=grounding["grounding_text"] if grounding["present"] else None,
             state=state, perception=perception,
             image_captured_at_unix_ms=captured_ms,
             refreshed_perception=self._perception_with_obstacles(),
+            # A LiDAR cluster nearer than everything the camera saw inside the
+            # box is in front of the boxed object, not the object itself.
+            box_nearest_depth_m=(box_depth or {}).get("minimum_optical_z_m"),
             provenance=[
                 {"sensor": camera["sensor_id"], "source": source,
                  "image_sha256": grounding["image"]["sha256"]},
@@ -1092,7 +1101,7 @@ class MissionClient:
         estimate["vlm"]["view_context"] = grounding.get('view_context')
         estimate["latency_ms"] = int(time.time() * 1000) - captured_ms
         if depth_frame is not None and estimate.get("box_1000"):
-            estimate["depth_at_capture"] = depth_frame.region(estimate["box_1000"], now_unix_ms=captured_ms)
+            estimate["depth_at_capture"] = box_depth or depth_frame.region(estimate["box_1000"], now_unix_ms=captured_ms)
             estimate["depth_at_capture"]["association"] = "VLM-selected RGB region; calibration alignment required; mixed foreground/background possible"
         estimate = self._targets().register(estimate, new_target=new_target)
         self.episode.record("semantic_target_localization", estimate)

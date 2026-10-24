@@ -229,6 +229,30 @@ class LocalizerTests(unittest.TestCase):
         self.assertNotIn("confidence", str(estimate))
         self.assertEqual(estimate["footprint"]["height_m"], 6.0)
 
+    def test_cluster_nearer_than_the_box_depth_is_not_the_boxed_object(self):
+        # A hedge 0.5 m ahead spans the whole image and out-overlaps the house
+        # face; the camera's depth inside the box says the object is ~13 m away.
+        hedge = [(0.5, -12.0), (0.5, 12.0)]
+        perception = _perception(_obstacle("hedge", hedge, points=400, observed_at=99_900),
+                                 _obstacle("face", FACE, observed_at=99_900), observed_at=99_900)
+        estimate = self.localizer.observe(
+            "house", vlm_text="(319,402),(648,859)", state=_state(),
+            perception=perception, image_captured_at_unix_ms=99_900,
+            box_nearest_depth_m=12.9)
+        self.assertTrue(estimate["found"])
+        self.assertEqual(estimate["surface_range_m"], 14.0)
+        flags = {c["id"]: c["nearer_than_box_depth"] for c in estimate["candidates"]}
+        self.assertEqual(flags, {"hedge": True, "face": False})
+        # Without depth nothing is flagged; the geometric ranking alone decides.
+        plain = self._observe("(319,402),(648,859)", perception=perception)
+        self.assertFalse(any(c["nearer_than_box_depth"] for c in plain["candidates"]))
+        # If every overlapping cluster is nearer than the box depth, nothing is measured.
+        alone = _perception(_obstacle("hedge", hedge, points=400, observed_at=99_900), observed_at=99_900)
+        none = self.localizer.observe("house", vlm_text="(319,402),(648,859)", state=_state(),
+                                      perception=alone, image_captured_at_unix_ms=99_900,
+                                      box_nearest_depth_m=12.9)
+        self.assertFalse(none["found"])
+
     def test_repeated_views_agree_and_report_spread(self):
         self._observe("(319,402),(648,859)")
         self.now[0] += 20
