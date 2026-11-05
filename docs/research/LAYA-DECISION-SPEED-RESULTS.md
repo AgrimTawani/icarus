@@ -15,7 +15,7 @@ The loop was not slow because the 4B model thinks slowly. It was slow because it
 | Every camera question stopped llama-server so Qwen2.5-VL-3B could have the GPU; the next decision reloaded weights and re-prefilled ~9k tokens. | Qwen3.5-4B is multimodal: its projector is declared in `config/dcm/agent-runtime.json` and the same resident server answers inspect/ground questions. llama-server's RAM prompt cache restores the mission conversation after each image. (`ca99803`) | Decision after a camera question: ~1.7 s, cache hit, no reload. |
 | The startup warm-up sent no tools, so it cached nothing the first decision could use. | Warm-up sends the session's exact catalogue. (`ca99803`) | First decision ~8 s -> ~1-3 s (8,221 tokens cached). |
 | Beside Unreal (AirSim), reserving GPU memory for the projector made `--fit` leave 5 of 34 layers on the CPU: decisions at 15-20 tok/s instead of 42. | Runtime reads llama.cpp's own "offloaded N/M layers" report and, only when N < M, restarts with the projector on the CPU. In Gazebo both fit on the GPU. (`9a3115e`) | AirSim decisions back to 41-43 tok/s. |
-| With the projector on the CPU, a survey (dozens of frames) kept 8 threads busy and the sim's sensor bridges went stale: 2 of 2 AirSim house surveys aborted (route measurements stale / perception stale). | A CPU-projector llama-server runs at nice 10, so the flight stack wins CPU contention. | Next 2 of 2 surveys: route completed, 10/10 waypoints, 8 houses each. |
+| With the projector on the CPU, a survey (dozens of frames) kept 8 threads busy and the sim's sensor bridges went stale: 2 of 2 AirSim house surveys aborted (route measurements stale / perception stale). | A CPU-projector llama-server runs at nice 10, so the flight stack wins CPU contention, and encodes at most 256 image tokens (3.2 s instead of 5.1 s per Gazebo frame, same 10/10 answers, boxes within ~15 px). | Next 2 of 2 surveys: route completed, 10/10 waypoints, 8 houses each. |
 
 ## Camera questions: resident Qwen3.5-4B vs the one-shot Qwen2.5-VL-3B
 
@@ -25,13 +25,13 @@ The loop was not slow because the 4B model thinks slowly. It was slow because it
 |---|---|---|---|---|
 | Qwen2.5-VL-3B, llama-cli per question (before) | 23/24 | 22/24 | 21/24 (3 false) | 3.9 s |
 | Qwen3.5-4B resident, projector on GPU | 22/24 (1 false, "possible structure") | 23/24 | 23/24 (1 false) | 0.8-1.4 s |
-| Qwen3.5-4B resident, projector on CPU (AirSim) | not re-scored | | | 2.2-2.5 s |
+| Qwen3.5-4B resident, projector on CPU (AirSim 640x360 / Gazebo 848x480, 256-token cap) | 10/10 clear Gazebo frames | | | 2.2-2.5 s / 3.2 s |
 
 Qwen3.5 boxes are 0-1000 normalized whatever the prompt says, so the resident artifact declares `json_norm1000_xyxy`.
 
 ## Live headless missions (unchanged stock `dcm-fly`, autonomous mode)
 
-Gazebo `edge-vision`, projector on GPU. No same-wording baseline exists for most; the 2026-10-23/24 median decision was 14.9 s.
+Gazebo `edge-vision`. These six ran before the placement fix, with the projector on the GPU displacing model layers (decisions at ~24 tok/s); a later regression flight of Codex's mission with every layer on the GPU and the CPU projector took 12.9 s of model time over 6 decisions (median 2.3 s), orbit radial error 0.08 m. No same-wording baseline exists for most; the 2026-10-23/24 median decision was 14.9 s.
 
 | Mission (operator words) | Outcome | Decisions | Model time | Median decision |
 |---|---|---|---|---|

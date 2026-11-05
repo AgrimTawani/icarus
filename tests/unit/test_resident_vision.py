@@ -160,6 +160,8 @@ def test_projector_moves_to_cpu_only_when_it_displaces_model_layers():
             patch.object(runtime, '_warm'), patch.object(runtime, 'stop', side_effect=lambda: setattr(runtime, 'process', None)):
         runtime.start()
     assert '--no-mmproj-offload' not in commands[0] and '--no-mmproj-offload' in commands[1]
+    assert commands[0][commands[0].index('--image-max-tokens') + 1] == '1024'
+    assert commands[1][commands[1].index('--image-max-tokens') + 1] == '256'  # cheaper CPU encoding
     assert runtime.projector_on_gpu is False and len(commands) == 2
 
 

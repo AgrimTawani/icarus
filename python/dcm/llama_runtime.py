@@ -47,6 +47,10 @@ class IncompleteModelResponse(RuntimeError):
 
 
 VISION_IMAGE_MAX_TOKENS = 1024
+# CPU encoding time scales with image tokens. On 848x480 Gazebo frames, 256
+# tokens answered the same 10/10 building questions at 3.2 s instead of 5.1 s,
+# with grounding boxes within ~15 px of the 1024-token boxes; 160 loosened them.
+VISION_CPU_IMAGE_MAX_TOKENS = 256
 
 
 class ResidentVision:
@@ -203,9 +207,10 @@ class LlamaCppRuntime:
         if self.descriptor.gpu_memory_margin_mib is not None:
             command.extend(["--fit-target", str(self.descriptor.gpu_memory_margin_mib)])
         if self.descriptor.mmproj_path:
-            command.extend(["--mmproj", self.descriptor.mmproj_path,
-                            "--image-max-tokens", str(VISION_IMAGE_MAX_TOKENS)])
-            if self.projector_on_gpu is False:
+            on_cpu = self.projector_on_gpu is False
+            command.extend(["--mmproj", self.descriptor.mmproj_path, "--image-max-tokens",
+                            str(VISION_CPU_IMAGE_MAX_TOKENS if on_cpu else VISION_IMAGE_MAX_TOKENS)])
+            if on_cpu:
                 command.append("--no-mmproj-offload")
             # Info level carries llama.cpp's "offloaded N/M layers" report that
             # decides projector placement (~2.5 KB of stderr per request).
