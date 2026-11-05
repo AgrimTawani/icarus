@@ -2,7 +2,7 @@
 import pytest
 from jsonschema import Draft202012Validator
 
-from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
+from python.dcm.agent_tools import known_target_ids, ToolExecutor, decision_tools, validate_call
 from test_target_motion import Client
 
 
@@ -87,15 +87,16 @@ def test_exactly_one_reference_in_static_and_live_catalogs(name, extra):
           {} if name=='overfly_target' else
           {'object_position':'standoff','standoff_m':3})
     for context in ({},{'targets':[{'target_id':'known'}]}):
-        catalog=decision_tools(context)
+        catalog=decision_tools(context); known=known_target_ids(context)
         validate_call(operation,{**args,'destination':{'type':'visible_object',
-            'visual_query':'visible object','view_heading_deg':0}},tools=catalog)
+            'visual_query':'visible object','view_heading_deg':0}},tools=catalog,target_ids=known)
         if context:
-            validate_call(operation,{**args,'destination':{'type':'registered_target','target_id':'known'}},tools=catalog)
+            validate_call(operation,{**args,'destination':{'type':'registered_target','target_id':'known'}},
+                          tools=catalog,target_ids=known)
         for reference in ({},{'type':'registered_target','target_id':'invented'},
                           {'type':'registered_target','target_id':'known','visual_query':'visible object'}):
             with pytest.raises(ValueError):
-                validate_call(operation,{**args,'destination':reference},tools=catalog)
+                validate_call(operation,{**args,'destination':reference},tools=catalog,target_ids=known)
 
 
 def test_object_alternatives_have_complete_typed_grammar_branches():

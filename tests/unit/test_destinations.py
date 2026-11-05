@@ -222,12 +222,14 @@ def test_airborne_altitude_cannot_invent_an_origin():
     assert result['status']=='FAILED' and not client.sent
 
 
-def test_airborne_tool_catalogue_only_offers_supported_altitude_options():
-    tools=decision_tools({'state':{'landed':False,'armed':True}})
-    schema=next(t['function']['parameters'] for t in tools if t['function']['name']=='takeoff')
-    assert 'maximum_climb_rate_mps' not in schema['properties']
-    validate_call('takeoff',{'target_altitude_agl_m':5},tools=tools)
-    with pytest.raises(ValueError):validate_call('takeoff',
-        {'target_altitude_agl_m':5,'maximum_climb_rate_mps':1},tools=tools)
+def test_tool_catalogue_does_not_change_with_flight_phase():
+    # A per-phase catalogue invalidates the model's prompt cache at every takeoff/landing.
+    airborne=decision_tools({'state':{'landed':False,'armed':True}})
+    assert airborne==decision_tools({'state':{'landed':True,'armed':False}})
+    validate_call('takeoff',{'target_altitude_agl_m':5},tools=airborne)
+    # An airborne climb rate is still refused, by the executor, without sending a command.
+    client=FakeClient();client.vehicle.landed=False;client.vehicle.armed=True
+    result=ToolExecutor(client).execute('takeoff',{'target_altitude_agl_m':5,'maximum_climb_rate_mps':1})
+    assert result['status']=='NEEDS_CLARIFICATION' and not client.sent
 
 

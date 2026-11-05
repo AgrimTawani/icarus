@@ -305,16 +305,12 @@ def turn_arguments(name, arguments, *, native=False):
 
 
 def decision_tools(context, names=AGENT_TOOLS):
-    """Bind opaque handles to exact currently known values, without rewriting calls.
+    """The native tool catalogue for this session: static per session, never per step.
 
+    Session constants (detector vocabulary, motion limits, defaults, operator waypoints)
+    are bound once; live handles such as measured targets are checked by validate_call.
     Geometry validity and workflow ownership remain backend responsibilities.
-    A stale registered target remains selectable so it can be refreshed.
     """
-    targets = context.get('targets', [])
-    target_ids = sorted({item['target_id'] for item in targets
-                         if isinstance(item, dict) and isinstance(item.get('target_id'), str)
-                         and item.get('reference_available', True) is not False
-                         and item['target_id']}) if isinstance(targets, list) else []
     advertised = context.get('motion_limits', {})
     limits = {}
     for parameter, capability in (
@@ -343,9 +339,11 @@ def decision_tools(context, names=AGENT_TOOLS):
             properties['classes']['description'] = (
                 'Supported fixed detector labels. For other visual subjects use inspect_scene or localize_target.')
             properties['classes']['maxItems'] = len(labels)
-        if ('target_altitude_agl_m' in properties and context.get('state', {}).get('landed') is False
-                and context.get('state', {}).get('armed') is True):
-            properties.pop('maximum_climb_rate_mps', None)
+        # The catalogue never depends on flight phase or on which targets exist
+        # yet: it is rendered at the top of every prompt, so any change makes the
+        # model server prefill the whole conversation again (~9 s on the edge GPU).
+        # The executor rejects an airborne climb rate, and validate_call rejects an
+        # unknown target_id, from the live state instead.
         standoff = context.get('defaults', {}).get('object_standoff_m')
         if ('standoff_m' in properties and isinstance(standoff, (int, float))
                 and not isinstance(standoff, bool) and math.isfinite(standoff) and standoff > 0):
@@ -395,12 +393,10 @@ def decision_tools(context, names=AGENT_TOOLS):
                         variants.remove(branch)
                     elif waypoint_names:
                         branch['properties']['waypoint_name']['enum'] = waypoint_names
-            for branch in list(variants):
+            for branch in variants:
                 if branch['properties']['type']['const'] == 'registered_target':
-                    if target_ids:
-                        branch['properties']['target_id']['enum'] = target_ids.copy()
-                    else:
-                        variants.remove(branch)
+                    branch['properties']['target_id']['description'] = (
+                        'A target_id returned by an earlier tool result (listed as measured targets in the vehicle state).')
         if function['name'] == 'inspect_scene':
             function['parameters']['required'].append('question_type')
         if function['name'] == 'yaw':
@@ -450,10 +446,29 @@ def drop_padding(name, arguments):
     return arguments
 
 
-def validate_call(name, arguments, *, tools=None, detector_classes=None):
-    """Validate the advertised call contract, or the static API for direct callers."""
+def known_target_ids(context):
+    """Measured target handles the vehicle currently holds (stale ones stay selectable)."""
+    targets = context.get('targets', [])
+    return sorted({item['target_id'] for item in targets
+                   if isinstance(item, dict) and isinstance(item.get('target_id'), str) and item['target_id']
+                   and item.get('reference_available', True) is not False}) if isinstance(targets, list) else []
+
+
+def validate_call(name, arguments, *, tools=None, detector_classes=None, target_ids=None):
+    """Validate the advertised call contract, or the static API for direct callers.
+
+    target_ids: the measured handles of this decision. A registered_target destination
+    naming any other id is rejected here, before execution, since the schema is static.
+    """
     if not isinstance(name, str) or name not in SCHEMAS:
         raise ValueError(f"Unknown tool {name!r}; use a listed tool")
+    destination = arguments.get('destination') if isinstance(arguments, dict) else None
+    if (target_ids is not None and isinstance(destination, dict)
+            and destination.get('type') == 'registered_target'
+            and destination.get('target_id') not in target_ids):
+        known = ', '.join(target_ids) or 'none yet'
+        raise ValueError(f"destination target_id {destination.get('target_id')!r} is not a measured target "
+                         f"(known: {known}); use visible_object to measure it first")
     schema = SCHEMAS[name]
     reference_call = (name in ('goto', 'orbit', 'overfly_target','approach_target') and isinstance(arguments, dict)
                       and 'destination' in arguments)

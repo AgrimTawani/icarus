@@ -11,7 +11,7 @@ import time
 
 from python.dcm.agent_context import capture_context, system_prompt
 from python.dcm.agent_tools import (
-    FLIGHT, SKILLS, TARGET_FLIGHT, WORKFLOW_FLIGHT, ToolExecutor, decision_tools, drop_padding, message_dict, validate_call)
+    FLIGHT, SKILLS, TARGET_FLIGHT, WORKFLOW_FLIGHT, ToolExecutor, decision_tools, drop_padding, known_target_ids, message_dict, validate_call)
 from python.dcm.operator_control import OperatorInterrupt
 from python.dcm.viewpoint_gate import ViewpointGate
 
@@ -229,7 +229,8 @@ def fly_mission(
             try:
                 args = call["function"].get("arguments", {})
                 args = json.loads(args) if isinstance(args, str) else args
-                validate_call(name, args, tools=tools, detector_classes=context.get('detector_classes'))
+                validate_call(name, args, tools=tools, detector_classes=context.get('detector_classes'),
+                              target_ids=known_target_ids(context))
                 args = drop_padding(name, dict(args))
             except (ValueError, KeyError, TypeError) as error:
                 result = {"status": "INVALID_ARGUMENT", "message": str(error)}

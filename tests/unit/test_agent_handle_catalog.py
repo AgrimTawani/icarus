@@ -1,7 +1,7 @@
 """Opaque tool handles are supplied as exact choices, never guessed/repaired."""
 import copy
 
-from python.dcm.agent_tools import TOOLS, decision_tools, validate_call
+from python.dcm.agent_tools import TOOLS, decision_tools, known_target_ids, validate_call
 from python.dcm.fly import AgentSession, fly_mission
 from test_direct_agent import FakeClient, call, context
 
@@ -34,24 +34,29 @@ def test_object_standoff_default_is_context_data_and_does_not_override_explicit_
     assert 'default' not in prop(decision_tools({}), 'orbit', 'standoff_m')
 
 
-def test_registered_target_handles_include_stale_and_update_without_mutating_static():
+def test_registered_target_handles_are_validated_live_while_the_catalog_stays_static():
+    import pytest
     before = copy.deepcopy(TOOLS)
     ctx = {'targets': [{'target_id': 'target_long_abc', 'fresh': False},
                        {'target_id': 'target_other_def', 'fresh': True}]}
     first = decision_tools(ctx)
-    for tool in ('approach_target', 'orbit'):
-        assert prop(first, tool, 'target_id')['enum'] == ['target_long_abc', 'target_other_def']
+    assert known_target_ids(ctx) == ['target_long_abc', 'target_other_def']
     ctx['targets'].append({'target_id': 'target_new_xyz'})
-    second = decision_tools(ctx)
-    assert 'target_new_xyz' in prop(second, 'orbit', 'target_id')['enum']
-    assert 'target_new_xyz' not in prop(first, 'orbit', 'target_id')['enum']
+    # The catalogue heads every prompt; it must not change when a target appears.
+    assert decision_tools(ctx) == first == decision_tools({})
+    assert 'enum' not in prop(first, 'orbit', 'target_id')
     assert TOOLS == before
-    # Call validation remains typed; the backend, not this schema helper,
-    # decides whether a referenced object is usable or requires new evidence.
+    destination = {'type': 'registered_target', 'target_id': 'target_new_xyz'}
+    validate_call('orbit', {'destination': destination, 'standoff_m': 3, 'camera': 'none'},
+                  tools=first, target_ids=known_target_ids(ctx))
+    with pytest.raises(ValueError, match='not a measured target'):
+        validate_call('orbit', {'destination': destination, 'standoff_m': 3, 'camera': 'none'},
+                      tools=first, target_ids=['target_long_abc'])
+    # Direct callers keep the typed static API; the backend decides usability.
     validate_call('orbit_target', {'target_id': 'unknown', 'standoff_m': 3})
 
 
-def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflows():
+def test_live_decisions_keep_one_catalog_as_targets_appear():
     client = FakeClient()
     session = AgentSession('Hold and report.')
     catalogs = []
@@ -71,11 +76,10 @@ def test_live_decisions_rebind_new_targets_and_use_only_current_mission_workflow
     result = fly_mission(client, Runtime(), session.mission, session=session,
                          context_provider=capture, echo=lambda *args: None)
     assert result['status'] == 'completed'
-    assert prop(catalogs[0], 'orbit', 'target_id')['enum'] == ['target_1']
-    assert prop(catalogs[1], 'orbit', 'target_id')['enum'] == ['target_2']
+    assert catalogs[0] == catalogs[1]
 
 
-def test_truncation_retry_uses_same_handle_bindings():
+def test_truncation_retry_uses_same_catalog():
     from python.dcm.llama_runtime import IncompleteModelResponse
     client = FakeClient()
     catalogs = []
@@ -92,7 +96,6 @@ def test_truncation_retry_uses_same_handle_bindings():
                 context_provider=lambda c: {**context(c), 'targets': [{'target_id': 'exact_123'}]},
                 echo=lambda *args: None)
     assert len(catalogs) == 2 and catalogs[0] == catalogs[1]
-    assert prop(catalogs[1], 'orbit', 'target_id')['enum'] == ['exact_123']
 
 
 def test_server_motion_limits_apply_to_nested_arguments_without_affecting_other_numbers():
@@ -188,16 +191,15 @@ def test_native_tagged_destinations_keep_root_fields_and_exact_nested_variants()
                         ('orbit',{'standoff_m':3,'camera':'forward_d435i'})]:
         schema=next(t['function']['parameters'] for t in catalog if t['function']['name']==name)
         assert 'destination' in schema['properties'] and 'oneOf' not in schema
-        assert prop(catalog,name,'target_id')['enum']==['known']
         assert prop(catalog,name,'maximum_ground_speed_mps')['maximum']==2
         valid=[{'type':'registered_target','target_id':'known'},
                {'type':'visible_object','visual_query':'visible structure','view_heading_deg':0}]
         for destination in valid:
-            validate_call(name,{**common,'destination':destination},tools=catalog)
+            validate_call(name,{**common,'destination':destination},tools=catalog,target_ids=['known'])
         for destination in [{}, {'type':'registered_target','target_id':'invented'},
                             {'type':'registered_target','target_id':'known','visual_query':'x'},
                             {'type':'visible_object','visual_query':'x'}]:
             with pytest.raises(ValueError):
-                validate_call(name,{**common,'destination':destination},tools=catalog)
+                validate_call(name,{**common,'destination':destination},tools=catalog,target_ids=['known'])
         with pytest.raises(ValueError):
             validate_call(name,{**common,'destination':valid[0],'maximum_ground_speed_mps':3},tools=catalog)
