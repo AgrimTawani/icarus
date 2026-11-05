@@ -99,6 +99,13 @@ class ResidentVision:
             runtime._inference_lock.release()
 
 
+CPU_PROJECTOR_NICE = 10
+
+
+def _yield_cpu_to_flight_stack():
+    os.nice(CPU_PROJECTOR_NICE)
+
+
 def _free_port():
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -214,7 +221,11 @@ class LlamaCppRuntime:
         if self.descriptor.reasoning_mode is not None:
             command.extend(["--reasoning", self.descriptor.reasoning_mode])
         self.process = subprocess.Popen(
-            command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            # A CPU projector encodes every camera frame on the CPU. The flight
+            # stack's sensor bridges must win that contention: measured AirSim
+            # surveys aborted twice on stale perception without this.
+            preexec_fn=_yield_cpu_to_flight_stack if self.projector_on_gpu is False else None)
         self._start_stderr_drain()
         try:
             self._await_ready()

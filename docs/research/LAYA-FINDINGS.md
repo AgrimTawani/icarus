@@ -1,5 +1,9 @@
 # Laya for Icarus decision speed and determinism: findings
 
+> The scratchpad paths below were session-local. The labelled frame set, labels and the two VLM benchmark
+> scripts were kept in `docs/research/vision-bench/` (frames under `output/laya-speed-20261106/vision-bench/`).
+> Outcome of this work: [LAYA-DECISION-SPEED-RESULTS.md](LAYA-DECISION-SPEED-RESULTS.md).
+
 Date: 2026-11-06. Branch `feat/laya-decision-speed`. Research only; nothing under `python/` was changed.
 Laya reference: `_reference/laya` at v0.4.24 (upstream main). Isolated venv: `/home/agrim/venvs/laya`
 (`python3 -m venv`, pip without sudo; torch 2.14.0+cu130, laya 0.4.24, vegaml 0.15.0, **torchvision 0.29.0 added by

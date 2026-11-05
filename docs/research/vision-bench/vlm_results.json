@@ -1,0 +1,606 @@
+{
+ "rows": [
+  {
+   "frame": "f00",
+   "building": {
+    "found": false,
+    "validity": "valid",
+    "answer": "trees",
+    "ms": 9767,
+    "gold": false
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3866,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "road",
+    "ms": 3774,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f01",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 3866,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3805,
+    "gold": true
+   },
+   "car": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 3828,
+    "gold": true
+   }
+  },
+  {
+   "frame": "f02",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3791,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3773,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3767,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f03",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3815,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3816,
+    "gold": false
+   },
+   "car": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 3849,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f04",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3854,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3809,
+    "gold": false
+   },
+   "car": {
+    "found": true,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 3809,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f05",
+   "building": {
+    "found": false,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3807,
+    "gold": false
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3808,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3780,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f06",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3810,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3815,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3846,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f07",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3798,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3853,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3836,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f08",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3893,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3819,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3822,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f09",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3979,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3841,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3849,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f10",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3735,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3802,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3840,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f11",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 3864,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3804,
+    "gold": false
+   },
+   "car": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 3813,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f12",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3767,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3822,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3772,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f13",
+   "building": {
+    "found": false,
+    "validity": "valid",
+    "answer": "road",
+    "ms": 3989,
+    "gold": false
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3994,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "road",
+    "ms": 3986,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f14",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 4007,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 3974,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 3976,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f15",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3989,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 4015,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 3984,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f16",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3971,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building, person",
+    "ms": 4038,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 3935,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f17",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3979,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 4023,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 4053,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f18",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 4046,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 4038,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "tree",
+    "ms": 3956,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f19",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3973,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 4002,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 3998,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f20",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3920,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3976,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3938,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f21",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 4042,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 4236,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 4024,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f22",
+   "building": {
+    "found": true,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 4015,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "validity": "valid",
+    "answer": "true",
+    "ms": 4017,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "car",
+    "ms": 3977,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f23",
+   "building": {
+    "found": false,
+    "validity": "valid",
+    "answer": "building",
+    "ms": 3958,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "validity": "valid",
+    "answer": "false",
+    "ms": 3920,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "validity": "valid",
+    "answer": "null",
+    "ms": 3964,
+    "gold": false
+   }
+  }
+ ],
+ "summary": {
+  "building": {
+   "n": 24,
+   "correct": 23,
+   "none": 0,
+   "fp": 0,
+   "fn": 1,
+   "median_ms": 3958
+  },
+  "person": {
+   "n": 24,
+   "correct": 22,
+   "none": 0,
+   "fp": 0,
+   "fn": 2,
+   "median_ms": 3866
+  },
+  "car": {
+   "n": 24,
+   "correct": 21,
+   "none": 0,
+   "fp": 3,
+   "fn": 0,
+   "median_ms": 3849
+  }
+ }
+}

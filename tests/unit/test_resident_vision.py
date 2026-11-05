@@ -176,3 +176,23 @@ def test_projector_stays_on_gpu_when_everything_fits():
             patch.object(runtime, '_warm'):
         runtime.start()
     assert started.call_count == 1 and runtime.projector_on_gpu is True
+
+
+def test_cpu_projector_server_yields_cpu_to_the_flight_stack():
+    from python.dcm import llama_runtime
+    config = dataclasses.replace(descriptor(), mmproj_path='/m/proj.gguf', mmproj_sha256='ab')
+    runtime = LlamaCppRuntime(config, binary=__file__, verify_artifact=False)
+    runtime.projector_on_gpu = False
+    with patch('python.dcm.llama_runtime.subprocess.Popen', return_value=Mock()) as popen, \
+            patch.object(runtime, '_start_stderr_drain'), patch.object(runtime, '_await_ready'), \
+            patch.object(runtime, '_warm'):
+        runtime.start()
+    assert popen.call_args.kwargs['preexec_fn'] is llama_runtime._yield_cpu_to_flight_stack
+    runtime, _ = started(config)  # projector on the GPU: normal priority
+    with patch('python.dcm.llama_runtime.subprocess.Popen', return_value=Mock()) as popen, \
+            patch.object(runtime, '_start_stderr_drain'), patch.object(runtime, '_await_ready'), \
+            patch.object(runtime, '_warm'):
+        runtime.process = None
+        runtime.projector_on_gpu = None
+        runtime.start()
+    assert popen.call_args.kwargs['preexec_fn'] is None
