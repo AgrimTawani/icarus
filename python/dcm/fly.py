@@ -151,6 +151,41 @@ def drop_oldest_exchange(messages):
     return False
 
 
+def session_tools(context):
+    """The catalogue for this vehicle session; identical every step so the prompt cache holds."""
+    from python.dcm.destinations import catalogue_context
+    context['registered_waypoints'] = catalogue_context(True)  # names only; tools resolve poses
+    return decision_tools(context)
+
+
+def attach_vision(client, runtime):
+    """Camera questions go to the resident multimodal model when there is one, else to a leased VLM."""
+    vision = getattr(runtime, "vision", None)
+    resident = vision() if callable(vision) else None
+    if resident is not None:
+        client.resident_vision = resident
+    visual_inference = getattr(runtime, "visual_inference", None)
+    if callable(visual_inference):
+        client.visual_inference = visual_inference
+
+
+def prepare_runtime(client, runtime, context_provider=capture_context):
+    """Start the model with this session's exact prompt prefix already cached.
+
+    Warming is an optimization: if the catalogue cannot be built yet, the
+    model still starts and the first decision pays the prefill.
+    """
+    try:
+        tools = session_tools(context_provider(client))
+    except Exception:  # noqa: BLE001 - a cold first decision is slower, never unsafe
+        tools = None
+    if tools is not None and callable(getattr(runtime, "warm", None)):
+        runtime.warm(tools)
+    else:
+        runtime.start()
+    attach_vision(client, runtime)
+
+
 def fly_mission(
     client,
     runtime,
@@ -171,9 +206,7 @@ def fly_mission(
     interrupt.enable_safety(client)
     interrupt.arm(client)
     executor = ToolExecutor(client, interrupt, session=session)
-    visual_inference = getattr(runtime, "visual_inference", None)
-    if callable(visual_inference):
-        client.visual_inference = visual_inference
+    attach_vision(client, runtime)
     from python.dcm.llama_runtime import IncompleteModelResponse
     from python.dcm.runtime_config import ContextBudgetExceeded
     failures = 0
@@ -183,9 +216,7 @@ def fly_mission(
             if interrupt.sequence():
                 raise InterruptedError("Operator stopped the mission")
             context = context_provider(client)
-            from python.dcm.destinations import catalogue_context
-            context['registered_waypoints'] = catalogue_context(True)  # names only; tools resolve poses
-            tools = decision_tools(context)
+            tools = session_tools(context)
             first = not any(m.get("role") == "assistant" for m in session.messages)
             session.messages[-1]["content"] = ((session.messages[-1].get("content") or "") + "\n"
                                                + vehicle_state(context, with_defaults=first))

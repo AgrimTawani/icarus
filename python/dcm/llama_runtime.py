@@ -45,6 +45,59 @@ class IncompleteModelResponse(RuntimeError):
     """No tool executed; one concise retry may repair unusable model output."""
 
 
+VISION_IMAGE_MAX_TOKENS = 1024
+
+
+class ResidentVision:
+    """Image questions answered by the mission runtime's own multimodal server.
+
+    Same ``complete`` interface as the short-lived VLM server in
+    python/perception/vlm.py, so the camera tools keep their prompts,
+    grammars and decoding unchanged. Requests are serialized with mission
+    decisions on the runtime's inference lock.
+    """
+
+    # Qwen3.5 boxes are 0-1000 normalized whatever the prompt says.
+    artifact_fields = {"grounding_format": "json_norm1000_xyxy", "minimum_request_interval_s": 0.5}
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+        descriptor = runtime.descriptor
+        self.artifact = {"family": descriptor.family, "quantization": descriptor.quantization,
+                         "sha256": descriptor.artifact_sha256, "mmproj_sha256": descriptor.mmproj_sha256,
+                         "path": descriptor.artifact_path, "mmproj_path": descriptor.mmproj_path,
+                         "resident": True, **self.artifact_fields}
+        self._marker = None
+
+    @property
+    def marker(self):
+        if self._marker is None:
+            with urllib.request.urlopen(self.runtime.endpoint + "/props", timeout=5) as response:
+                self._marker = json.loads(response.read())["media_marker"]
+        return self._marker
+
+    def complete(self, image_b64, question, prefill, n_predict, *, grammar=None, timeout_s=45.0):
+        runtime = self.runtime
+        if not runtime._inference_lock.acquire(timeout=timeout_s):
+            raise TimeoutError("mission model busy; image question not sent")
+        try:
+            if runtime.process is None:
+                runtime.start()
+            # Thinking stays off for camera answers, as for decisions.
+            prompt = ("<|im_start|>user\n" + self.marker + question + "<|im_end|>\n"
+                      "<|im_start|>assistant\n<think>\n\n</think>\n\n" + prefill)
+            payload = {"prompt": {"prompt_string": prompt, "multimodal_data": [image_b64]},
+                       "temperature": 0, "n_predict": n_predict, "cache_prompt": True}
+            if grammar is not None:
+                payload["grammar"] = grammar
+            request = urllib.request.Request(runtime.endpoint + "/completion", json.dumps(payload).encode(),
+                                             {"Content-Type": "application/json"})
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                return json.loads(response.read()).get("content", "")
+        finally:
+            runtime._inference_lock.release()
+
+
 def _free_port():
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -100,6 +153,10 @@ class LlamaCppRuntime:
         self._stderr_lock = threading.Lock()
         self._stderr_stop = threading.Event()
         self._stderr_thread = None
+        # The session's native tool catalogue, when known before start(). The
+        # chat template renders it at the top of every prompt, so warming
+        # without it caches nothing a decision can reuse.
+        self.warm_tools = None
 
     # ---------------------------------------------------------------- server
     @property
@@ -135,6 +192,9 @@ class LlamaCppRuntime:
         ]
         if self.descriptor.gpu_memory_margin_mib is not None:
             command.extend(["--fit-target", str(self.descriptor.gpu_memory_margin_mib)])
+        if self.descriptor.mmproj_path:
+            command.extend(["--mmproj", self.descriptor.mmproj_path,
+                            "--image-max-tokens", str(VISION_IMAGE_MAX_TOKENS)])
         # Bound individual prefill kernels when rendering and inference share
         # an accelerator; the manifest records the effective scheduling policy.
         for name, flag in (("batch_size", "--batch-size"),
@@ -192,35 +252,49 @@ class LlamaCppRuntime:
     def _warm(self):
         """Prefill the fixed prompt prefix before the mission clock starts.
 
-        /health reports ready once weights are loaded, but the first request
-        still pays to prefill the shared prompt prefix that `cache_prompt`
-        serves to every later decision. Warming with the real system prompt is
-        legitimate rather than flattering: it is fixed and known before any
-        episode runs, so what remains is the steady-state cost a deployed loop
-        would actually see.
-
-        This reduces the first decision's cost but does not remove it; see
-        docs/architecture/DCM-OBSERVE-V1.md for the measured spread and why the
-        deadline must be set with it in mind.
+        The prefix is the system prompt plus the native tool catalogue, which
+        the chat template renders first; ``warm_tools`` must be the exact
+        catalogue the mission loop will send, or the first decision re-prefills
+        everything (~8 s on the edge GPU instead of ~1 s). Warming is
+        legitimate: the prefix is fixed and known before any mission is typed.
         """
         from python.dcm.agent_context import system_prompt
-        prompt = {"system": system_prompt(), "user": "Awaiting an operator mission."}
-        body = json.dumps({
-            "messages": [
-                {"role": "system", "content": prompt.get("system", "")},
-                {"role": "user", "content": prompt.get("user", "")},
-            ],
-            "temperature": 0.0, "stream": False, "max_tokens": 1,
-            "cache_prompt": True,
-        }).encode("utf-8")
+        request_body = {
+            "messages": [{"role": "system", "content": system_prompt()},
+                         {"role": "user", "content": "Awaiting an operator mission."}],
+            "temperature": 0.0, "stream": False, "max_tokens": 1, "cache_prompt": True,
+        }
+        if self.warm_tools:
+            request_body.update(tools=self.warm_tools,
+                                chat_template_kwargs={"enable_thinking": False})
         request = urllib.request.Request(
-            self.endpoint + "/v1/chat/completions", data=body,
+            self.endpoint + "/v1/chat/completions", data=json.dumps(request_body).encode("utf-8"),
             headers={"Content-Type": "application/json"})
         # A failed warmup is not fatal: the first decision simply pays the
         # cost it would have paid anyway.
         with contextlib.suppress(Exception), \
                 urllib.request.urlopen(request, timeout=STARTUP_TIMEOUT_S) as r:
             r.read()
+
+    def warm(self, tools):
+        """Cache the session's system prompt and tool catalogue on the running server."""
+        self.warm_tools = tools
+        if self.process is None:
+            self.start()
+        else:
+            with self._inference_lock:
+                self._warm()
+
+    def vision(self):
+        """The camera-question interface of this resident server, or None.
+
+        Only a primary artifact declared with its multimodal projector serves
+        images. Camera questions then share the mission model's server: no
+        second model, no unload, and llama-server's RAM prompt cache restores
+        the mission conversation after each image (measured ~1.7 s decision
+        after a camera call instead of a weight reload plus ~9 s of prefill).
+        """
+        return ResidentVision(self) if self.descriptor.mmproj_path else None
 
     def _await_ready(self):
         deadline = time.monotonic() + STARTUP_TIMEOUT_S
@@ -474,6 +548,10 @@ class LlamaCppRuntime:
                 "predicted_per_second"),
             "prompt_per_second": (payload.get("timings") or {}).get(
                 "prompt_per_second"),
+            # Tokens actually prefilled vs served from the prompt cache: the
+            # number that says whether the cache held for this decision.
+            "tokens_prefilled": (payload.get("timings") or {}).get("prompt_n"),
+            "tokens_cached": (payload.get("timings") or {}).get("cache_n"),
         }
         self.last_stats.update(outcome.get("allocation", {}))
         choice = payload["choices"][0]

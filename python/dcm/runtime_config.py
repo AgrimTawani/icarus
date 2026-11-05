@@ -48,6 +48,10 @@ class RuntimeDescriptor:
     repetition_penalty: float | None = None
     # Native uint32 maximum is llama.cpp's random-seed sentinel.
     seed: int | None = None
+    # A multimodal primary model also answers the camera questions from the same
+    # resident server, so camera work never unloads the mission model.
+    mmproj_path: str | None = None
+    mmproj_sha256: str | None = None
 
     def __post_init__(self):
         for name in ("temperature", "top_p", "min_p", "presence_penalty", "repetition_penalty"):
@@ -121,26 +125,32 @@ class RuntimeDescriptor:
             "deadline_ms": artifact.get("deadline_ms", manifest.get("deadline_ms", 15_000)),
         }
         for name in ("top_p", "top_k", "min_p", "presence_penalty", "repetition_penalty", "seed",
-                     "batch_size", "micro_batch_size"):
+                     "batch_size", "micro_batch_size", "mmproj_path", "mmproj_sha256"):
             fields[name] = artifact.get(name, manifest.get(name))
         fields.update(overrides)
         return cls(**fields)
 
     def verify_artifact(self):
-        """Re-hash the weights so a swapped or truncated file fails loudly."""
-        path = Path(self.artifact_path)
-        if not path.is_file():
-            raise FileNotFoundError("model artifact missing: " + str(path))
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for block in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(block)
-        actual = digest.hexdigest()
-        if actual != self.artifact_sha256:
-            raise ValueError(
-                f"model artifact checksum mismatch for {path}: "
-                f"expected {self.artifact_sha256}, found {actual}")
-        return actual
+        """Re-hash the weights (and projector) so a swapped or truncated file fails loudly."""
+        if (self.mmproj_path is None) != (self.mmproj_sha256 is None):
+            raise ValueError("mmproj_path and mmproj_sha256 must be given together")
+        pairs = [(self.artifact_path, self.artifact_sha256)]
+        if self.mmproj_path:
+            pairs.append((self.mmproj_path, self.mmproj_sha256))
+        for name, expected in pairs:
+            path = Path(name)
+            if not path.is_file():
+                raise FileNotFoundError("model artifact missing: " + str(path))
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                for block in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(block)
+            actual = digest.hexdigest()
+            if actual != expected:
+                raise ValueError(
+                    f"model artifact checksum mismatch for {path}: "
+                    f"expected {expected}, found {actual}")
+        return self.artifact_sha256
 
     def as_record(self):
         """The provenance block written into every observe report."""

@@ -14,7 +14,7 @@ import threading
 import time
 import uuid
 from functools import wraps
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 import grpc
@@ -518,6 +518,30 @@ class MissionClient:
             trace_id=self.trace_id,
         )
 
+    @contextmanager
+    def _vision_lease(self):
+        """(gpu_layers, resident server) for one camera question.
+
+        A resident multimodal mission model answers in place. Otherwise the
+        owned flight model is released before a one-shot VLM uses the shared
+        GPU; standalone callers without a runtime lease remain CPU-only.
+        """
+        server = getattr(self, 'resident_vision', None)
+        if server is not None:
+            yield 0, server
+            return
+        with getattr(self, 'visual_inference', lambda: nullcontext(0))() as gpu_layers:
+            yield gpu_layers, None
+
+    def _vision_limiter(self):
+        """Edge camera-question admission; the interval belongs to the vision model."""
+        from python.perception.edge_vision import RateLimiter
+        if getattr(self, "edge_vlm_limiter", None) is None:
+            server = getattr(self, 'resident_vision', None)
+            interval = server.artifact.get('minimum_request_interval_s', 5.0) if server is not None else 5.0
+            self.edge_vlm_limiter = RateLimiter(interval_s=interval)
+        return self.edge_vlm_limiter
+
     def _edge_manifest(self):
         return Path(os.environ.get("EDGE_VISION_MANIFEST") or (Path.home() / "models/edge/MANIFEST.json"))
 
@@ -772,17 +796,13 @@ class MissionClient:
         from python.perception.vlm import ground_all
         try:
             if self.vision_profile == "edge-vision":
-                from python.perception.edge_vision import RateLimiter
-                if self.edge_vlm_limiter is None:
-                    self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
-                self.edge_vlm_limiter.admit()
+                self._vision_limiter().admit()
                 manifest = self._edge_manifest()
             else:
                 manifest = Path.home() / "models/vision/MANIFEST.json"
-            lease = getattr(self, 'visual_inference', lambda: nullcontext(0))
-            with lease() as gpu_layers:
+            with self._vision_lease() as (gpu_layers, server):
                 result = ground_all(Path(view["path"]), description, manifest,
-                                    timeout_s=90.0, gpu_layers=gpu_layers)
+                                    timeout_s=90.0, gpu_layers=gpu_layers, server=server)
         finally:
             shutil.rmtree(view["directory"], ignore_errors=True)
         result["image"].update(source=view["source"], captured_at_unix_ms=view["captured_at_unix_ms"],
@@ -815,17 +835,11 @@ class MissionClient:
             else:
                 source = self._capture_rgb(output)
             if self.vision_profile == "edge-vision":
-                from python.perception.edge_vision import RateLimiter
-                if self.edge_vlm_limiter is None:
-                    self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
-                self.edge_vlm_limiter.admit()
-                # Release the owned flight model before using the shared GPU.
-                # Standalone callers without a runtime lease remain CPU-only.
-                lease = getattr(self, 'visual_inference', lambda: nullcontext(0))
-                with lease() as gpu_layers:
+                self._vision_limiter().admit()
+                with self._vision_lease() as (gpu_layers, server):
                     result = inspect_image(
                         output, question, self._edge_manifest(),
-                        timeout_s=45.0, gpu_layers=gpu_layers,
+                        timeout_s=45.0, gpu_layers=gpu_layers, server=server,
                         view_context=_visual_view_context(view.get('capture_pose', {}), view.get('camera', 'forward_d435i')) if view else None,
                         **({"structured": True, "result_type": result_type} if structured or result_type else {}))
             else:
@@ -1059,15 +1073,12 @@ class MissionClient:
             except (ImportError, ValueError, KeyError, RuntimeError):
                 depth_frame = None  # LiDAR localization remains available; context reports missing depth.
             perception = self._perception_with_obstacles()
-            from python.perception.edge_vision import RateLimiter
-            if getattr(self, "edge_vlm_limiter", None) is None:
-                self.edge_vlm_limiter = RateLimiter(interval_s=5.0)
-            self.edge_vlm_limiter.admit()
-            lease = getattr(self, 'visual_inference', lambda: nullcontext(0))
-            with lease() as gpu_layers:
+            self._vision_limiter().admit()
+            with self._vision_lease() as (gpu_layers, server):
                 grounding = ground_description(
                     output, grounding_target["visual_query"], manifest,
-                    timeout_s=90.0, gpu_layers=gpu_layers, view_context=_visual_view_context(state))
+                    timeout_s=90.0, gpu_layers=gpu_layers, view_context=_visual_view_context(state),
+                    server=server)
         box_depth = None
         if depth_frame is not None and grounding["present"]:
             from python.perception.target_localization import parse_grounding_box

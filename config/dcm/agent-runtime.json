@@ -16,7 +16,9 @@
       "revision": "ba06320255db2dbec194dad738d066be90dabf29",
       "path": "/home/agrim/models/qwen/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
       "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
-      "quantization": "q4_k_m"
+      "quantization": "q4_k_m",
+      "mmproj_path": "/home/agrim/models/qwen/mmproj-Qwen_Qwen3.5-4B-f16.gguf",
+      "mmproj_sha256": "659b59dd44b73b1cd34af6cc424669484b06dc80f4340adf8ea84ad776eef813"
     }
   ]
 }

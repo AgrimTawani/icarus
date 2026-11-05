@@ -12,6 +12,7 @@ from python.dcm.fly import (
     AgentSession,
     dumps,
     fly_mission,
+    prepare_runtime,
     safe_exit_recovery,
     session_episode_summary,
     summarize,
@@ -98,7 +99,7 @@ def main():
         print("Preparing camera tools…", flush=True)
         client.prepare_camera_detector()
         print("Loading mission model…", flush=True)
-        runtime.start()
+        prepare_runtime(client, runtime)
         print(BANNER)
         session = AgentSession(args.mission) if args.mission else None
         pending = args.mission

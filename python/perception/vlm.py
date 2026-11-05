@@ -9,6 +9,7 @@ never a flight command or landing approval.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import json
 import math
@@ -242,14 +243,18 @@ def inspection_prompt(question, structured=False, result_type="description"):
 def inspect_image(image_path: Path, question: str, manifest_path: Path,
                   binary: Path | None = None, timeout_s: float = 45.0,
                   gpu_layers: int = 99, structured=False, result_type=None,
-                  view_context=None) -> dict:
-    """Ask the pinned VLM one question about an image without retaining pixels."""
+                  view_context=None, server=None) -> dict:
+    """Ask the pinned VLM one question about an image without retaining pixels.
+
+    ``server``: a resident multimodal model (the mission runtime's
+    ``vision()``); otherwise a one-shot llama-cli process loads the VLM.
+    """
     question = normalize_question(question)
     image_path = Path(image_path)
-    artifact = load_vlm(manifest_path)
+    artifact = server.artifact if server is not None else load_vlm(manifest_path)
     executable = binary or (Path(__file__).resolve().parents[2]
                             / "third_party/llama.cpp/build/bin/llama-cli")
-    if not executable.is_file():
+    if server is None and not executable.is_file():
         raise FileNotFoundError("llama-cli is unavailable")
     if timeout_s <= 0:
         raise ValueError("VLM timeout must be positive")
@@ -265,6 +270,13 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
     prompt = inspection_prompt(question, structured, result_type)
     started = time.monotonic()
     cpu_threads = artifact.get('cpu_threads', 4)
+    if server is not None:
+        raw = server.complete(base64.b64encode(image_path.read_bytes()).decode(), prompt, "",
+                              160 if structured else 96,
+                              grammar=measurement_grammar(result_type) if structured else None)
+        answer = extract_condition_answer(raw, result_type) if structured else raw
+        return _inspection_result(answer, question, structured, result_type, started, image_path, artifact,
+                                  view_context, {"server": "resident"})
     command = [str(executable), "-m", artifact["path"], "--mmproj",
                artifact["mmproj_path"], "--image", str(image_path),
                *_cpu_only_arguments(gpu_layers, cpu_threads)]
@@ -300,6 +312,15 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
                                 (error_lines[-1] if error_lines else completed.stderr[-500:]))
     answer = (extract_condition_answer(completed.stdout, result_type) if structured
               else extract_answer(completed.stdout))
+    return _inspection_result(answer, question, structured, result_type, started, image_path, artifact,
+                              view_context, {"gpu_layers": gpu_layers,
+                                             "cpu_threads": cpu_threads if gpu_layers == 0 else None,
+                                             "context_tokens": context_tokens, "image_max_tokens": image_tokens})
+
+
+def _inspection_result(answer, question, structured, result_type, started, image_path, artifact,
+                       view_context, runtime_details):
+    answer = answer.strip()
     if not answer:
         raise VlmInferenceError("empty_output", "VLM returned no inspection text")
     measurement = decode_measurement(answer, result_type) if structured else {}
@@ -313,9 +334,7 @@ def inspect_image(image_path: Path, question: str, manifest_path: Path,
         "image": {"sha256": _sha256(image_path)},
         "runtime": ({key: artifact.get(key) for key in
                     ("family", "quantization", "sha256", "mmproj_sha256",
-                     "repository", "revision")} | {"gpu_layers": gpu_layers,
-                     "cpu_threads": cpu_threads if gpu_layers == 0 else None,
-                     "context_tokens": context_tokens, "image_max_tokens": image_tokens}),
+                     "repository", "revision")} | runtime_details),
         "view_context": view_context,
         "flight_authority": False,
     }
@@ -430,6 +449,24 @@ class _GroundingServer:
             return json.loads(response.read()).get("content", "")
 
 
+JSON_BOX_FORMATS = ('json_pixel_xyxy', 'json_norm1000_xyxy')
+
+
+def box_instruction(grounding_format, width, height):
+    """Where the model is told its box coordinates live."""
+    if grounding_format == 'json_norm1000_xyxy':
+        return 'in coordinates normalized to 0-1000 (0,0 top-left, 1000,1000 bottom-right of the image)'
+    return f'in image pixel coordinates ({width} wide, {height} high)'
+
+
+def box_to_pixels(grounding_format, box, width, height):
+    """Model box -> model-image pixels; anything malformed passes through to validation."""
+    if (grounding_format != 'json_norm1000_xyxy' or not isinstance(box, list) or len(box) != 4
+            or not all(type(v) in (int, float) for v in box)):
+        return box
+    return [box[0] * width / 1000, box[1] * height / 1000, box[2] * width / 1000, box[3] * height / 1000]
+
+
 def normalize_description(description: str) -> str:
     if not isinstance(description, str):
         raise ValueError("target description must be text")  # noqa: TRY004 - public validation contract
@@ -446,7 +483,8 @@ def presence_answer_is_yes(answer: str) -> bool:
 
 
 def ground_all(image_path: Path, description: str, manifest_path: Path,
-               binary: Path | None = None, timeout_s: float = 90.0, gpu_layers: int = 0) -> dict:
+               binary: Path | None = None, timeout_s: float = 90.0, gpu_layers: int = 0,
+               server=None) -> dict:
     """Every visible instance of a description as source-image pixel boxes.
 
     One constrained VLM call. Boxes slightly past a frame edge are clipped as
@@ -454,12 +492,13 @@ def ground_all(image_path: Path, description: str, manifest_path: Path,
     """
     description = normalize_description(description)
     image_path = Path(image_path)
-    artifact = load_vlm(manifest_path)
-    if artifact.get('grounding_format') != 'json_pixel_xyxy':
-        raise ValueError('Multi-object grounding needs a json_pixel_xyxy VLM artifact')
+    artifact = server.artifact if server is not None else load_vlm(manifest_path)
+    grounding_format = artifact.get('grounding_format')
+    if grounding_format not in JSON_BOX_FORMATS:
+        raise ValueError('Multi-object grounding needs a JSON box VLM artifact')
     executable = binary or (Path(__file__).resolve().parents[2]
                             / "third_party/llama.cpp/build/bin/llama-server")
-    if not executable.is_file():
+    if server is None and not executable.is_file():
         raise FileNotFoundError("llama-server is unavailable")
     from PIL import Image
     from python.perception.visual_coordinates import prepare_grounding_image, source_pixel_box
@@ -469,18 +508,19 @@ def ground_all(image_path: Path, description: str, manifest_path: Path,
     width, height = ((input_transform['model_width'], input_transform['model_height'])
                      if input_transform else (source_width, source_height))
     started = time.monotonic()
-    with _GroundingServer(executable, artifact, gpu_layers, started + timeout_s) as server:
-        raw = server.complete(image_b64,
+    with (contextlib.nullcontext(server) if server is not None
+          else _GroundingServer(executable, artifact, gpu_layers, started + timeout_s)) as vlm:
+        raw = vlm.complete(image_b64,
             f'Find every {description} in this image. Return JSON with '
-            f'bboxes=[[xmin,ymin,xmax,ymax], ...], one box per {description}, in image pixel '
-            f'coordinates ({width} wide, {height} high). Use bboxes=[] if no {description} is visible.',
+            f'bboxes=[[xmin,ymin,xmax,ymax], ...], one box per {description}, '
+            f'{box_instruction(grounding_format, width, height)}. Use bboxes=[] if no {description} is visible.',
             '', 512, grammar=measurement_grammar('pixel_boxes'))
     try:
         listed = json.loads(raw)['bboxes']
     except (ValueError, KeyError, TypeError) as error:
         raise VlmInferenceError('invalid_pixel_boxes', str(error)) from error
     boxes = []
-    for box in listed:
+    for box in (box_to_pixels(grounding_format, item, width, height) for item in listed):
         try:
             pixel, _ = decode_pixel_box(json.dumps({'bbox': box}), width, height)
         except VlmInferenceError:
@@ -495,7 +535,7 @@ def ground_all(image_path: Path, description: str, manifest_path: Path,
 
 def ground_description(image_path: Path, description: str, manifest_path: Path,
                        binary: Path | None = None, timeout_s: float = 90.0,
-                       gpu_layers: int = 0, view_context=None) -> dict:
+                       gpu_layers: int = 0, view_context=None, server=None) -> dict:
     """Ask the pinned VLM whether a described thing is visible, and where.
 
     The artifact declares its coordinate/output contract. Legacy Qwen2-VL
@@ -505,15 +545,15 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
     """
     description = normalize_description(description)
     image_path = Path(image_path)
-    artifact = load_vlm(manifest_path)
+    artifact = server.artifact if server is not None else load_vlm(manifest_path)
     grounding_format = artifact.get('grounding_format')
     if grounding_format is None and artifact.get('family') == 'qwen2-vl':
         grounding_format = 'qwen2vl_box_1000'  # Existing pinned manifests.
-    if grounding_format not in ('qwen2vl_box_1000', 'json_pixel_xyxy'):
+    if grounding_format not in ('qwen2vl_box_1000', *JSON_BOX_FORMATS):
         raise ValueError('VLM artifact requires a supported explicit grounding_format')
     executable = binary or (Path(__file__).resolve().parents[2]
                             / "third_party/llama.cpp/build/bin/llama-server")
-    if not executable.is_file():
+    if server is None and not executable.is_file():
         raise FileNotFoundError("llama-server is unavailable")
     if timeout_s <= 0:
         raise ValueError("VLM timeout must be positive")
@@ -528,11 +568,11 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
     viewing_context_text(view_context)
     started = time.monotonic()
     pixel_box = None
-    with _GroundingServer(executable, artifact, gpu_layers,
-                          started + timeout_s) as server:
+    with (contextlib.nullcontext(server) if server is not None
+          else _GroundingServer(executable, artifact, gpu_layers, started + timeout_s)) as server:
         loaded = time.monotonic()
         grounding = None
-        if grounding_format == 'json_pixel_xyxy':
+        if grounding_format in JSON_BOX_FORMATS:
             # One question: where is it, or null. A separate yes/no step could
             # contradict the box and blocked objects plainly in view.
             from PIL import Image
@@ -542,9 +582,16 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
                 width, height = input_transform['model_width'], input_transform['model_height']
             raw = server.complete(image_b64,
                 f'Find the {description} in this image. '
-                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] around it in image pixel coordinates '
-                f'({width} wide, {height} high). Use bbox=null if no {description} is visible.',
+                f'Return JSON with bbox=[xmin,ymin,xmax,ymax] around it '
+                f'{box_instruction(grounding_format, width, height)}. Use bbox=null if no {description} is visible.',
                 '', 96, grammar=measurement_grammar('pixel_box'))
+            if grounding_format == 'json_norm1000_xyxy':
+                try:
+                    value = json.loads(raw)
+                    if isinstance(value, dict) and 'bbox' in value:
+                        raw = json.dumps({**value, 'bbox': box_to_pixels(grounding_format, value['bbox'], width, height)})
+                except ValueError:
+                    pass  # decode_pixel_box reports malformed output as unknown
             pixel_box, normalized = decode_pixel_box(raw, width, height)
             present = normalized is not None
             presence = 'Yes.' if present else 'No.'
@@ -560,7 +607,7 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
                 raise VlmInferenceError('invalid_presence',
                     'VLM did not provide a usable yes/no observation; presence is unknown')
             present = presence_answer_is_yes(presence)
-        if present and grounding_format != 'json_pixel_xyxy':
+        if present and grounding_format not in JSON_BOX_FORMATS:
             grounding = "(" + server.complete(
                 image_b64, f"Locate the physical object referred to as: {description}.",
                 f"<|object_ref_start|>the {description}<|object_ref_end|>"
@@ -585,7 +632,7 @@ def ground_description(image_path: Path, description: str, manifest_path: Path,
                     ("family", "quantization", "sha256", "mmproj_sha256",
                      "repository", "revision")} | {"gpu_layers": gpu_layers,
                                                    "cpu_threads": artifact.get('cpu_threads', 4) if gpu_layers == 0 else None,
-                                                   "server": "llama-server"}),
+                                                   "server": "resident" if artifact.get('resident') else "llama-server"}),
         "flight_authority": False,
     }
 
