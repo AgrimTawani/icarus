@@ -142,3 +142,37 @@ def test_resident_vision_never_takes_the_unload_lease():
     client.visual_inference = leased
     with client._vision_lease() as (layers, server):
         assert server is None and layers == 99
+
+
+def test_projector_moves_to_cpu_only_when_it_displaces_model_layers():
+    config = dataclasses.replace(descriptor(), mmproj_path='/m/proj.gguf', mmproj_sha256='ab')
+    runtime = LlamaCppRuntime(config, binary=__file__, verify_artifact=False)
+    reports = iter(['load_tensors: offloaded 29/34 layers to GPU', 'load_tensors: offloaded 34/34 layers to GPU'])
+    commands = []
+
+    def popen(command, **kwargs):
+        commands.append(command)
+        runtime._stderr_tail = bytearray(next(reports).encode())
+        return Mock(poll=Mock(return_value=None))
+
+    with patch('python.dcm.llama_runtime.subprocess.Popen', side_effect=popen), \
+            patch.object(runtime, '_start_stderr_drain'), patch.object(runtime, '_await_ready'), \
+            patch.object(runtime, '_warm'), patch.object(runtime, 'stop', side_effect=lambda: setattr(runtime, 'process', None)):
+        runtime.start()
+    assert '--no-mmproj-offload' not in commands[0] and '--no-mmproj-offload' in commands[1]
+    assert runtime.projector_on_gpu is False and len(commands) == 2
+
+
+def test_projector_stays_on_gpu_when_everything_fits():
+    config = dataclasses.replace(descriptor(), mmproj_path='/m/proj.gguf', mmproj_sha256='ab')
+    runtime = LlamaCppRuntime(config, binary=__file__, verify_artifact=False)
+
+    def popen(command, **kwargs):
+        runtime._stderr_tail = bytearray(b'load_tensors: offloaded 34/34 layers to GPU')
+        return Mock()
+
+    with patch('python.dcm.llama_runtime.subprocess.Popen', side_effect=popen) as started, \
+            patch.object(runtime, '_start_stderr_drain'), patch.object(runtime, '_await_ready'), \
+            patch.object(runtime, '_warm'):
+        runtime.start()
+    assert started.call_count == 1 and runtime.projector_on_gpu is True

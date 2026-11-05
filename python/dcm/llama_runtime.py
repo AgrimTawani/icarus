@@ -24,6 +24,7 @@ import contextlib
 import dataclasses
 import json
 import os
+import re
 import select
 import socket
 import subprocess
@@ -157,6 +158,8 @@ class LlamaCppRuntime:
         # chat template renders it at the top of every prompt, so warming
         # without it caches nothing a decision can reuse.
         self.warm_tools = None
+        # None until the first start measures whether model and projector both fit.
+        self.projector_on_gpu = None
 
     # ---------------------------------------------------------------- server
     @property
@@ -195,6 +198,11 @@ class LlamaCppRuntime:
         if self.descriptor.mmproj_path:
             command.extend(["--mmproj", self.descriptor.mmproj_path,
                             "--image-max-tokens", str(VISION_IMAGE_MAX_TOKENS)])
+            if self.projector_on_gpu is False:
+                command.append("--no-mmproj-offload")
+            # Info level carries llama.cpp's "offloaded N/M layers" report that
+            # decides projector placement (~2.5 KB of stderr per request).
+            command.extend(["-lv", "4"])
         # Bound individual prefill kernels when rendering and inference share
         # an accelerator; the manifest records the effective scheduling policy.
         for name, flag in (("batch_size", "--batch-size"),
@@ -210,11 +218,28 @@ class LlamaCppRuntime:
         self._start_stderr_drain()
         try:
             self._await_ready()
+            if self._projector_displaced_layers():
+                # Decisions come first: every model layer on the GPU halves
+                # decision time (measured 20 -> 42 tok/s beside Unreal), while
+                # the projector on the CPU adds ~1.5 s per camera question.
+                self.stop()
+                self.projector_on_gpu = False
+                return self.start()
             self._warm()
         except BaseException:
             self.stop()
             raise
         return self
+
+    def _projector_displaced_layers(self):
+        """True when the GPU projector pushed model layers to the CPU (llama.cpp's own report)."""
+        if not self.descriptor.mmproj_path or self.projector_on_gpu is False or self.gpu_layers == 0:
+            return False
+        match = re.search(r"offloaded (\d+)/(\d+) layers to GPU", self._stderr_text())
+        if match is None:
+            return False
+        self.projector_on_gpu = int(match.group(1)) == int(match.group(2))
+        return not self.projector_on_gpu
 
     def _start_stderr_drain(self):
         """Drain diagnostics continuously without unbounded RAM or log files."""
