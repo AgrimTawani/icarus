@@ -198,3 +198,40 @@ def test_cpu_projector_server_yields_cpu_to_the_flight_stack():
         runtime.projector_on_gpu = None
         runtime.start()
     assert popen.call_args.kwargs['preexec_fn'] is None
+
+
+def test_mission_and_camera_each_own_a_slot_and_nothing_is_cached_in_ram():
+    from python.dcm.llama_runtime import MISSION_SLOT, VISION_SLOT
+    runtime, args = started(dataclasses.replace(descriptor(), mmproj_path='/m/proj.gguf', mmproj_sha256='ab'))
+    assert args[args.index('--parallel') + 1] == '2' and '--kv-unified' in args
+    assert args[args.index('--cache-ram') + 1] == '0'
+    assert runtime._mission_slot() == {'id_slot': MISSION_SLOT} and MISSION_SLOT != VISION_SLOT
+    runtime.process = Mock()
+    vision = ResidentVision(runtime)
+    vision._marker = '<__media__>'
+    bodies = []
+
+    def urlopen(request, timeout):
+        bodies.append(json.loads(request.data))
+        return io.BytesIO(b'{"content": "x"}')
+
+    with patch('python.dcm.llama_runtime.urllib.request.urlopen', side_effect=urlopen):
+        vision.complete('aW1n', 'Where?', '', 8)
+        runtime.warm([{'type': 'function', 'function': {'name': 'hold'}}])
+    assert bodies[0]['id_slot'] == VISION_SLOT and bodies[1]['id_slot'] == MISSION_SLOT
+
+
+def test_text_only_runtime_keeps_one_slot():
+    runtime, args = started(descriptor())
+    assert args[args.index('--parallel') + 1] == '1' and '--cache-ram' not in args
+    assert runtime._mission_slot() == {} and runtime._vision_slot_tokens() == 0
+
+
+def test_mission_budget_leaves_room_for_the_camera_slot():
+    from python.dcm.llama_runtime import (VISION_CPU_IMAGE_MAX_TOKENS, VISION_IMAGE_MAX_TOKENS,
+                                          VISION_SLOT_TEXT_TOKENS)
+    runtime = LlamaCppRuntime(dataclasses.replace(descriptor(), mmproj_path='/p', mmproj_sha256='a'),
+                              binary=__file__, verify_artifact=False)
+    assert runtime._vision_slot_tokens() == VISION_IMAGE_MAX_TOKENS + VISION_SLOT_TEXT_TOKENS
+    runtime.projector_on_gpu = False
+    assert runtime._vision_slot_tokens() == VISION_CPU_IMAGE_MAX_TOKENS + VISION_SLOT_TEXT_TOKENS

@@ -51,6 +51,13 @@ VISION_IMAGE_MAX_TOKENS = 1024
 # tokens answered the same 10/10 building questions at 3.2 s instead of 5.1 s,
 # with grounding boxes within ~15 px of the 1024-token boxes; 160 loosened them.
 VISION_CPU_IMAGE_MAX_TOKENS = 256
+# The mission conversation and camera questions each own a server slot, so an
+# image never displaces the conversation. With one shared slot llama-server
+# copied the displaced prompt into its RAM cache on every switch: measured
+# ~110 MiB per camera question (1.9 -> 4.2 GiB after 15), and an 88-frame
+# survey evicted the mission conversation, costing ~9 s of prefill afterwards.
+MISSION_SLOT, VISION_SLOT = 0, 1
+VISION_SLOT_TEXT_TOKENS = 256  # question, prefill and answer around the image
 
 
 class ResidentVision:
@@ -92,7 +99,8 @@ class ResidentVision:
             prompt = ("<|im_start|>user\n" + self.marker + question + "<|im_end|>\n"
                       "<|im_start|>assistant\n<think>\n\n</think>\n\n" + prefill)
             payload = {"prompt": {"prompt_string": prompt, "multimodal_data": [image_b64]},
-                       "temperature": 0, "n_predict": n_predict, "cache_prompt": True}
+                       "temperature": 0, "n_predict": n_predict, "cache_prompt": True,
+                       "id_slot": VISION_SLOT}
             if grammar is not None:
                 payload["grammar"] = grammar
             request = urllib.request.Request(runtime.endpoint + "/completion", json.dumps(payload).encode(),
@@ -197,8 +205,11 @@ class LlamaCppRuntime:
             "--host", self.host,
             "--port", str(self.port),
             # _inference_lock permits one in-flight request. Automatic parallel
-            # slots allocate unused recurrent/KV state and fragment context.
-            "--parallel", "1",
+            # slots allocate unused recurrent/KV state and fragment context; a
+            # declared projector gets exactly one extra slot for camera questions,
+            # sharing one KV pool, and no RAM prompt cache (nothing is displaced).
+            *(("--parallel", "2", "--kv-unified", "--cache-ram", "0") if self.descriptor.mmproj_path
+              else ("--parallel", "1")),
             "-c", str(self.descriptor.context_length),
             "-ngl", str(self.gpu_layers),
             "--fit", "on",
@@ -304,6 +315,7 @@ class LlamaCppRuntime:
             "messages": [{"role": "system", "content": system_prompt()},
                          {"role": "user", "content": "Awaiting an operator mission."}],
             "temperature": 0.0, "stream": False, "max_tokens": 1, "cache_prompt": True,
+            **self._mission_slot(),
         }
         if self.warm_tools:
             request_body.update(tools=self.warm_tools,
@@ -326,14 +338,23 @@ class LlamaCppRuntime:
             with self._inference_lock:
                 self._warm()
 
+    def _mission_slot(self):
+        return {"id_slot": MISSION_SLOT} if self.descriptor.mmproj_path else {}
+
+    def _vision_slot_tokens(self):
+        """Context the camera slot can hold in the shared KV pool."""
+        if not self.descriptor.mmproj_path:
+            return 0
+        image = VISION_CPU_IMAGE_MAX_TOKENS if self.projector_on_gpu is False else VISION_IMAGE_MAX_TOKENS
+        return image + VISION_SLOT_TEXT_TOKENS
+
     def vision(self):
         """The camera-question interface of this resident server, or None.
 
         Only a primary artifact declared with its multimodal projector serves
         images. Camera questions then share the mission model's server: no
-        second model, no unload, and llama-server's RAM prompt cache restores
-        the mission conversation after each image (measured ~1.7 s decision
-        after a camera call instead of a weight reload plus ~9 s of prefill).
+        second model, no unload. They use their own slot (VISION_SLOT), so the
+        mission conversation stays in place whatever the camera is asked.
         """
         return ResidentVision(self) if self.descriptor.mmproj_path else None
 
@@ -446,6 +467,7 @@ class LlamaCppRuntime:
             "temperature": self.descriptor.temperature,
             "stream": False,
             "cache_prompt": True,
+            **self._mission_slot(),
         }
         for field, parameter in (("top_p", "top_p"), ("top_k", "top_k"),
                                  ("min_p", "min_p"), ("presence_penalty", "presence_penalty"),
@@ -491,12 +513,15 @@ class LlamaCppRuntime:
                         raise RuntimeError("llama-server returned an invalid prompt token count")
                     # Keep the full JSON allowance. Only optional reasoning may
                     # shrink; never truncate context or rely on context shifting.
-                    available = self.descriptor.context_length - count - max_tokens - 32
+                    camera = self._vision_slot_tokens()
+                    available = self.descriptor.context_length - camera - count - max_tokens - 32
                     if available < 0:
                         raise ContextBudgetExceeded(
                             f"mission context needs {count} prompt tokens plus {max_tokens} "
                             f"reply tokens and 32 boundary tokens, exceeding configured "
-                            f"context={self.descriptor.context_length}; no prompt was truncated")
+                            f"context={self.descriptor.context_length}"
+                            + (f" less {camera} held for camera questions" if camera else "")
+                            + "; no prompt was truncated")
                     effective = 0 if prompt.get("concise") else min(self.descriptor.reasoning_budget, available)
                     request_body["reasoning_budget_tokens"] = effective
                     request_body["max_tokens"] = max_tokens + effective
