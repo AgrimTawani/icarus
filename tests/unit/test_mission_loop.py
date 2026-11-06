@@ -139,6 +139,8 @@ def test_a_retried_step_that_succeeded_is_resolved_and_a_repeated_claim_is_deliv
                                 {'action': 'survey_count', 'result': ok}]) == []
     assert unresolved_failures([{'action': 'land', 'result': failed, 'operator': True}]) == []
     assert unresolved_failures([{'action': 'inspect_scene', 'result': {'status': 'VIEWPOINT_REQUIRED'}}]) == []
+    assert unresolved_failures([{'action': 'arm', 'result': {
+        'status': 'REJECTED', 'reason_code': 'REASON_CODE_ALREADY_ARMED', 'message': 'aircraft is already armed'}}]) == []
     assert unresolved_failures([{'action': 'survey_count', 'result': failed}]) == ['survey_count (FAILED: route stale)']
     runtime = Runtime(call('yaw', angle_deg=30, direction='clockwise'),
                       call('finish', outcome='completed', message='Turned.'),

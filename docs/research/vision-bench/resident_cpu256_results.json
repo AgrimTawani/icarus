@@ -1,0 +1,534 @@
+{
+ "rows": [
+  {
+   "frame": "f00",
+   "building": {
+    "found": false,
+    "answer": "grass, paved path, trees",
+    "ms": 2355,
+    "gold": false
+   },
+   "person": {
+    "found": false,
+    "answer": "grass, paved path, trees",
+    "ms": 658,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "grass, paved path, trees",
+    "ms": 659,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f01",
+   "building": {
+    "found": true,
+    "answer": "road, grass, trees, cars, houses",
+    "ms": 2431,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "road, cars, houses, trees, grass, sidewalk, blue object (pos",
+    "ms": 1053,
+    "gold": true
+   },
+   "car": {
+    "found": true,
+    "answer": "road, grass, trees, houses, cars, sidewalk, shadows",
+    "ms": 818,
+    "gold": true
+   }
+  },
+  {
+   "frame": "f02",
+   "building": {
+    "found": true,
+    "answer": "house, roof, windows, driveway, lawn, trees, power lines",
+    "ms": 2523,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "house, roof, windows, driveway, lawn, trees, power lines, fe",
+    "ms": 954,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "house, roof, windows, driveway, lawn, trees, power lines, fe",
+    "ms": 967,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f03",
+   "building": {
+    "found": true,
+    "answer": "house, roof, trees, grass, street, car",
+    "ms": 2474,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "houses, roofs, trees, grass, street, parked cars",
+    "ms": 804,
+    "gold": false
+   },
+   "car": {
+    "found": true,
+    "answer": "house, roof, trees, grass, road, fence, person",
+    "ms": 826,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f04",
+   "building": {
+    "found": true,
+    "answer": "road, grass, trees, building",
+    "ms": 2402,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "grass, road, trees, building",
+    "ms": 686,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "road, grass, trees, building",
+    "ms": 690,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f05",
+   "building": {
+    "found": true,
+    "answer": "grass, trees, ground, possible structure in background",
+    "ms": 2518,
+    "gold": false
+   },
+   "person": {
+    "found": false,
+    "answer": "grass, ground, trees, distant structures",
+    "ms": 703,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "grass, trees, ground, light source",
+    "ms": 710,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f06",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2294,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "drone camera view, grassy area, trees, building with windows",
+    "ms": 888,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "house, trees, grass, shadows, distant structures",
+    "ms": 756,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f07",
+   "building": {
+    "found": true,
+    "answer": "house, buildings, trees, grass, ground",
+    "ms": 2498,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "house, windows, lawn, trees, small structures, shadows",
+    "ms": 796,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "house, windows, lawn, trees, small structures",
+    "ms": 753,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f08",
+   "building": {
+    "found": true,
+    "answer": "buildings, trees, grass, rock",
+    "ms": 2451,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "grass, trees, rocks, buildings, shadows",
+    "ms": 732,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "grass, trees, rocks, buildings, path",
+    "ms": 731,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f09",
+   "building": {
+    "found": true,
+    "answer": "trees, grass, buildings",
+    "ms": 2426,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "trees, grass, buildings, fence, shadows",
+    "ms": 731,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "trees, grass, buildings, fence, windows",
+    "ms": 733,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f10",
+   "building": {
+    "found": true,
+    "answer": "houses",
+    "ms": 2303,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "houses, hedges, trees, grass, windows, roof",
+    "ms": 805,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "houses, hedges, trees, grass, windows, roof",
+    "ms": 802,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f11",
+   "building": {
+    "found": true,
+    "answer": "houses, buildings, trees, grass, roof",
+    "ms": 2500,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "houses, trees, grass, driveway, windows, roof",
+    "ms": 779,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "houses, trees, grass, driveway, windows, roof",
+    "ms": 787,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f12",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2309,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "dark outdoor scene with grass, trees, and parts of buildings",
+    "ms": 869,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "grass, trees, building roof",
+    "ms": 671,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f13",
+   "building": {
+    "found": false,
+    "answer": "road, grass, sky, orange line",
+    "ms": 2778,
+    "gold": false
+   },
+   "person": {
+    "found": false,
+    "answer": "road, grass, sky, orange line",
+    "ms": 715,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "road, grass, sky, orange line",
+    "ms": 713,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f14",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2611,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "building, windows, grass, road, people",
+    "ms": 741,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, windows, grass, pavement, people",
+    "ms": 754,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f15",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2646,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "person, building, wall, ground, sky",
+    "ms": 740,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "drone camera view, green ground, brown rectangular object, g",
+    "ms": 1018,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f16",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2624,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "building, windows, ground, sky, person",
+    "ms": 739,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, windows, grass, sky, people",
+    "ms": 742,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f17",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2626,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "building, windows, ground, people",
+    "ms": 693,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, windows, grass, road, people",
+    "ms": 741,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f18",
+   "building": {
+    "found": true,
+    "answer": "building, tree, person, ground, road, strip",
+    "ms": 2846,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "building, tree, person, ground, road, strip",
+    "ms": 787,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, tree, two people, grass, road, long rectangular ob",
+    "ms": 857,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f19",
+   "building": {
+    "found": true,
+    "answer": "building, tree, ground, sky",
+    "ms": 2772,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "building, tree, ground, sky, small figures at the bottom",
+    "ms": 826,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, tree, grass, sky, small figures",
+    "ms": 765,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f20",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2626,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "building, roof, ground",
+    "ms": 644,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "building, roof, ground",
+    "ms": 651,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f21",
+   "building": {
+    "found": true,
+    "answer": "building",
+    "ms": 2640,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "building, windows, ground, sky, person",
+    "ms": 741,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, windows, ground, sky, people",
+    "ms": 742,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f22",
+   "building": {
+    "found": true,
+    "answer": "building, people, tree, ground, sky",
+    "ms": 2824,
+    "gold": true
+   },
+   "person": {
+    "found": true,
+    "answer": "person",
+    "ms": 556,
+    "gold": true
+   },
+   "car": {
+    "found": false,
+    "answer": "building, tree, people, ground, sky",
+    "ms": 742,
+    "gold": false
+   }
+  },
+  {
+   "frame": "f23",
+   "building": {
+    "found": false,
+    "answer": "green surface, brown surface, light blue background",
+    "ms": 2831,
+    "gold": true
+   },
+   "person": {
+    "found": false,
+    "answer": "green surface, brown surface, light blue background",
+    "ms": 740,
+    "gold": false
+   },
+   "car": {
+    "found": false,
+    "answer": "green surface, brown surface, light blue background",
+    "ms": 747,
+    "gold": false
+   }
+  }
+ ],
+ "summary": {
+  "building": {
+   "n": 24,
+   "correct": 22,
+   "none": 0,
+   "fp": 1,
+   "fn": 1,
+   "median_ms": 2523
+  },
+  "person": {
+   "n": 24,
+   "correct": 24,
+   "none": 0,
+   "fp": 0,
+   "fn": 0,
+   "median_ms": 741
+  },
+  "car": {
+   "n": 24,
+   "correct": 23,
+   "none": 0,
+   "fp": 1,
+   "fn": 0,
+   "median_ms": 747
+  }
+ }
+}

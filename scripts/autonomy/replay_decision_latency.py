@@ -8,9 +8,10 @@ each request is the exact messages + tools the agent sent during the recorded mi
   .venv/bin/python scripts/autonomy/replay_decision_latency.py logs/episodes/<id> \
       --server-args "--checkpoint-min-step 0"
 
-With --current the recorded conversation is replayed under today's system prompt and
-tool catalogue, and each choice is compared with the recorded one: a regression check
-for prompt or catalogue edits (--system-file tries a prompt without installing it).
+With --current the recorded conversation is replayed under today's system prompt (the
+recorded tool catalogue is kept: it carries that vehicle's limits) and each choice is
+compared with the recorded one: a regression check for prompt edits. --system-file
+tries a prompt without installing it.
 
   .venv/bin/python scripts/autonomy/replay_decision_latency.py logs/episodes/2026* --current --limit 0
 """
@@ -50,7 +51,7 @@ def main():
     parser.add_argument("--server-args", default="")
     parser.add_argument("--limit", type=int, default=12, help="decisions per episode; 0 = all")
     parser.add_argument("--current", action="store_true",
-                        help="replay under the current system prompt and static catalogue")
+                        help="replay under the current system prompt")
     parser.add_argument("--system-file", help="system prompt to use instead (implies --current)")
     parser.add_argument("--static-tools", action="store_true",
                         help="send the first decision's catalogue every step (the loop's static catalogue)")
@@ -62,9 +63,7 @@ def main():
     current = options.current or options.system_file
     if current:
         from python.dcm.agent_context import system_prompt
-        from python.dcm.fly import session_tools
         system = Path(options.system_file).read_text() if options.system_file else system_prompt()
-        current_tools = session_tools({})
     with runtime:
       for episode in options.episode:
         static_tools = None
@@ -75,7 +74,6 @@ def main():
             tools = static_tools if options.static_tools else payload["tools"]
             messages = payload["messages"]
             if current:
-                tools = current_tools
                 messages = [{"role": "system", "content": system}] + messages[1:]
             body = {"messages": messages, "tools": tools, "temperature": 0.0,
                     "stream": False, "cache_prompt": True, "max_tokens": 768, "tool_choice": "required",

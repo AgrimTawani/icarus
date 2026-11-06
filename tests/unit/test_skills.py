@@ -65,6 +65,8 @@ def test_search_inspects_each_view_and_stops_when_found():
     turn = executor.calls[1][1]
     assert turn == {'angle_deg': 30, 'direction': 'clockwise', 'rate_deg_s': 30}
     assert executor.client.heading == 60
+    # The result says what it is: a sighting, with the measuring left to the object tools.
+    assert 'not measured yet' in result['message'] and 'orbit' in result['message']
 
 
 def test_search_honours_direction_and_bounded_sweep():
@@ -73,6 +75,8 @@ def test_search_honours_direction_and_bounded_sweep():
     assert result['evidence']['found'] is False
     assert names(executor).count('inspect_scene') == 4 and names(executor).count('yaw') == 3
     assert all(args['direction'] == 'counterclockwise' for name, args in executor.calls if name == 'yaw')
+    # An empty sweep is one position's sighting attempt, never a count of the area.
+    assert 'has not counted' in result['message'] and 'survey_count' in result['message']
 
 
 def test_search_retries_a_turn_once_after_a_safety_abort():

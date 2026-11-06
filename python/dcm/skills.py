@@ -42,11 +42,16 @@ def search_for_object(executor, visual_query, clockwise=True, step_deg=30.0, rat
                       'found': evidence.get('found'), 'answer': evidence.get('answer')})
         if look.get('status') == 'SUCCEEDED' and evidence.get('found') is True:
             return {'status': 'SUCCEEDED',
-                    'message': f'{visual_query} visible at heading {views[-1]["heading_deg"]} deg after turning {swept:.0f} deg.',
+                    # Say what this result is and is not: the next call is chosen from it.
+                    'message': f'{visual_query} visible at heading {views[-1]["heading_deg"]} deg after turning {swept:.0f} deg. '
+                               'Seen by the camera, not measured yet: orbit, approach_target and overfly_target '
+                               'each measure it and fly to their own standoff in the one call.',
                     'evidence': {'found': True, 'answer': evidence.get('answer'), 'views': views}}
         if swept + step_deg > max_sweep_deg + 1e-6:
             return {'status': 'SUCCEEDED',
-                    'message': f'{visual_query} not seen in {len(views)} views over {swept:.0f} deg.',
+                    'message': f'{visual_query} not seen in {len(views)} views over {swept:.0f} deg. '
+                               'A turn in place looks for one object from this position; it has not counted '
+                               'anything. Counting over an area is survey_count.',
                     'evidence': {'found': False, 'views': views}}
         moved = executor.execute('yaw', dict(turn))
         if moved.get('status') != 'SUCCEEDED':

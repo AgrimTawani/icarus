@@ -106,6 +106,8 @@ def unresolved_failures(actions):
             continue
         if item["action"] in ("inspect_scene", "localize_target") and result.get("status") == "VIEWPOINT_REQUIRED":
             continue  # a refused repeat of an observation already made, not a missing step
+        if str(result.get("reason_code", "")).startswith("REASON_CODE_ALREADY_"):
+            continue  # refused because its goal already holds (arm while armed): nothing is missing
         latest[item["action"]] = result
     return [f"{name} ({result.get('status')}: {result.get('message', '')})".replace(": )", ")")
             for name, result in latest.items() if result.get("status") != "SUCCEEDED"]
