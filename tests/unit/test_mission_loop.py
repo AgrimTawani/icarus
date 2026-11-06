@@ -116,3 +116,47 @@ def test_grammar_padding_never_reaches_the_executor():
     assert result['status'] == 'completed'
     assert result['executed'][0]['arguments'] == {}
     assert [name for name, _ in client.sent] == ['Land']
+
+
+def test_completed_is_checked_once_against_unresolved_failures():
+    from python.dcm.fly import unresolved_failures
+    client = airborne()
+    client.fail = 'Yaw'
+    runtime = Runtime(call('yaw', angle_deg=30, direction='clockwise'),
+                      call('finish', outcome='completed', message='Turned.'),
+                      call('finish', outcome='incomplete', message='The turn did not run.'))
+    result = run(client, runtime)
+    assert result['status'] == 'incomplete' and result['decisions'] == 3
+    check = json.loads(runtime.inputs[2][-1]['content'].split('\n')[0])
+    assert check['status'] == 'REJECTED' and 'yaw (' in check['message']
+    assert unresolved_failures(result['executed']) == [check['message'].split('latest call of ')[1].split(' did not')[0]]
+
+
+def test_a_retried_step_that_succeeded_is_resolved_and_a_repeated_claim_is_delivered():
+    from python.dcm.fly import unresolved_failures
+    ok, failed = {'status': 'SUCCEEDED'}, {'status': 'FAILED', 'message': 'route stale'}
+    assert unresolved_failures([{'action': 'survey_count', 'result': failed},
+                                {'action': 'survey_count', 'result': ok}]) == []
+    assert unresolved_failures([{'action': 'land', 'result': failed, 'operator': True}]) == []
+    assert unresolved_failures([{'action': 'inspect_scene', 'result': {'status': 'VIEWPOINT_REQUIRED'}}]) == []
+    assert unresolved_failures([{'action': 'survey_count', 'result': failed}]) == ['survey_count (FAILED: route stale)']
+    runtime = Runtime(call('yaw', angle_deg=30, direction='clockwise'),
+                      call('finish', outcome='completed', message='Turned.'),
+                      call('finish', outcome='completed', message='Turned, I insist.'))
+    client = airborne()
+    client.fail = 'Yaw'
+    result = run(client, runtime)
+    assert result['status'] == 'completed' and result['unresolved_failures'][0].startswith('yaw (')
+
+
+def test_completed_without_failures_needs_no_extra_decision():
+    runtime = Runtime(call('yaw', angle_deg=30, direction='clockwise'),
+                      call('finish', outcome='completed', message='Turned.'))
+    result = run(airborne(), runtime)
+    assert result['decisions'] == 2 and 'unresolved_failures' not in result
+
+
+def test_failed_step_partial_evidence_says_the_path_was_not_completed():
+    summary = brief({'status': 'FAILED', 'message': 'route stale',
+                     'evidence': {'count': 9, 'path_completed': False, 'objects': []}})
+    assert summary['evidence']['path_completed'] is False

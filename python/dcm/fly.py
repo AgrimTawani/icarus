@@ -17,7 +17,7 @@ from python.dcm.viewpoint_gate import ViewpointGate
 
 MAX_CONSECUTIVE_FAILURES = 3
 EVIDENCE_KEYS = ('found', 'answer', 'validity', 'counts', 'count', 'objects', 'target_id', 'reason', 'surface_range_m',
-                 'final_surface_range_m', 'bearing_deg', 'requested_standoff_m', 'error_code')
+                 'final_surface_range_m', 'bearing_deg', 'requested_standoff_m', 'error_code', 'path_completed')
 
 
 def record(client, event, value):
@@ -73,6 +73,7 @@ class AgentSession:
         self.operator_updates = []
         self.finished = False
         self.viewpoint_gate = ViewpointGate()
+        self.finish_checked = False
 
     def answer(self, text):
         if not self.awaiting_user:
@@ -94,6 +95,20 @@ class AgentSession:
             "executed": list(self.actions),
             "operator_updates": list(self.operator_updates),
         }
+
+
+def unresolved_failures(actions):
+    """Tools whose latest model-chosen call did not succeed: work with no success receipt."""
+    latest = {}
+    for item in actions:
+        result = item.get("result") or {}
+        if item.get("operator") or not item.get("action"):
+            continue
+        if item["action"] in ("inspect_scene", "localize_target") and result.get("status") == "VIEWPOINT_REQUIRED":
+            continue  # a refused repeat of an observation already made, not a missing step
+        latest[item["action"]] = result
+    return [f"{name} ({result.get('status')}: {result.get('message', '')})".replace(": )", ")")
+            for name, result in latest.items() if result.get("status") != "SUCCEEDED"]
 
 
 def brief(result):
@@ -277,10 +292,26 @@ def fly_mission(
                 session.awaiting_user = True
                 return session.result("awaiting_user", args["question"])
             if name == "finish":
+                unresolved = unresolved_failures(session.actions) if args["outcome"] == "completed" else []
+                if unresolved and not session.finish_checked:
+                    # The outcome is the model's word; check it once against the receipts before it is delivered.
+                    session.finish_checked = True
+                    check = {"status": "REJECTED", "message": (
+                        "Not delivered: outcome=completed needs a SUCCEEDED result for every requested step, and the "
+                        "latest call of " + "; ".join(unresolved) + " did not succeed. Partial evidence from a "
+                        "failed call is not a result. Unless a later successful step did the same work, finish "
+                        "with outcome=incomplete, saying what is missing and what was measured.")}
+                    session.messages.append({"role": "tool", "tool_call_id": call_id,
+                                             "content": json.dumps(check, separators=(",", ":"))})
+                    record(client, "agent_finish_check", {"arguments": args, "unresolved": unresolved})
+                    echo("  Finish check: completed claimed with unresolved " + ", ".join(unresolved))
+                    continue
                 session.messages.append({"role": "tool", "tool_call_id": call_id, "content": "Result delivered."})
                 session.finished = True
                 result = session.result(args["outcome"], args["message"])
                 result["assessment_source"] = "mission_model"
+                if unresolved:
+                    result["unresolved_failures"] = unresolved
                 return result
             if mode == "approval" and name in executor_flight_names():
                 echo(f"Execute {name} {json.dumps(args)}? [y/N]")

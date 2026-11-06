@@ -950,12 +950,14 @@ void ArdupilotGateway::HandleMessage(const void* opaque) {
     SendMessage(&landed_request);
     // Perception projects body-frame ranges through the vehicle's local NED
     // pose. Request that prerequisite explicitly instead of relying on the
-    // implementation-defined contents/timing of MAV_DATA_STREAM_ALL.
+    // implementation-defined contents/timing of MAV_DATA_STREAM_ALL. Routes and
+    // guardrails reject a pose older than max_state_age_ms (500 ms): at 5 Hz a
+    // single 300 ms host stall made it stale, so match the 20 Hz stream rate.
     mavlink_message_t local_position_request{};
     mavlink_msg_command_long_pack(
         kSourceSystem, kSourceComponent, &local_position_request,
         target_system_, target_component_, MAV_CMD_SET_MESSAGE_INTERVAL, 0,
-        static_cast<float>(MAVLINK_MSG_ID_LOCAL_POSITION_NED), 200'000, 0, 0,
+        static_cast<float>(MAVLINK_MSG_ID_LOCAL_POSITION_NED), 50'000, 0, 0,
         0, 0, 0);
     SendMessage(&local_position_request);
     for (const auto message_id : {MAVLINK_MSG_ID_DISTANCE_SENSOR,

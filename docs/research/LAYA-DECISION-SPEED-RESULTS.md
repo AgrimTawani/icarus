@@ -55,16 +55,25 @@ AirSim city scene 6, projector on CPU. Same words as the 2026-10-23/24 runs:
 
 Same-wording AirSim missions: **346 s -> 65 s of model time (-81 %)**, median decision ~2 s.
 
-## Still wrong (not speed; left for decision-quality work, no prompt patches were added)
+## Decision quality (second pass, same day)
 
-- **Success over-claimed.** Twice the survey route FAILED and the model still called `finish(outcome=completed)`
-  with the partial count. `summarize()` prints the failed call to the operator, but the outcome is the model's word.
-- **Invented recovery motion.** After `VIEWPOINT_REQUIRED` on an orbit the model flew `move_relative forward 10 m`,
-  which the operator never asked for. The result text tells it to use motion "the user's request calls for".
-- **Interpretation variance at temperature 0.** "Search the area around here ... cars" picked a 360 deg turn instead
-  of `survey_count`; "take a look around" inspected one view. Both are word-sense ambiguities, not hardcoding targets.
-- **Hedged VLM evidence counts as found.** "possible structure in background" became `found=true` on one frame; the
-  LiDAR localization gate is what stops an approach on it.
+What the first pass left wrong, and what changed. No mission-specific prompt text was added.
+
+| Problem | Change | Live result (AirSim scene 6) |
+|---|---|---|
+| **Success over-claimed**: twice `finish(completed)` after a FAILED survey, once quoting the partial count as the answer. | The loop checks a `completed` claim once against the receipts: if the latest call of any tool did not succeed, the finish is returned to the model with the unresolved steps (`unresolved_failures` in `fly.py`). A second identical claim is delivered, tagged `unresolved_failures`. A refused repeat observation (`VIEWPOINT_REQUIRED` on inspect/localize) does not count. Failed results now also carry `path_completed`, so a partial survey says it is partial. | 4 missions with failed surveys: the model reported `incomplete` itself twice; once the loop stopped it after 3 failures; once it claimed `completed`, the check fired and it ended `incomplete` (that run, before the wording fix, also re-flew the survey from home; the check message no longer invites a redo). Missions whose failed steps were later redone (orbit retried after a climb) passed without a check. |
+| **Invented recovery motion** after `VIEWPOINT_REQUIRED` (forward 10 m). | The result now says a turn gives a new view (`search_for_object`), that flying to a new position needs a distance or place the operator gave, else `ask_user` or `finish(incomplete)`. | The contradicted-view case did not recur in these flights; covered by unit tests only. |
+| **"Search the area ... how many cars"** flown as a turn in place. | `search_for_object` now states it stops at the first sighting and cannot count; the counting rule covers "beyond the current view (an area, the surroundings ...)". | 2 of 2 runs chose `survey_count`. |
+| AirSim survey routes went stale | Local position (LOCAL_POSITION_NED) requested at 20 Hz instead of 5 Hz (`mavlink_gateway.cpp`): at 5 Hz a pose was routinely ~200 ms old against the 500 ms limit. | Pose-only staleness gone (median 45 ms). Surveys still aborted because the whole sim stalled 0.5-2 s: **the laptop was on battery** (AC offline), frames took ~5 s instead of 2.8 s. Re-test on AC. |
+
+Second-pass flights: house orbit completed; surveillance loop completed (orbit retried after climb); Codex's mission
+completed once and ended `incomplete` once (planner found no collision-free climb); surveys see above.
+
+Still open:
+- **"Take a look around"** inspects one view. The live catalogue has no turn-and-describe tool (`scan_heading` is not
+  exposed to decisions); not changed.
+- **Hedged VLM evidence counts as found** ("possible structure"); the LiDAR gate still stops an approach on it.
+- When the survey route fails, the model sometimes goes home instead of retrying once as the prompt says.
 
 ## Laya, DSPy, ZeroClaw: verdicts
 

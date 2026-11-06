@@ -228,7 +228,7 @@ SCHEMAS.update(
 )
 DESCRIPTIONS = {
     'survey_count': 'Fly over an area (rectangle, square or circle, anchored at the drone; default square when no size is given) once and count a kind of object while flying; nothing stops to look. Returns count, approximate object positions and the distance from each to its nearest neighbour.',
-    'search_for_object': 'Look for an object by turning in place: inspect the current view, then turn step_deg in the given direction and inspect again, until the VLM sees it or max_sweep_deg is used. Returns found and the heading. Use the operator\'s requested direction, step and rate.',
+    'search_for_object': 'Look for an object by turning in place: inspect the current view, then turn step_deg in the given direction and inspect again, until the VLM sees it or max_sweep_deg is used. Returns found and the heading. It stops at the first view that shows the object, so it cannot count: counting uses survey_count (an area) or detect (the current view). Use the operator\'s requested direction, step and rate.',
     'face_heading': 'Hold airborne position/altitude and face an absolute compass heading (north0/east90/south180/west270).',
     'orbit': 'Fly a circular path around a center; face it by default. Object destinations use standoff_m from measured hull; coordinate/home/launch destinations use radius_m and altitude_agl_m. Select camera explicitly; none requests heading-only flight. Cameras cannot tilt.',
     'scan_heading': 'Airborne turn–settle–observe workflow. step_deg positive; sweep_deg=step_deg makes one station. clockwise=false turns left. Select exit_policy explicitly. finish_at_match ends the scan on stop_on_detection/minimum_count; pause_at_match permits resuming after a nested branch. each_observation yields every view; complete_coverage is unconditional. repeat_until_match searches across sweeps. Resume with resume_heading_scan.',
@@ -625,9 +625,10 @@ class ToolExecutor:
             if gate and gate.blocks(name, arguments):
                 return {'status': 'VIEWPOINT_REQUIRED', 'no_action_executed': True,
                         'message': 'Measured localization contradicted the positive visual answer in this view, so '
-                                   'observing it again cannot resolve the conflict. Change the viewpoint with motion '
-                                   "the user's request calls for, then observe again; or ask the user or finish if "
-                                   'it calls for none. No camera or flight command sent.'}
+                                   'observing it again cannot resolve the conflict. No camera or flight command sent. '
+                                   'A turn gives a new view (search_for_object keeps looking for the named object); '
+                                   'flying to a new position needs a distance or place the operator gave. Otherwise '
+                                   'ask_user, or finish with outcome=incomplete.'}
             if name in ('goto', 'orbit', 'overfly_target','approach_target') and 'destination' in arguments:
                 from python.dcm.destinations import execute_destination
                 operation = 'goto' if name in ('overfly_target','approach_target') else name
