@@ -218,7 +218,7 @@ def test_a_non_takeoff_call_is_skipped_by_validation_not_passed(monkeypatch, cap
     labels = frames(tmp_path)
     hold = {"role": "assistant", "tool_calls": [{"function": {"name": "hold", "arguments": "{}"}}]}
     code, out = run_main(monkeypatch, capsys, FakeCloud(reply=hold), tmp_path, labels)
-    assert "FAIL catalogue_takeoff" in out.out and "SKIP validate_call (the call was hold, not takeoff" in out.out
+    assert "FAIL catalogue_takeoff" in out.out and "SKIP validate_call (the call was hold, not arm or takeoff" in out.out
     assert "PASS validate_call" not in out.out and code == 1
 
 
@@ -512,3 +512,11 @@ def test_local_replay_still_posts_the_llama_body_and_reads_timings(monkeypatch, 
     assert (rows[0]["prompt_total"], rows[0]["prefilled"], rows[0]["cached"], rows[0]["prefill_ms"],
             rows[0]["gen_tokens"], rows[0]["gen_ms"]) == (90, 10, 80, 5, 3, 7)
     assert "provider_host" not in rows[-1] and rows[-1]["same_tool_as_recorded"] == 1
+
+
+def test_arm_is_an_accepted_first_step_and_is_validated(monkeypatch, capsys, tmp_path):
+    # A disarmed drone asked to take off may correctly arm first; both are valid first steps.
+    labels = frames(tmp_path)
+    arm = {"role": "assistant", "tool_calls": [{"function": {"name": "arm", "arguments": "{}"}}]}
+    _code, out = run_main(monkeypatch, capsys, FakeCloud(reply=arm), tmp_path, labels)
+    assert "PASS catalogue_takeoff" in out.out and "PASS validate_call" in out.out

@@ -6,7 +6,7 @@ ICARUS_LLM_MODEL, and optionally the ICARUS_VLM_* equivalents for the camera mod
 simulator. Checks, one line each with latency and tokens:
 
   provider_reachable  the provider answers and accepts the key (no model call)
-  catalogue_takeoff   the real 23-tool catalogue is accepted and a takeoff request returns a takeoff call
+  catalogue_takeoff   the real 23-tool catalogue is accepted and a takeoff request returns arm or takeoff
   validate_call       the flight code's own validator accepts that call
   condition_true      "is there a building?" on a labelled building frame answers found=true
   condition_false     the same question on a labelled non-building frame answers found=false
@@ -162,6 +162,10 @@ def mission_context():
             "detector_classes": sorted(YOLO_CLASSES)}
 
 
+# A disarmed drone asked to take off may arm first; both are correct first steps.
+FIRST_STEPS = ("arm", "takeoff")
+
+
 def takeoff_request(context=None):
     """`(messages, tools)` exactly as the mission loop builds the first decision of a takeoff mission."""
     from python.dcm.agent_context import system_prompt
@@ -197,13 +201,13 @@ class Checks:
         name, arguments = first_call(message)
         self.call = (name, arguments)
         detail = f"{name} {json.dumps(arguments)} ({len(self.tools)} tools)"
-        return name == "takeoff", tokens, detail
+        return name in FIRST_STEPS, tokens, detail
 
     def validate_call(self):
         if self.call is None:
             raise Skipped("no call to validate; catalogue_takeoff did not return one")
-        if self.call[0] != "takeoff":
-            raise Skipped(f"the call was {self.call[0]}, not takeoff; nothing to validate")
+        if self.call[0] not in FIRST_STEPS:
+            raise Skipped(f"the call was {self.call[0]}, not arm or takeoff; nothing to validate")
         from python.dcm.agent_tools import validate_call
 
         validate_call(self.call[0], self.call[1], tools=self.tools,
