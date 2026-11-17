@@ -1,5 +1,6 @@
 """Drone skills: bounded loops over ordinary executor actions."""
 import math
+
 import pytest
 
 from python.dcm import skills
@@ -141,6 +142,7 @@ def test_acquire_is_bounded():
 
 def test_survey_counts_while_flying_and_merges_repeat_sightings(monkeypatch):
     import threading
+
     import python.dcm.camera_geometry as geometry
     calls = []
     houses = iter([(5.0, 5.0), (5.5, 5.2), (20.0, 5.0), (300.0, 300.0)])  # 2nd repeats the 1st; last is outside

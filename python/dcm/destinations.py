@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+
 from python.dcm.viewing import VIEW_SCHEMA, resolve_view
 
 KINDS = ['coordinates', 'home', 'launch', 'named_waypoint', 'visible_object', 'registered_target']
@@ -150,8 +151,8 @@ def validate_destination(operation, args):
     elif kind in OBJECTS:
         required.add('visual_query' if kind == 'visible_object' else 'target_id')
         allowed |= {'visual_query' if kind == 'visible_object' else 'target_id', 'view', 'view_heading_deg', 'standoff_m'}
-        if kind == 'visible_object':
-            if 'view_heading_deg' not in args:required.add('view')
+        if kind == 'visible_object' and 'view_heading_deg' not in args:
+            required.add('view')
         if operation == 'goto':
             required.add('object_position'); allowed.add('object_position')
             if args.get('object_position') == 'above':

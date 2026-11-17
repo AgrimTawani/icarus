@@ -1,7 +1,9 @@
 """Deterministic geometry/observation boundaries; no mission-text templates."""
 import copy
 from types import SimpleNamespace
+
 import pytest
+
 from python.dcm.scan_workflow import ScanWorkflow, prepare_pattern
 
 

@@ -1,9 +1,16 @@
 """Model pixels and sensor pixels retain an explicit reversible transform."""
-import base64,io
+import base64
+import io
+
 import pytest
 from PIL import Image
-from python.perception.visual_coordinates import prepare_grounding_image,source_pixel_box,grounding_image_policy
-from python.perception.vlm import decode_pixel_box,_GroundingServer
+
+from python.perception.visual_coordinates import (
+    grounding_image_policy,
+    prepare_grounding_image,
+    source_pixel_box,
+)
+from python.perception.vlm import _GroundingServer, decode_pixel_box
 
 POLICY={'grounding_image':{'alignment':28,'minimum_tokens':1024,'maximum_tokens':1536}}
 

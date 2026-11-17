@@ -5,7 +5,11 @@ import math
 import pytest
 
 from python.dcm import camera_geometry
-from python.perception.target_localization import CameraModel, airsim_localization_config, load_localization_config
+from python.perception.target_localization import (
+    CameraModel,
+    airsim_localization_config,
+    load_localization_config,
+)
 
 SETTINGS = 'config/simulation/airsim/settings.realistic-city.json'
 

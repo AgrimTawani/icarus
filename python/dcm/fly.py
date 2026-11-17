@@ -11,7 +11,17 @@ import time
 
 from python.dcm.agent_context import capture_context, system_prompt
 from python.dcm.agent_tools import (
-    FLIGHT, SKILLS, TARGET_FLIGHT, WORKFLOW_FLIGHT, ToolExecutor, decision_tools, drop_padding, known_target_ids, message_dict, validate_call)
+    FLIGHT,
+    SKILLS,
+    TARGET_FLIGHT,
+    WORKFLOW_FLIGHT,
+    ToolExecutor,
+    decision_tools,
+    drop_padding,
+    known_target_ids,
+    message_dict,
+    validate_call,
+)
 from python.dcm.operator_control import OperatorInterrupt
 from python.dcm.viewpoint_gate import ViewpointGate
 
@@ -244,8 +254,8 @@ def fly_mission(
             while True:
                 try:
                     response = interrupted_call(
-                        (lambda: runtime.decide(messages, tools, concise=True)) if concise
-                        else (lambda: runtime.decide(messages, tools)),
+                        (lambda messages=messages, tools=tools: runtime.decide(messages, tools, concise=True)) if concise
+                        else (lambda messages=messages, tools=tools: runtime.decide(messages, tools)),
                         interrupt, getattr(runtime, 'stop', None))
                     break
                 except ContextBudgetExceeded:
@@ -330,7 +340,7 @@ def fly_mission(
             echo(f"→ {name} {json.dumps(args, separators=(',', ':'))}")
             if name in ("detect", "inspect_scene", "assess_landing_zone", "localize_target"):
                 # Camera work can be slow; operator recovery must still start immediately.
-                result = interrupted_call(lambda: executor.execute(name, args), interrupt)
+                result = interrupted_call(lambda name=name, args=args: executor.execute(name, args), interrupt)
             else:
                 result = executor.execute(name, args)
             session.actions.append({"action": name, "arguments": args, "result": result})

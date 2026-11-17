@@ -12,8 +12,8 @@ import json
 import os
 import re
 import signal
-import sys
 import subprocess
+import sys
 import time
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
@@ -21,7 +21,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from python.dcm.fly import AgentSession, fly_mission, safe_exit_recovery, session_episode_summary
+from python.dcm.fly import (
+    AgentSession,
+    fly_mission,
+    safe_exit_recovery,
+    session_episode_summary,
+)
 from python.model_runtime.cloud_config import MissingCloudSetting
 from python.model_runtime.select import ALIASES, KINDS, make_runtime
 
@@ -156,7 +161,8 @@ def main():
             capture = client._capture_rgb
             camera_directory = args.output / case['id'] / 'camera'
             camera_directory.mkdir(parents=True, exist_ok=True)
-            def retain_capture(output, camera='forward_d435i'):
+            def retain_capture(output, camera='forward_d435i', *, capture=capture,
+                               camera_directory=camera_directory, client=client):
                 source = capture(output, camera=camera)
                 from PIL import Image
                 stamp = time.time_ns()
@@ -206,14 +212,14 @@ def main():
                 except KeyboardInterrupt:
                     result.update(status='cancelled', message='Evaluation interrupted by operator')
                     client.episode_outcome = 'incomplete'
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - record the failure and still run exit recovery
                     result.update(status='error', message=f'{type(error).__name__}: {error}')
                     client.episode_outcome = 'failed'
                 finally:
                     with defer_stop_during_recovery(result):
                         try:
                             result['recovery'] = safe_exit_recovery(client)
-                        except Exception as error:
+                        except Exception as error:  # noqa: BLE001 - recovery failure must be recorded
                             result['recovery'] = {'status': 'FAILED', 'message': str(error)}
                         finally:
                             if result.get('recovery', {}).get('status') not in ('SUCCEEDED', 'manual_override'):
@@ -226,7 +232,7 @@ def main():
                             result['episode'] = str(episode.directory) if episode is not None else None
                             try:
                                 client.close()
-                            except Exception as error:
+                            except Exception as error:  # noqa: BLE001 - cleanup failure must be recorded
                                 result['cleanup_error'] = str(error)
                         result['seconds'] = round(time.monotonic() - started, 2)
                         changed = [name for name, digest in provenance['source_sha256'].items()

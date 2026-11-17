@@ -13,10 +13,12 @@ from python.dcm.fly import (
     dumps,
     fly_mission,
     prepare_runtime,
-    record as record_event,
     safe_exit_recovery,
     session_episode_summary,
     summarize,
+)
+from python.dcm.fly import (
+    record as record_event,
 )
 from python.dcm.operator_control import OperatorInterrupt, operator_safety_command
 from python.dcm.runtime_config import DIRECT_PROMPT_VERSION, DIRECT_TOOL_VERSION

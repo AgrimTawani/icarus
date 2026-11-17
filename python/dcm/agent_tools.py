@@ -6,7 +6,6 @@ import time
 import uuid
 
 from jsonschema import Draft202012Validator
-from python.perception.classes import YOLO_CLASSES
 
 from python.dcm._paths import ensure_generated_proto_on_path
 from python.dcm.actions import (
@@ -17,6 +16,7 @@ from python.dcm.actions import (
 )
 from python.dcm.validation_diagnostics import format_schema_error
 from python.dcm.viewing import VIEW_SCHEMA, canonical_view_arguments, resolve_view
+from python.perception.classes import YOLO_CLASSES
 
 # Native ActionExecutor heading/attitude contracts, independent of mission text.
 HEADING_TOLERANCE_DEG = 5.0
@@ -378,7 +378,11 @@ def decision_tools(context, names=AGENT_TOOLS):
             # still selects its measured reference through orbit.
             continue
         if function['name'] in ('goto', 'orbit', 'overfly_target','approach_target'):
-            from python.dcm.destinations import destination_schema, overflight_schema, approach_schema
+            from python.dcm.destinations import (
+                approach_schema,
+                destination_schema,
+                overflight_schema,
+            )
             function['parameters'] = bind_limits(overflight_schema(SCHEMAS['overfly_target']) if function['name'] == 'overfly_target'
                 else approach_schema(SCHEMAS['approach_target']) if function['name']=='approach_target'
                 else destination_schema(function['name'], SCHEMAS[function['name']]))
@@ -473,7 +477,11 @@ def validate_call(name, arguments, *, tools=None, detector_classes=None, target_
     reference_call = (name in ('goto', 'orbit', 'overfly_target','approach_target') and isinstance(arguments, dict)
                       and 'destination' in arguments)
     if reference_call:
-        from python.dcm.destinations import destination_schema, overflight_schema, approach_schema
+        from python.dcm.destinations import (
+            approach_schema,
+            destination_schema,
+            overflight_schema,
+        )
         schema = overflight_schema(schema) if name == 'overfly_target' else approach_schema(schema) if name=='approach_target' else destination_schema(name,schema)
     if tools is not None:
         schema = next((tool['function']['parameters'] for tool in tools
@@ -715,8 +723,8 @@ class ToolExecutor:
                 from python.dcm import skills
                 result = getattr(skills, name)(self, **arguments)
             elif name in WORKFLOW_FLIGHT:
-                from python.dcm.scan_workflow import ScanWorkflow
                 from python.dcm.angular_scan import AngularScan
+                from python.dcm.scan_workflow import ScanWorkflow
                 workflow = AngularScan(self) if name in ('scan_heading', 'resume_heading_scan') else ScanWorkflow(self)
                 method = 'fly_pattern' if name == 'scan_area' and arguments.get('observation') == 'none' else name
                 result = getattr(workflow, method)(**arguments)
@@ -837,7 +845,10 @@ class ToolExecutor:
             args = {'angle_deg': delta, **({'rate_deg_s': args['rate_deg_s']} if 'rate_deg_s' in args else {})}
             name = 'yaw'
         if name == 'orbit':
-            from python.dcm.camera_geometry import resolve_reference, orbit_camera_feasibility
+            from python.dcm.camera_geometry import (
+                orbit_camera_feasibility,
+                resolve_reference,
+            )
             args = dict(args)
             args.setdefault('face_center', True)
             reference = args.pop('center_reference', None)

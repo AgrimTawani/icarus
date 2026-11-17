@@ -3,8 +3,8 @@ from copy import deepcopy
 
 import pytest
 
-from python.dcm.agent_tools import validate_call, SCHEMAS, TARGET_FLIGHT
-from python.dcm.target_motion import TargetMotion, OrbitMeasurements
+from python.dcm.agent_tools import TARGET_FLIGHT, validate_call
+from python.dcm.target_motion import OrbitMeasurements, TargetMotion
 
 
 class Client:
@@ -404,7 +404,7 @@ def test_overhead_point_is_outside_level_front_camera_but_in_downward_view():
 
 
 def test_a_single_missed_lidar_scan_does_not_lose_the_target(monkeypatch):
-    import python.dcm.target_motion as target_motion
+    from python.dcm import target_motion
     monkeypatch.setattr(target_motion, 'REFRESH_WAIT_S', 0)
     seen = iter([{'found': False, 'reason': 'target_not_observed'}, {'found': True, 'target_id': 't'}])
 
@@ -416,7 +416,7 @@ def test_a_single_missed_lidar_scan_does_not_lose_the_target(monkeypatch):
 
 
 def test_a_lost_target_still_fails_after_bounded_rescans(monkeypatch):
-    import python.dcm.target_motion as target_motion
+    from python.dcm import target_motion
     monkeypatch.setattr(target_motion, 'REFRESH_WAIT_S', 0)
     calls = []
 

@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import grpc
-
 from test_localize_target import _module
 
 

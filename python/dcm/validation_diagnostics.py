@@ -1,5 +1,6 @@
 """Concise factual schema errors without replaying entire arguments or schemas."""
 import json
+
 from jsonschema import Draft202012Validator
 
 

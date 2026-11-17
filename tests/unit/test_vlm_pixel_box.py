@@ -1,9 +1,14 @@
 """Image-coordinate adapters preserve sensor units and explicit absence."""
-import json
 from unittest.mock import patch
+
 import pytest
 from PIL import Image
-from python.perception.vlm import decode_pixel_box,ground_description,VlmInferenceError
+
+from python.perception.vlm import (
+    VlmInferenceError,
+    decode_pixel_box,
+    ground_description,
+)
 
 
 def test_pixel_boxes_scale_each_source_dimension_independently():

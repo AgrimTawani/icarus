@@ -4,11 +4,11 @@ import math
 from types import SimpleNamespace
 
 import pytest
+from test_direct_agent import FakeClient
 
 from python.dcm import ground_recovery as ground
-from python.dcm.agent_tools import message_dict, ToolExecutor
+from python.dcm.agent_tools import ToolExecutor, message_dict
 from python.dcm.fly import safe_exit_recovery
-from test_direct_agent import FakeClient
 
 
 @pytest.fixture

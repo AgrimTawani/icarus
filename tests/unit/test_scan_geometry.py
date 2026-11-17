@@ -1,4 +1,5 @@
 """Frame, shape and bounded-resource contracts for scan geometry."""
+import itertools
 import math
 
 import pytest
@@ -7,9 +8,9 @@ from python.dcm.scan_geometry import generate_scan
 
 
 def make(**overrides):
-    arguments = dict(shape="rectangle", coverage="perimeter", start_north_m=0,
-                     start_east_m=0, heading_deg=0, altitude_agl_m=4,
-                     width_m=1, length_m=1)
+    arguments = {"shape": "rectangle", "coverage": "perimeter", "start_north_m": 0,
+                 "start_east_m": 0, "heading_deg": 0, "altitude_agl_m": 4,
+                 "width_m": 1, "length_m": 1}
     arguments.update(overrides)
     return generate_scan(**arguments)
 
@@ -32,7 +33,8 @@ def test_square_alias_and_clockwise_reverse():
 @pytest.mark.parametrize("shape,coverage", [("rectangle", "perimeter"), ("rectangle", "area"),
                                               ("circle", "perimeter"), ("circle", "area")])
 def test_rotation_translation_invariance(shape, coverage):
-    dimensions = dict(width_m=3, length_m=5) if shape == "rectangle" else dict(width_m=None, length_m=None, radius_m=3)
+    dimensions = ({"width_m": 3, "length_m": 5} if shape == "rectangle"
+                  else {"width_m": None, "length_m": None, "radius_m": 3})
     baseline = make(shape=shape, coverage=coverage, lane_spacing_m=1, **dimensions)
     moved = make(shape=shape, coverage=coverage, lane_spacing_m=1, start_north_m=17,
                  start_east_m=-23, heading_deg=37, **dimensions)
@@ -52,9 +54,9 @@ def test_heading_90_right_is_south_forward_is_east():
 
 def test_rectangle_area_alternates_includes_edges_and_bounds_spacing():
     points = pairs(make(coverage="area", width_m=6, length_m=7, lane_spacing_m=2))
-    lanes = sorted(set(n for n, _ in points))
+    lanes = sorted({n for n, _ in points})
     assert lanes[0] == 0 and lanes[-1] == 7
-    assert max(b-a for a,b in zip(lanes, lanes[1:])) <= 2
+    assert max(b-a for a,b in itertools.pairwise(lanes)) <= 2
     assert points[:4] == [(0, 0), (0, 6), (1.75, 6), (1.75, 0)]
     assert all(0 <= n <= 7 and 0 <= e <= 6 for n,e in points)
     assert points[-1] != points[0]  # No unrequested return leg.
@@ -77,18 +79,18 @@ def test_circle_closure_radius_and_direction():
 
 def test_circle_resolution_bounds_chords():
     points = pairs(circle(max_segment_m=0.25))
-    assert all(math.dist(a,b) <= .25 for a,b in zip(points, points[1:]))
+    assert all(math.dist(a,b) <= .25 for a,b in itertools.pairwise(points))
 
 
 def test_circle_area_chords_and_connectors_stay_inside_and_spacing_bounded():
     points = pairs(circle(coverage="area", lane_spacing_m=.7))
     assert points[0] == (0,0) and points[-1] == (6,0)
     assert all(math.hypot(n-3,e) <= 3+1e-9 for n,e in points)
-    for a,b in zip(points, points[1:]):
+    for a,b in itertools.pairwise(points):
         midpoint = ((a[0]+b[0])/2, (a[1]+b[1])/2)
         assert math.hypot(midpoint[0]-3,midpoint[1]) <= 3+1e-9
-    lanes = sorted(set(n for n,e in points))
-    assert max(b-a for a,b in zip(lanes, lanes[1:])) <= .7
+    lanes = sorted({n for n,e in points})
+    assert max(b-a for a,b in itertools.pairwise(lanes)) <= .7
 
 
 def test_wide_circle_swath_still_includes_diameter():

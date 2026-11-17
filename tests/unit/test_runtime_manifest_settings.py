@@ -173,8 +173,8 @@ def test_explicit_revision_rejects_wrong_cached_commit(tmp_path):
 
 
 def test_sampling_inheritance_overrides_and_provenance(tmp_path):
-    settings = dict(temperature=.6, top_p=.95, top_k=20, min_p=0,
-                    presence_penalty=0, repetition_penalty=1, seed=42)
+    settings = {'temperature': .6, 'top_p': .95, 'top_k': 20, 'min_p': 0,
+                'presence_penalty': 0, 'repetition_penalty': 1, 'seed': 42}
     data = manifest(tmp_path)
     data.update(settings)
     descriptor = RuntimeDescriptor.from_manifest(save(tmp_path, data), role='chosen')
@@ -210,8 +210,8 @@ def test_invalid_sampling_fails_before_model_loading(tmp_path, field, bad):
 
 def test_provisioning_preserves_and_validates_sampling_controls(tmp_path):
     data = manifest(tmp_path)
-    settings = dict(temperature=.6, top_p=.95, top_k=20, min_p=0,
-                    presence_penalty=0, repetition_penalty=1, seed=42)
+    settings = {'temperature': .6, 'top_p': .95, 'top_k': 20, 'min_p': 0,
+                'presence_penalty': 0, 'repetition_penalty': 1, 'seed': 42}
     data.update(settings)
     data['artifacts'][0]['top_k'] = 10
     before = copy.deepcopy(data)

@@ -1,10 +1,12 @@
 """Active camera views delegate compass geometry without implicit launch."""
 import math
+
 import pytest
-from python.dcm.viewing import resolve_view,COMPASS_HEADINGS
-from python.dcm.agent_tools import ToolExecutor,decision_tools,validate_call
+from test_direct_agent import FakeClient, context
+
+from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
+from python.dcm.viewing import COMPASS_HEADINGS, resolve_view
 from python.perception.vlm import VlmInferenceError
-from test_direct_agent import FakeClient,context
 
 
 @pytest.mark.parametrize('direction,expected',list(COMPASS_HEADINGS.items()))

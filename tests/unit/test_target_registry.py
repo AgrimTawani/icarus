@@ -1,6 +1,6 @@
 """Static target identity and range contracts; no simulator or model needed."""
-import unittest
 import math
+import unittest
 
 from python.perception.target_registry import TargetRegistry
 
@@ -94,7 +94,7 @@ def test_clipped_refresh_does_not_erase_a_previously_measured_static_top():
 
 
 def test_static_reference_does_not_survive_an_origin_change_or_transfer_sessions():
-    registry, target_id, now = static_reference_fixture()
+    registry, target_id, _now = static_reference_fixture()
     assert registry.anchor(target_id, state(origin='other'))['reference_available'] is False
     registry.refresh(target_id, perception(obstacle()), state(origin='other'))
     assert registry.anchor(target_id, state())['reference_available'] is False
@@ -486,8 +486,8 @@ def test_radial_approach_does_not_supply_angular_baseline():
 
 
 def test_curved_candidates_preserve_requested_standoff_from_measured_hull():
-    from python.perception.target_registry import _measurement_views
     from python.perception.target_localization import _nearest_on_hull
+    from python.perception.target_registry import _measurement_views
     hull = [(8, 0), (8.586, -1.414), (10, -2), (10, 2), (8.586, 1.414)]
     views = _measurement_views(hull, {'north_m': 0, 'east_m': 0}, 'origin-A', 10)
     assert len(views) == 2

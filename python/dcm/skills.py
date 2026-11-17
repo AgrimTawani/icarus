@@ -92,7 +92,7 @@ def registered(client, localization):
 def nearest(description):
     """Ground the nearest instance by default: with several in view the VLM otherwise
     picks the most prominent one, often too far for LiDAR to range."""
-    return description if re.search(r'\b(nearest|closest)\b', description, re.I) else f'nearest {description}'
+    return description if re.search(r'\b(nearest|closest)\b', description, re.IGNORECASE) else f'nearest {description}'
 
 
 def acquire(executor, description):
@@ -177,6 +177,7 @@ def survey_count(executor, visual_query, shape='rectangle', width_m=None, length
     position; distances between counted objects come from the same positions.
     """
     import threading
+
     from python.dcm.agent_tools import message_dict
     from python.dcm.camera_geometry import camera_calibration, ground_point
     from python.dcm.target_motion import operating_defaults
@@ -214,7 +215,7 @@ def survey_count(executor, visual_query, shape='rectangle', width_m=None, length
                                          found['source_width'], found['source_height'])
                     if point is not None:
                         sightings.append(point)
-            except Exception as error:  # one bad frame must not stop the survey
+            except Exception as error:  # noqa: BLE001 - one bad frame must not stop the survey worker
                 errors.append(str(error)[:200])
                 done.wait(1.0)
 
@@ -233,7 +234,7 @@ def survey_count(executor, visual_query, shape='rectangle', width_m=None, length
                 'sightings_inside_area': len(inside), 'lane_spacing_m': pattern['lane_spacing_m'],
                 'altitude_agl_m': altitude, 'camera': camera, 'path_completed': flight['status'] == 'SUCCEEDED',
                 **({'area_assumed': assumed} if assumed else {}),
-                'method': 'VLM boxes projected to flat ground, merged within %.0f m; positions approximate' % MERGE_RADIUS_M,
+                'method': f'VLM boxes projected to flat ground, merged within {MERGE_RADIUS_M:.0f} m; positions approximate',
                 **({'frame_errors': errors[:3]} if errors else {})}
     status = flight['status'] if flight['status'] != 'SUCCEEDED' or frames else 'OBSERVATION_UNAVAILABLE'
     return {'status': status, 'message': flight.get('message', ''), 'evidence': evidence}

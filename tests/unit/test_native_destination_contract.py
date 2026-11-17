@@ -1,8 +1,8 @@
 """The generated JSON contract must include the executor's prerequisites."""
-import copy
 import pytest
 from jsonschema import Draft202012Validator
-from python.dcm.agent_tools import decision_tools,validate_call
+
+from python.dcm.agent_tools import decision_tools, validate_call
 from python.dcm.destinations import canonical_destination_arguments
 
 CONTEXT={'targets':[{'target_id':'measured'}],'registered_waypoints':{

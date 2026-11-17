@@ -3,10 +3,10 @@
 The model selects a target and outcome. These bounded controllers consume
 sensor geometry and dispatch ordinary Drone API actions with runtime provenance.
 """
+import json
 import math
 import threading
 import time
-import json
 from pathlib import Path
 
 
@@ -348,7 +348,7 @@ class TargetMotion:
                     return fail('Operator interrupted before target camera observation.')
                 observed = self.client.localize_target(description, new_target=False)
                 if not isinstance(observed, dict):
-                    raise ValueError('Camera localization returned no structured measurement')
+                    raise ValueError('Camera localization returned no structured measurement')  # noqa: TRY004 - handled as a ValueError step failure
                 step.update(found=observed.get('found', False), target_id=observed.get('target_id'),
                             reason=observed.get('reason'))
                 if self.interrupted():
@@ -423,7 +423,7 @@ class TargetMotion:
             while not done.is_set():
                 try:
                     metrics.observe(self.client.state())
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - orbit sampler must keep running; errors are reported
                     errors.append(str(error))
                 done.wait(0.2)
         thread = threading.Thread(target=sample, daemon=True)

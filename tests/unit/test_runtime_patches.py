@@ -1,7 +1,8 @@
 """A tracked dependency fix is reproducible; unrelated edits are never erased."""
 import subprocess
-from pathlib import Path
+
 import pytest
+
 from python.dcm.runtime_patches import apply_runtime_patch
 
 

@@ -1,7 +1,8 @@
 """Directional image acquisition owns orientation, never implicit departure."""
 import pytest
-from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
 from test_direct_agent import FakeClient, context
+
+from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
 
 
 def test_airborne_orientation_finishes_before_localization():

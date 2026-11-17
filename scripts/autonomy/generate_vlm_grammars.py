@@ -15,7 +15,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from python.perception.vlm import CONDITION_SCHEMA, COUNT_SCHEMA, DESCRIPTION_SCHEMA, PIXEL_BOX_SCHEMA, PIXEL_BOXES_SCHEMA
+from python.perception.vlm import (
+    CONDITION_SCHEMA,
+    COUNT_SCHEMA,
+    DESCRIPTION_SCHEMA,
+    PIXEL_BOX_SCHEMA,
+    PIXEL_BOXES_SCHEMA,
+)
 
 CONVERTER = r'''
 #include "json-schema-to-grammar.h"

@@ -293,7 +293,7 @@ def main():
             for name, timeout in (('evaluation',120),('camera',5),('autonomy',15),('simulator',20)):
                 try:
                     stop_owned(processes.get(name), timeout=timeout, tracked=tracked.get(name, ()))
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - stop every owned process before reporting
                     cleanup_errors.append(name + ': ' + str(error))
             if cleanup_errors:
                 print('Cleanup needs review: ' + '; '.join(cleanup_errors), flush=True)

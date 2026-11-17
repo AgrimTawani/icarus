@@ -112,10 +112,10 @@ def test_actual_camera_captures_keep_separate_trackers_and_shared_model(tmp_path
 
 @pytest.mark.parametrize('model_id', ['yolo11n', 'yolo11s'])
 def test_normalized_result_reports_selected_model_not_hardcoded_nano(tmp_path, model_id):
-    from python.perception.edge_vision import detect_edge_image, UniqueTrackCounter
+    from python.perception.edge_vision import UniqueTrackCounter, detect_edge_image
     frame = tmp_path / 'input.ppm'
     frame.write_bytes(b'P6\n1 1\n255\n\xff\xff\xff')
-    values = SimpleNamespace(tolist=lambda: [])
+    values = SimpleNamespace(tolist=list)
     output = SimpleNamespace(names={}, boxes=SimpleNamespace(cls=values, conf=values, xyxy=values), orig_shape=(1,1))
     runtime = SimpleNamespace(prepare=lambda **kw: None, selected='cpu',
         artifact={'path': str(tmp_path / (model_id + '.pt')), 'repository': 'ultralytics/yolo11', 'sha256': 'pinned'},

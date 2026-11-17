@@ -186,7 +186,7 @@ def capture_context(client, include_geometry=False, include_waypoints=False):
         'launch': resolve_reference(context['state'], 'launch', getattr(client, '_takeoff_reference', None))}
     from python.dcm.destinations import catalogue_context
     context['registered_waypoints'] = catalogue_context(include_waypoints)
-    context['detector_classes'] = getattr(client, 'camera_detector_classes', lambda: [])()
+    context['detector_classes'] = getattr(client, 'camera_detector_classes', list)()
     context["now_unix_ms"] = now
     # Model feedback is a view of telemetry, not a protobuf dump. Preserve
     # decisions' measurements and validity; transport counters, duplicate

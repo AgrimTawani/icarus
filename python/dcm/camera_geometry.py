@@ -5,9 +5,9 @@ optical forward +X, image right -Y, image down -Z. Unknown inputs stay unknown.
 """
 import json
 import math
+import xml.etree.ElementTree as ET
 from functools import lru_cache
 from pathlib import Path
-import xml.etree.ElementTree as ET
 
 _MODEL = Path(__file__).resolve().parents[2] / 'simulation/models/akshu_compact_sitl/model.sdf'
 _NAMES = {'forward_d435i': 'd435i', 'downward_brio': 'brio_down'}

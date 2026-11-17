@@ -1,9 +1,15 @@
 """Opaque tool handles are supplied as exact choices, never guessed/repaired."""
 import copy
 
-from python.dcm.agent_tools import TOOLS, decision_tools, known_target_ids, validate_call
-from python.dcm.fly import AgentSession, fly_mission
 from test_direct_agent import FakeClient, call, context
+
+from python.dcm.agent_tools import (
+    TOOLS,
+    decision_tools,
+    known_target_ids,
+    validate_call,
+)
+from python.dcm.fly import AgentSession, fly_mission
 
 
 def prop(catalog, tool, field):
@@ -122,8 +128,9 @@ def test_orbit_catalog_requires_visual_intent_and_reference_workflows_are_not_ba
 
 
 def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monkeypatch):
-    from python.dcm.agent_tools import ToolExecutor
     from test_direct_agent import Runtime
+
+    from python.dcm.agent_tools import ToolExecutor
     cases = [
         ('orbit', {'destination': {'type':'home'}, 'radius_m':3, 'altitude_agl_m':8}, {}, 'camera'),
         ('takeoff', {'target_altitude_agl_m': 3, 'maximum_climb_rate_mps': 3},
@@ -141,7 +148,7 @@ def test_exact_decision_contract_rejects_invalid_calls_before_any_executor(monke
         runtime = Runtime(call(name, **arguments),
                           call('finish', outcome='incomplete', message='Invalid arguments.'))
         fly_mission(client, runtime, session.mission, session=session,
-                    context_provider=lambda c: {**context(c), **extra_context},
+                    context_provider=lambda c, extra_context=extra_context: {**context(c), **extra_context},
                     echo=lambda *args: None)
         assert not client.sent
         assert not session.actions

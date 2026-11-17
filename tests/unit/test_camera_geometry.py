@@ -1,7 +1,13 @@
 import copy
 import math
 import unittest
-from python.dcm.camera_geometry import camera_calibration, orbit_camera_feasibility, project_point, resolve_reference
+
+from python.dcm.camera_geometry import (
+    camera_calibration,
+    orbit_camera_feasibility,
+    project_point,
+    resolve_reference,
+)
 
 
 def state():

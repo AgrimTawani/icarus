@@ -1,8 +1,9 @@
 """Saved navigation poses are retrieved explicitly, not visual object context."""
 import json
+
+from test_direct_agent import FakeClient, Runtime, call, run
+
 from python.dcm.destinations import catalogue_context
-from python.dcm.fly import AgentSession, fly_mission
-from test_direct_agent import FakeClient, Runtime, call, context, run
 
 
 def catalogue(tmp_path,monkeypatch):

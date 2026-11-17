@@ -1,8 +1,6 @@
 """The state/perception sampler must outlive one slow Drone API reply."""
 import json
-import tempfile
 import time
-from pathlib import Path
 from types import SimpleNamespace
 
 import grpc
