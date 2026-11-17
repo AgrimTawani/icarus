@@ -265,7 +265,6 @@ class CloudRuntime:
         return {key: message[key] for key in ("role", "content", "tool_calls") if key in message}
 
 
-SCHEMA_REJECTION_MARKERS = ("response_format", "json_schema")
 RESULT_TYPES = ("boolean", "count", "description", "pixel_box", "pixel_boxes")
 PIXEL_FORMAT = "json_pixel_xyxy"
 
@@ -276,7 +275,7 @@ class CloudVision:
     Same `complete` surface as `ResidentVision`, so the camera tools keep their
     prompts and answer schemas. The tools hand over a llama.cpp grammar; it is
     mapped back to the JSON schema it was generated from and sent as a strict
-    `json_schema` response format. A provider that rejects that is retried once
+    `json_schema` response format. A provider that answers that with a 400 is retried once
     with `json_object` plus the schema in the prompt, and remembered.
     """
 
@@ -360,9 +359,13 @@ class CloudVision:
                             "name": f"icarus_{kind}", "strict": True, "schema": schema}}, text)
                         return
                     except RejectedRequest as failure:
-                        if not any(marker in failure.detail for marker in SCHEMA_REJECTION_MARKERS):
+                        if failure.status != 400:
                             raise
+                        # Any 400 to a json_schema request may be the schema; json_object is
+                        # remembered only if it succeeds, so an unrelated 400 changes nothing.
+                        outcome["payload"] = post({"type": "json_object"}, fallback)
                         self._json_object = True
+                        return
                 outcome["payload"] = post({"type": "json_object"}, fallback)
             except BaseException as failure:  # noqa: BLE001 - relayed to the asking thread
                 outcome["failure"] = failure

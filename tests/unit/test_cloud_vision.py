@@ -154,12 +154,34 @@ def test_strict_schema_rejected_falls_back_to_json_object(fake_http):
     assert len(fake_http.requests) == 3 and fake_http.last_json["response_format"] == {"type": "json_object"}
 
 
-def test_unrelated_400_is_not_a_fallback(fake_http):
-    fake_http.script = [http_error(400, json.dumps({"error": {"message": "image too large"}}))]
-    with pytest.raises(RuntimeError, match="HTTP 400") as raised:
+def test_any_400_to_a_schema_request_falls_back_to_json_object(fake_http):
+    reply = completion({"role": "assistant", "content": '{"seen": "x", "found": false}'}, finish="stop")
+    fake_http.script = [http_error(400, json.dumps({"error": {"message": "bad request"}})), reply]
+    vision = make_vision()
+    assert vision.complete(PPM_B64, "Q?", "", 160, grammar=measurement_grammar("boolean")) \
+        == '{"seen": "x", "found": false}'
+    assert len(fake_http.requests) == 2 and fake_http.last_json["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.parametrize("status", [404, 422])
+def test_other_rejections_raise_without_fallback(fake_http, status):
+    fake_http.script = [http_error(status, "response_format json_schema")]
+    with pytest.raises(RuntimeError, match=f"HTTP {status}") as raised:
         make_vision().complete(PPM_B64, "Q?", "", 160, grammar=measurement_grammar("boolean"))
     assert len(fake_http.requests) == 1
-    assert "image too large" not in str(raised.value) and "vk-secret" not in str(raised.value)
+    assert "json_schema" not in str(raised.value) and "vk-secret" not in str(raised.value)
+
+
+def test_failed_fallback_does_not_drop_strict_schemas(fake_http):
+    reply = completion({"role": "assistant", "content": '{"seen": "x", "found": true}'}, finish="stop")
+    fake_http.script = [http_error(400, "image too large"), http_error(400, "image too large")]
+    vision = make_vision()
+    with pytest.raises(RuntimeError, match="HTTP 400") as raised:
+        vision.complete(PPM_B64, "Q?", "", 160, grammar=measurement_grammar("boolean"))
+    assert "image too large" not in str(raised.value) and len(fake_http.requests) == 2
+    fake_http.script = [reply]
+    vision.complete(PPM_B64, "Q?", "", 160, grammar=measurement_grammar("boolean"))
+    assert len(fake_http.requests) == 3 and fake_http.last_json["response_format"]["type"] == "json_schema"
 
 
 def test_second_rejection_after_fallback_raises(fake_http):
