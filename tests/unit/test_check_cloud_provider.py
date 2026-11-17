@@ -34,9 +34,17 @@ def test_check_summary_passes_only_when_all_pass():
     assert check_cloud_provider.summarise([("a", True, 1), ("b", True, 2)]) == (0, "PASS")
 
 
+def test_exit_codes_are_distinct_for_pass_fail_and_skip_only():
+    summarise = check_cloud_provider.summarise
+    assert summarise([("a", True, 1)])[0] == 0
+    assert summarise([("a", False, 1)])[0] == 1
+    assert summarise([("a", None, 0)])[0] == 3
+    assert summarise([("a", None, 0), ("b", False, 1)])[0] == 1
+
+
 def test_check_summary_never_counts_a_skip_as_a_pass():
     status, verdict = check_cloud_provider.summarise([("a", True, 1), ("box", None, 0)])
-    assert status == 0 and verdict.startswith("NO FAILURES") and "box" in verdict and verdict != "PASS"
+    assert status == 3 and verdict.startswith("NO FAILURES") and "box" in verdict and verdict != "PASS"
     status, verdict = check_cloud_provider.summarise([("a", False, 1), ("box", None, 0)])
     assert status == 1 and verdict == "FAIL a; skipped (not verified): box"
 
@@ -166,7 +174,7 @@ def test_missing_frames_are_skipped_not_passed(monkeypatch, capsys, tmp_path):
     labels = frames(tmp_path, names=())
     code, out = run_main(monkeypatch, capsys, FakeCloud(), tmp_path, labels)
     lines = out.out.splitlines()
-    assert code == 0 and "SKIP condition_true (frames not found:" in out.out
+    assert code == 3 and "SKIP condition_true (frames not found:" in out.out
     assert "SKIP pixel_box (frames not found:" in out.out
     assert lines[-1].startswith("RESULT NO FAILURES, but skipped (not verified): condition_true")
 
@@ -204,6 +212,111 @@ def test_missing_settings_fail_cleanly_naming_the_variable(monkeypatch, capsys):
     assert check_cloud_provider.main([]) == 2
     err = capsys.readouterr().err
     assert "ICARUS_LLM_BASE_URL is not set" in err and "Traceback" not in err
+
+
+def test_a_non_takeoff_call_is_skipped_by_validation_not_passed(monkeypatch, capsys, tmp_path):
+    labels = frames(tmp_path)
+    hold = {"role": "assistant", "tool_calls": [{"function": {"name": "hold", "arguments": "{}"}}]}
+    code, out = run_main(monkeypatch, capsys, FakeCloud(reply=hold), tmp_path, labels)
+    assert "FAIL catalogue_takeoff" in out.out and "SKIP validate_call (the call was hold, not takeoff" in out.out
+    assert "PASS validate_call" not in out.out and code == 1
+
+
+def test_an_invalid_setting_exits_2_naming_it_without_the_missing_hint(monkeypatch, capsys, tmp_path):
+    from python.model_runtime.cloud_config import CloudSettings
+
+    environ = {"ICARUS_LLM_BASE_URL": "http://api.example.com/v1", "ICARUS_LLM_API_KEY": KEY,
+               "ICARUS_LLM_MODEL": "m"}
+    monkeypatch.setattr(check_cloud_provider, "make_runtime",
+                        lambda kind, manifest, **kw: CloudSettings.from_manifest(manifest, environ=environ))
+    assert check_cloud_provider.main([]) == 2
+    err = capsys.readouterr().err
+    assert "ICARUS_LLM_BASE_URL must be an https:// URL" in err and KEY not in err and "Traceback" not in err
+
+
+def test_the_catalogue_check_is_built_from_a_flight_shaped_context():
+    context = check_cloud_provider.mission_context()
+    assert context["motion_limits"]["maximum_climb_speed_mps"] > 0
+    assert context["motion_limits"]["maximum_horizontal_speed_mps"] > 0
+    assert "person" in context["detector_classes"] and context["defaults"]["takeoff_altitude_agl_m"] == 3.0
+    messages, tools = check_cloud_provider.takeoff_request(context)
+    schemas = {tool["function"]["name"]: tool["function"]["parameters"] for tool in tools}
+    # the session's limits and detector vocabulary are bound into the schemas the provider sees
+    assert schemas["detect"]["properties"]["classes"]["items"]["enum"] == context["detector_classes"]
+    assert schemas["takeoff"]["properties"]["maximum_climb_rate_mps"]["maximum"] == (
+        context["motion_limits"]["maximum_climb_speed_mps"])
+    assert check_cloud_provider.takeoff_request()[1] == tools
+
+
+# ---- the real runtime over a fake network: a refusal's reason is shown, the key never is ----
+
+def run_real(monkeypatch, capsys, tmp_path, answers, manifest_retries=0):
+    """Drive `main` with the real CloudRuntime; `answers(path)` is a body to return or an HTTP error code and body."""
+    import io
+    import urllib.error
+
+    from test_cloud_runtime import Reply
+
+    labels = frames(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    block = json.loads((SCRIPTS.parents[1] / "config/dcm/agent-runtime.json").read_text())
+    block["cloud"]["max_retries"] = manifest_retries
+    manifest.write_text(json.dumps(block))
+    for name, value in (("ICARUS_LLM_BASE_URL", "https://api.example.com/v1"), ("ICARUS_LLM_API_KEY", KEY),
+                        ("ICARUS_LLM_MODEL", "m")):
+        monkeypatch.setenv(name, value)
+    for name in ("ICARUS_VLM_BASE_URL", "ICARUS_VLM_API_KEY", "ICARUS_VLM_MODEL", "ICARUS_VLM_GROUNDING_FORMAT"):
+        monkeypatch.delenv(name, raising=False)
+    seen = []
+
+    def fake_open(request, timeout=None):
+        seen.append(request)
+        outcome = answers(request.full_url)
+        if isinstance(outcome, tuple):
+            code, body = outcome
+            raise urllib.error.HTTPError(request.full_url, code, "err", {}, io.BytesIO(body.encode()))
+        return Reply(outcome)
+
+    monkeypatch.setattr("python.model_runtime.cloud._open", fake_open)
+    code = check_cloud_provider.main(["--manifest", str(manifest), "--frames-dir", str(tmp_path),
+                                      "--labels", str(labels)])
+    return code, capsys.readouterr(), seen
+
+
+@pytest.mark.parametrize("status,reason", [(400, "oneof is not supported"), (500, "internal error")])
+def test_a_provider_refusal_never_leaks_the_key_and_a_400_shows_its_reason(monkeypatch, capsys, tmp_path, status, reason):
+    body = json.dumps({"error": {"message": f"{reason}; you sent Authorization: Bearer {KEY}"}})
+
+    def answers(url):
+        return {"data": []} if url.endswith("/models") else (status, body)
+
+    code, out, seen = run_real(monkeypatch, capsys, tmp_path, answers)
+    shown = out.out + out.err
+    assert code == 1 and KEY not in shown and KEY.upper() not in shown
+    assert any(request.full_url.endswith("/chat/completions") for request in seen)  # the real runtime really ran
+    assert f"HTTP {status}" in out.out
+    if status == 400:
+        assert "provider said: " in out.out and "oneof is not supported" in out.out
+    else:
+        assert "provider said" not in out.out  # a 500 is retried and reported without its body
+
+
+def test_a_rejected_key_never_leaks_the_key(monkeypatch, capsys, tmp_path):
+    body = json.dumps({"error": f"invalid api key {KEY}"})
+    code, out, _ = run_real(monkeypatch, capsys, tmp_path, lambda url: (401, body))
+    assert code == 1 and "FAIL provider_reachable" in out.out and "HTTP 401" in out.out
+    assert KEY not in out.out + out.err
+
+
+def test_the_provider_reason_is_one_line_and_capped(monkeypatch, capsys, tmp_path):
+    long_reason = "oneof " + "x\n" * 400
+
+    def answers(url):
+        return {"data": []} if url.endswith("/models") else (400, json.dumps({"error": long_reason}))
+
+    code, out, _ = run_real(monkeypatch, capsys, tmp_path, answers)
+    line = next(line for line in out.out.splitlines() if line.startswith("FAIL catalogue_takeoff"))
+    assert "oneof" in line and len(line) < 700
 
 
 # ---- replay --runtime cloud ----
