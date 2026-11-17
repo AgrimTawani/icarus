@@ -17,9 +17,10 @@ from python.dcm.fly import (
     session_episode_summary,
     summarize,
 )
-from python.dcm.llama_runtime import LlamaCppRuntime
 from python.dcm.operator_control import OperatorInterrupt, operator_safety_command
-from python.dcm.runtime_config import RuntimeDescriptor, DIRECT_PROMPT_VERSION, DIRECT_TOOL_VERSION
+from python.dcm.runtime_config import DIRECT_PROMPT_VERSION, DIRECT_TOOL_VERSION
+from python.model_runtime.cloud_config import MissingCloudSetting
+from python.model_runtime.select import ALIASES, KINDS, make_runtime, runtime_kind
 
 DEFAULT_MANIFEST = ROOT / "config/dcm/agent-runtime.json"
 BANNER = """Icarus drone pilot — direct feedback agent
@@ -42,28 +43,37 @@ def _load_mission_client():
 
 
 def build_runtime(args):
-    overrides = {
-        "contract_version": "direct-agent-v1",
-        "prompt_version": DIRECT_PROMPT_VERSION,
-        "vocabulary_version": DIRECT_TOOL_VERSION,
-    }
+    """Return `(runtime, record)`: the local llama server with its descriptor, or the hosted model with its provenance."""
+    overrides = {}
     if args.timeout_ms is not None:
         overrides["deadline_ms"] = args.timeout_ms
     if args.context_length is not None:
         overrides["context_length"] = args.context_length
-    descriptor = RuntimeDescriptor.from_manifest(
-        args.manifest, role="primary", **overrides
-    )
-    return LlamaCppRuntime(descriptor), descriptor
+    kind = runtime_kind(args.runtime)
+    if kind == "local":
+        overrides.update(
+            role="primary",
+            contract_version="direct-agent-v1",
+            prompt_version=DIRECT_PROMPT_VERSION,
+            vocabulary_version=DIRECT_TOOL_VERSION,
+        )
+    try:
+        return make_runtime(kind, args.manifest, **overrides)
+    except MissingCloudSetting as error:
+        print(f"dcm-fly: {error}; use --runtime local to fly offline", file=sys.stderr)
+        raise SystemExit(1) from None
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", default="127.0.0.1:50051")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    # Keep the user's familiar command valid, with only one live implementation.
     parser.add_argument(
-        "--runtime", choices=["llama"], default="llama", help=argparse.SUPPRESS
+        "--runtime",
+        type=lambda name: ALIASES.get(name, name),  # `llama` is the old name for `local`
+        choices=KINDS,
+        default="cloud",
+        help="mission model: the hosted API from ICARUS_LLM_* (default) or the local llama.cpp server (offline)",
     )
     parser.add_argument(
         "--profile", choices=["default", "edge-vision"], default="edge-vision"
@@ -77,12 +87,27 @@ def main():
     parser.add_argument("--mission")
     parser.add_argument("--show-prompts", action="store_true")
     parser.add_argument("--json", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.max_decisions <= 0:
         parser.error("--max-decisions must be positive")
-    runtime, descriptor = build_runtime(args)
+    return args
+
+
+def main():
+    args = parse_args()
+    runtime, record = build_runtime(args)
+    if args.runtime == "cloud":
+        # Fail before the drone is connected or its control is taken.
+        try:
+            runtime.start()
+        except RuntimeError as error:
+            print(f"dcm-fly: {error}", file=sys.stderr)
+            raise SystemExit(1) from None
+        model = f"{record['model']} via {record['provider_host']}"
+    else:
+        model = record.model_id
     print(
-        f"Model: {descriptor.model_id}; architecture: direct-agent-v1; mode: {args.mode}",
+        f"Model: {model}; architecture: direct-agent-v1; mode: {args.mode}",
         flush=True,
     )
     client = _load_mission_client()(

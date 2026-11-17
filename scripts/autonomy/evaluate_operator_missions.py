@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from python.dcm.fly import AgentSession, fly_mission, safe_exit_recovery, session_episode_summary
-from python.dcm.llama_runtime import LlamaCppRuntime
-from python.dcm.runtime_config import RuntimeDescriptor
+from python.model_runtime.cloud_config import MissingCloudSetting
+from python.model_runtime.select import ALIASES, KINDS, make_runtime
 
 
 def fixture_reply(item, question):
@@ -58,6 +58,8 @@ def main():
     parser.add_argument('--cases', type=Path, default=ROOT / 'tests/fixtures/operator_phase1_missions.json')
     parser.add_argument('--case', action='append')
     parser.add_argument('--manifest', type=Path, default=ROOT / 'config/dcm/agent-runtime.json')
+    parser.add_argument('--runtime', type=lambda name: ALIASES.get(name, name), choices=KINDS, default='cloud',
+                        help='mission model: the hosted API from ICARUS_LLM_* (default) or the local llama.cpp server')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--max-decisions', type=int, default=32)
     parser.add_argument('--clarification-answer', action='append', default=[],
@@ -73,8 +75,15 @@ def main():
     spec = importlib.util.spec_from_file_location('icarus_eval_client', ROOT / 'scripts/autonomy/run_mission.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    descriptor = RuntimeDescriptor.from_manifest(args.manifest)
-    runtime = LlamaCppRuntime(descriptor)
+    try:
+        runtime, descriptor = make_runtime(args.runtime, args.manifest)
+    except MissingCloudSetting as error:
+        parser.exit(1, f'{parser.prog}: {error}\n')
+    if args.runtime == 'cloud':
+        try:
+            runtime.start()  # fail before any drone is connected; local starts after the camera detector
+        except RuntimeError as error:
+            parser.exit(1, f'{parser.prog}: {error}\n')
     runtime_started = False
     results = []
     paths = [*sorted((ROOT / 'python/dcm').glob('*.py')),
@@ -91,9 +100,10 @@ def main():
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
     # Pin the actual serving executable and native parser library as well as
     # the upstream revision; a tracked backend patch changes the latter.
-    paths.append(runtime.binary.resolve())
-    paths.extend(sorted((runtime.binary.parent).glob('libllama-common.so.*'))[:1])
-    paths.extend(sorted((ROOT / 'config/dependencies/patches').glob('*.patch')))
+    if args.runtime == 'local':
+        paths.append(runtime.binary.resolve())
+        paths.extend(sorted((runtime.binary.parent).glob('libllama-common.so.*'))[:1])
+        paths.extend(sorted((ROOT / 'config/dependencies/patches').glob('*.patch')))
     if os.environ.get('ICARUS_WAYPOINTS_FILE'):
         paths.append(Path(os.environ['ICARUS_WAYPOINTS_FILE']).resolve())
     # Camera artifacts may be provisioned outside the checkout or supplied as
@@ -101,7 +111,7 @@ def main():
     paths.append(Path(os.environ.get('EDGE_VISION_MANIFEST') or
                       (Path.home() / 'models/edge/MANIFEST.json')).resolve())
     provenance = {
-        'runtime': descriptor.as_record(),
+        'runtime': descriptor.as_record() if args.runtime == 'local' else descriptor,
         'git_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
         'source_sha256': {(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p)):
                           hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},

@@ -16,7 +16,7 @@ def test_failed_exit_recovery_cannot_seal_a_successful_episode(raises):
     recovery = Mock(side_effect=RuntimeError('recovery transport failed')) if raises else Mock(
         return_value={'status': 'FAILED', 'message': 'landing not confirmed'})
     with (
-        patch('sys.argv', ['dcm-fly', '--mission', 'test']),
+        patch('sys.argv', ['dcm-fly', '--runtime', 'local', '--mission', 'test']),
         patch.object(fly_cli, '_load_mission_client', return_value=lambda *a: client),
         patch.object(fly_cli, 'build_runtime', return_value=(runtime, SimpleNamespace(model_id='test'))),
         patch.object(fly_cli, 'fly_mission', return_value=result),
@@ -41,7 +41,7 @@ def test_interrupted_or_failed_first_mission_is_never_sealed_completed(failure):
     runtime.start.side_effect = failure
     descriptor = SimpleNamespace(model_id='test')
     with (
-        patch('sys.argv', ['dcm-fly', '--mission', 'test']),
+        patch('sys.argv', ['dcm-fly', '--runtime', 'local', '--mission', 'test']),
         patch.object(fly_cli, '_load_mission_client', return_value=lambda *a: client),
         patch.object(fly_cli, 'build_runtime', return_value=(runtime, descriptor)),
         patch.object(fly_cli, 'safe_exit_recovery', return_value={'status': 'SUCCEEDED'}),
@@ -71,7 +71,7 @@ def test_console_model_cleanup_failure_still_closes_client():
     }
     descriptor = SimpleNamespace(model_id="test")
     with (
-        patch("sys.argv", ["dcm-fly", "--mission", "test"]),
+        patch("sys.argv", ["dcm-fly", "--runtime", "local", "--mission", "test"]),
         patch.object(fly_cli, "_load_mission_client", return_value=lambda *a: client),
         patch.object(fly_cli, "build_runtime", return_value=(runtime, descriptor)),
         patch.object(fly_cli, "fly_mission", return_value=result),
