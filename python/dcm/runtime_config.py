@@ -17,6 +17,10 @@ class ContextBudgetExceeded(RuntimeError):
     """Token counting could not fit a request; inference has not started."""
 
 
+class IncompleteModelResponse(RuntimeError):
+    """No tool executed; one concise retry may repair unusable model output."""
+
+
 @dataclasses.dataclass(frozen=True)
 class RuntimeDescriptor:
     """Everything that must be recorded to make a decision reproducible."""

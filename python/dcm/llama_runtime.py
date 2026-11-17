@@ -34,16 +34,17 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from python.dcm.runtime_config import ContextBudgetExceeded, DeadlineExceeded, RuntimeDescriptor
+from python.dcm.runtime_config import (  # noqa: F401 - IncompleteModelResponse is re-exported
+    ContextBudgetExceeded,
+    DeadlineExceeded,
+    IncompleteModelResponse,
+    RuntimeDescriptor,
+)
 
 DEFAULT_BINARY = (Path(__file__).resolve().parents[2]
                   / "third_party/llama.cpp/build/bin/llama-server")
 STARTUP_TIMEOUT_S = 180
 STDERR_TAIL_BYTES = 64 * 1024
-
-
-class IncompleteModelResponse(RuntimeError):
-    """No tool executed; one concise retry may repair unusable model output."""
 
 
 VISION_IMAGE_MAX_TOKENS = 1024

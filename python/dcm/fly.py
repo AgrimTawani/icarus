@@ -224,8 +224,7 @@ def fly_mission(
     interrupt.arm(client)
     executor = ToolExecutor(client, interrupt, session=session)
     attach_vision(client, runtime)
-    from python.dcm.llama_runtime import IncompleteModelResponse
-    from python.dcm.runtime_config import ContextBudgetExceeded
+    from python.dcm.runtime_config import ContextBudgetExceeded, IncompleteModelResponse
     failures = 0
     repeated_failures = {}  # identical call -> failures, whatever ran in between
     try:
