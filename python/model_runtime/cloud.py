@@ -31,6 +31,7 @@ AUTH_STATUS = frozenset({401, 403})
 CONTEXT_MARKERS = ("context_length_exceeded", "maximum context length", "too many tokens", "context window")
 INCOMPLETE_MARKERS = ("tool_use_failed", "failed to call a function")
 ERROR_BODY_LIMIT = 4096
+MAX_TOKENS = 768  # the reply cap LlamaCppRuntime.decide uses
 
 
 def _host(url):
@@ -146,8 +147,10 @@ class CloudRuntime:
         except urllib.error.HTTPError as failure:
             status = failure.code
             failure.close()
-            reason = f"rejected the API key (HTTP {status})" if status in AUTH_STATUS else f"returned HTTP {status}"
-            raise RuntimeError(f"cloud provider {host} {reason}; use --runtime local to fly offline") from None
+            if status in AUTH_STATUS:
+                raise RuntimeError(f"cloud provider {host} rejected the API key (HTTP {status}); "
+                                   "use --runtime local to fly offline") from None
+            # Any other status means the provider answered; some have no /models route.
         except (urllib.error.URLError, TimeoutError) as failure:
             reason = failure.reason if isinstance(failure, urllib.error.URLError) else failure
             raise RuntimeError(f"cannot reach cloud provider {host} ({' '.join(str(reason).split())[:200]}); "
@@ -172,7 +175,7 @@ class CloudRuntime:
         model has no thinking switch to turn off.
         """
         body = {"model": self.settings.model, "messages": messages, "tools": tools,
-                "tool_choice": "required", "temperature": 0}
+                "tool_choice": "required", "temperature": 0, "max_tokens": MAX_TOKENS}
         timeout_s = self.settings.deadline_ms / 1000
         abandoned, finished = threading.Event(), threading.Event()
         outcome = {}

@@ -116,7 +116,7 @@ def test_request_body_is_plain_openai(fake_http):
     runtime().decide(USER, TOOLS)
     body = fake_http.last_json
     assert body["model"] == "gemma4" and body["tool_choice"] == "required" and body["temperature"] == 0
-    assert body["messages"] == USER and body["tools"] == TOOLS
+    assert body["messages"] == USER and body["tools"] == TOOLS and body["max_tokens"] == 768
     for llama_only in ("cache_prompt", "id_slot", "chat_template_kwargs", "reasoning_budget_tokens",
                        "top_k", "min_p", "repeat_penalty", "parallel_tool_calls"):
         assert llama_only not in body
@@ -314,11 +314,18 @@ def test_start_unreachable_names_host_and_local_fallback(fake_http):
     assert "api.sarvam.ai" in str(raised.value) and "--runtime local" in str(raised.value)
 
 
-def test_start_rejected_key_hides_key(fake_http):
-    fake_http.script = [http_error(401, KEY)]
+@pytest.mark.parametrize("code", [401, 403])
+def test_start_rejected_key_hides_key(fake_http, code):
+    fake_http.script = [http_error(code, KEY)]
     with pytest.raises(RuntimeError) as raised:
         CloudRuntime(settings()).start()
-    assert "401" in str(raised.value) and KEY not in str(raised.value)
+    assert str(code) in str(raised.value) and KEY not in str(raised.value)
+
+
+@pytest.mark.parametrize("code", [404, 405])
+def test_start_tolerates_a_provider_without_a_models_route(fake_http, code):
+    fake_http.script = [http_error(code)]
+    CloudRuntime(settings()).start()
 
 
 def test_start_without_scheme_asks_for_https():
