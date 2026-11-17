@@ -375,6 +375,97 @@ def test_cloud_replay_uses_the_recorded_request_unchanged(monkeypatch, capsys, t
     assert messages == recorded("takeoff")["messages"] and tools == recorded("takeoff")["tools"]
 
 
+class FailingReplayRuntime(FakeReplayRuntime):
+    """Fails the decisions whose position is in `fail_at`, like a provider that refuses or times out."""
+
+    def __init__(self, calls, fail_at, failure):
+        super().__init__(calls)
+        self.fail_at, self.failure, self.count = fail_at, failure, 0
+
+    def decide(self, messages, tools, *, concise=False):
+        self.count += 1
+        if self.count in self.fail_at:
+            raise self.failure
+        return super().decide(messages, tools)
+
+
+def test_cloud_replay_reports_a_failed_decision_and_carries_on(monkeypatch, capsys, tmp_path):
+    from python.model_runtime.cloud import RejectedRequest
+
+    failure = RejectedRequest("api.example.com returned HTTP 400", 400, "oneof")
+    runtime = FailingReplayRuntime([("hold", {})], fail_at={1}, failure=failure)
+    rows = replay_cloud(monkeypatch, capsys, tmp_path, runtime)
+    assert len(rows) == 3 and runtime.stopped
+    assert rows[0]["error"] == "RejectedRequest: api.example.com returned HTTP 400" and rows[0]["tool"] is None
+    assert rows[0]["recorded_tool"] == "takeoff" and rows[0]["prompt_total"] is None
+    assert "error" not in rows[1] and rows[1]["tool"] == "hold"
+    summary = rows[-1]
+    assert summary["errors"] == 1 and summary["steps"] == 2 and summary["same_tool_as_recorded"] == 1
+    assert summary["first_wall_ms"] is not None and summary["provider_host"] == "api.example.com"
+
+
+def test_cloud_replay_summary_still_prints_when_every_decision_fails(monkeypatch, capsys, tmp_path):
+    runtime = FailingReplayRuntime([], fail_at={1, 2}, failure=RuntimeError("api.example.com returned HTTP 503"))
+    rows = replay_cloud(monkeypatch, capsys, tmp_path, runtime)
+    assert [row.get("error") for row in rows[:2]] == ["RuntimeError: api.example.com returned HTTP 503"] * 2
+    assert rows[-1]["errors"] == 2 and rows[-1]["steps"] == 2 and rows[-1]["median_wall_ms_after_first"] is None
+    assert rows[-1]["same_tool_as_recorded"] == 0 and runtime.stopped
+
+
+def test_cloud_replay_errors_never_carry_the_key(monkeypatch, capsys, tmp_path):
+    from test_cloud_runtime import settings
+    from python.model_runtime.cloud import CloudRuntime
+
+    runtime = CloudRuntime(settings(api_key=KEY))
+
+    def refuse(request, timeout=None):
+        import io
+        import urllib.error
+        raise urllib.error.HTTPError(request.full_url, 400, "bad", {}, io.BytesIO(f"nope {KEY}".encode()))
+
+    monkeypatch.setattr("python.model_runtime.cloud._open", refuse)
+    runtime.start = lambda: None
+    episode = write_episode(tmp_path / "ep", [recorded("hold")])
+    monkeypatch.setattr(replay, "make_runtime", lambda kind, manifest, **kw: (runtime, runtime.descriptor_record))
+    monkeypatch.setattr("sys.argv", ["replay", str(episode), "--runtime", "cloud"])
+    replay.main()
+    out = capsys.readouterr()
+    assert "RejectedRequest" in out.out and KEY not in out.out + out.err
+
+
+def test_cloud_replay_unreadable_manifest_exits_2_without_a_traceback(monkeypatch, capsys, tmp_path):
+    episode = write_episode(tmp_path / "ep", [recorded("hold")])
+    for name, value in (("ICARUS_LLM_BASE_URL", "https://api.example.com/v1"), ("ICARUS_LLM_API_KEY", KEY),
+                        ("ICARUS_LLM_MODEL", "m")):
+        monkeypatch.setenv(name, value)
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not json")
+    no_cloud = tmp_path / "no_cloud.json"
+    no_cloud.write_text("{}")
+    for manifest in (tmp_path / "absent.json", broken, no_cloud):
+        monkeypatch.setattr("sys.argv", ["replay", str(episode), "--runtime", "cloud", "--manifest", str(manifest)])
+        with pytest.raises(SystemExit) as stop:
+            replay.main()
+        assert stop.value.code == 2
+        err = capsys.readouterr().err
+        assert "cannot read the cloud settings" in err and str(manifest) in err and "Traceback" not in err
+
+
+def test_cloud_replay_missing_settings_and_unreachable_provider_exit_2(monkeypatch, capsys, tmp_path):
+    episode = write_episode(tmp_path / "ep", [recorded("hold")])
+    for name in ("ICARUS_LLM_BASE_URL", "ICARUS_LLM_API_KEY", "ICARUS_LLM_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr("sys.argv", ["replay", str(episode), "--runtime", "cloud"])
+    with pytest.raises(SystemExit) as stop:
+        replay.main()
+    assert stop.value.code == 2 and "ICARUS_LLM_BASE_URL is not set" in capsys.readouterr().err
+    runtime = FakeCloud(fail_start="cloud provider api.example.com rejected the API key (HTTP 401)")
+    monkeypatch.setattr(replay, "make_runtime", lambda kind, manifest, **kw: (runtime, RECORD))
+    with pytest.raises(SystemExit) as stop:
+        replay.main()
+    assert stop.value.code == 2 and "HTTP 401" in capsys.readouterr().err
+
+
 def test_replay_defaults_to_the_local_runtime():
     assert replay.build_parser().parse_args(["episode"]).runtime == "local"
     assert replay.build_parser().parse_args(["episode", "--runtime", "llama"]).runtime == "local"

@@ -17,7 +17,9 @@ tries a prompt without installing it.
 
 With --runtime cloud the same requests go to the hosted model from ICARUS_LLM_* through
 CloudRuntime.decide instead (--server-args is ignored). Rows report the tokens the provider
-counted; prefill and generation times are not reported by providers and show as null.
+counted; prefill and generation times are not reported by providers and show as null. A decision
+the provider fails (refusal, timeout, outage) prints a row with an "error" field and the replay
+continues; the summary counts those as "errors". Settings problems exit with status 2.
 
   .venv/bin/python scripts/autonomy/replay_decision_latency.py logs/episodes/<id> --runtime cloud
 """
@@ -53,13 +55,18 @@ def arguments(function):
 
 
 @contextlib.contextmanager
-def started(runtime):
-    """Start a hosted-model runtime for the replay and always stop it."""
-    runtime.start()
+def stopping(runtime):
+    """Always stop a hosted-model runtime that the replay started."""
     try:
         yield runtime
     finally:
         runtime.stop()
+
+
+def fail(message):
+    """A one-line, key-free message on stderr and exit status 2: no traceback for a settings problem."""
+    print(f"replay_decision_latency: {' '.join(str(message).split())[:300]}", file=sys.stderr)
+    sys.exit(2)
 
 
 def build_parser():
@@ -86,7 +93,13 @@ def main():
         try:
             runtime, record = make_runtime("cloud", options.manifest)
         except MissingCloudSetting as failure:
-            sys.exit(f"replay_decision_latency: {failure}")
+            fail(failure)
+        except (OSError, KeyError, ValueError) as failure:
+            fail(f"cannot read the cloud settings from {options.manifest}: {type(failure).__name__} {failure}")
+        try:
+            runtime.start()
+        except RuntimeError as failure:
+            fail(failure)
     else:
         descriptor = RuntimeDescriptor.from_manifest(options.manifest, role="primary", contract_version="direct-agent-v1",
                                                    prompt_version="replay", vocabulary_version="replay")
@@ -96,7 +109,7 @@ def main():
     if current:
         from python.dcm.agent_context import system_prompt
         system = Path(options.system_file).read_text() if options.system_file else system_prompt()
-    with started(runtime) if cloud else runtime:
+    with stopping(runtime) if cloud else runtime:
       for episode in options.episode:
         static_tools = None
         for index, payload in enumerate(decisions(episode)):
@@ -108,8 +121,13 @@ def main():
             if current:
                 messages = [{"role": "system", "content": system}] + messages[1:]
             started_at = time.monotonic()
+            error = None
             if cloud:
-                message = runtime.decide(messages, tools)
+                runtime.last_stats = None
+                try:
+                    message = runtime.decide(messages, tools)
+                except Exception as failure:  # noqa: BLE001 - one failed decision must not end the replay
+                    message, error = {}, f"{type(failure).__name__}: {failure}"
                 stats = runtime.last_stats or {}
                 counts = {"prompt_total": stats.get("tokens_prompt"), "prefilled": stats.get("tokens_prefilled"),
                           "cached": stats.get("tokens_cached"), "prefill_ms": None,
@@ -137,16 +155,20 @@ def main():
                          "arguments": arguments(function), "recorded_arguments": arguments(was),
                          "text_before_call": len(message.get("content") or ""), **counts,
                          "tool": call, "recorded_tool": recorded,
-                         "recorded_ms": payload.get("latency_ms")})
+                         "recorded_ms": payload.get("latency_ms"),
+                         **({"error": " ".join(error.split())[:300]} if error else {})})
             print(json.dumps(rows[-1]), flush=True)
-    walls = [row["wall_ms"] for row in rows[1:]] or [rows[0]["wall_ms"]]
+    timed = [row for row in rows if "error" not in row]  # a failed decision has no latency worth timing
+    walls = [row["wall_ms"] for row in timed[1:]] or [row["wall_ms"] for row in timed[:1]]
     for row in rows:
-        if row["tool"] != row["recorded_tool"]:
+        if "error" not in row and row["tool"] != row["recorded_tool"]:
             print(f"DIFFERENT TOOL {row['episode']} step {row['step']}: recorded {row['recorded_tool']} "
                   f"{json.dumps(row['recorded_arguments'])} -> now {row['tool']} {json.dumps(row['arguments'])}")
-    provenance = {"provider_host": record["provider_host"], "model": record["model"]} if cloud else {}
-    print(json.dumps({**provenance, "server_args": options.server_args, "static_tools": options.static_tools, "median_wall_ms_after_first": statistics.median(walls),
-                      "first_wall_ms": rows[0]["wall_ms"],
+    provenance = ({"provider_host": record["provider_host"], "model": record["model"],
+                   "errors": len(rows) - len(timed)} if cloud else {})
+    print(json.dumps({**provenance, "server_args": options.server_args, "static_tools": options.static_tools,
+                      "median_wall_ms_after_first": statistics.median(walls) if walls else None,
+                      "first_wall_ms": timed[0]["wall_ms"] if timed else None,
                       "same_tool_as_recorded": sum(r["tool"] == r["recorded_tool"] for r in rows),
                       "same_call_as_recorded": sum(r["tool"] == r["recorded_tool"] and r["arguments"] == r["recorded_arguments"]
                                                    for r in rows if r["tool"] != "finish"),
