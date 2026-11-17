@@ -12,9 +12,9 @@ reply is dropped. The API key is sent only in the Authorization header; it is
 never put in a message, a stat or a record.
 """
 import base64
+import http.client
 import io
 import json
-import socket
 import threading
 import time
 import urllib.error
@@ -50,6 +50,26 @@ class RejectedRequest(RuntimeError):
         self.detail = detail
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect: urllib would copy the Authorization header to the new host."""
+
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def _open(request, timeout):
+    """urlopen without redirect following; every cloud request goes through here."""
+    return _OPENER.open(request, timeout=timeout)
+
+
+def _redirected(host, status):
+    return RuntimeError(f"{host} redirected the request (HTTP {status}); redirects are not followed so the "
+                        "API key is never sent elsewhere; use the provider's final base URL")
+
+
 def _host(url):
     return urlparse(url).hostname or url
 
@@ -83,6 +103,10 @@ def _post_json(url, key, body, deadline_at, max_retries, *, clock=time.monotonic
     host = _host(url)
     data = json.dumps(body).encode("utf-8")
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+    try:
+        request = urllib.request.Request(url, data=data, headers=headers)
+    except ValueError:
+        raise RuntimeError(f"{host} is not a usable URL") from None
     if stats is not None:
         stats["retries"] = 0
     attempt = 0
@@ -92,15 +116,16 @@ def _post_json(url, key, body, deadline_at, max_retries, *, clock=time.monotonic
             raise DeadlineExceeded(f"no response from {host} before the deadline")
         wait = None
         try:
-            request = urllib.request.Request(url, data=data, headers=headers)
-            with urllib.request.urlopen(request, timeout=remaining) as response:
-                return json.loads(response.read().decode("utf-8"))
+            with _open(request, timeout=remaining) as response:
+                raw = response.read()
         except urllib.error.HTTPError as failure:
             status = failure.code
             text = _error_text(failure)
             failure.close()
             if status in AUTH_STATUS:
                 raise RuntimeError(f"{host} rejected the API key (HTTP {status})") from None
+            if 300 <= status < 400:
+                raise _redirected(host, status) from None
             if status not in RETRYABLE_STATUS:
                 if any(marker in text for marker in CONTEXT_MARKERS):
                     raise ContextBudgetExceeded(
@@ -113,13 +138,21 @@ def _post_json(url, key, body, deadline_at, max_retries, *, clock=time.monotonic
             failed = RuntimeError(f"{host} returned HTTP {status} after {attempt} retries")
             wait = _retry_after(failure)
         except urllib.error.URLError as failure:
-            if isinstance(failure.reason, (TimeoutError, socket.timeout)):
+            if isinstance(failure.reason, TimeoutError):
                 raise DeadlineExceeded(f"no response from {host} before the deadline") from None
             failed = RuntimeError(f"cannot reach {host}: {' '.join(str(failure.reason).split())[:200]}")
         except TimeoutError:
             raise DeadlineExceeded(f"no response from {host} before the deadline") from None
-        except ValueError:
-            raise RuntimeError(f"{host} returned a reply that is not JSON") from None
+        except http.client.InvalidURL:
+            raise RuntimeError(f"{host} is not a usable URL") from None
+        except (http.client.HTTPException, ConnectionError) as failure:
+            # A reset, early disconnect or short body part-way through the reply: transient.
+            failed = RuntimeError(f"connection to {host} broke mid-response ({type(failure).__name__})")
+        else:
+            try:
+                return json.loads(raw.decode("utf-8"))
+            except ValueError:
+                raise RuntimeError(f"{host} returned a reply that is not JSON") from None
         if attempt >= max_retries:
             raise failed
         wait = float(2 ** attempt) if wait is None else wait
@@ -160,7 +193,7 @@ class CloudRuntime:
         request = urllib.request.Request(
             self.settings.base_url + "/models", headers={"Authorization": f"Bearer {self.settings.api_key}"})
         try:
-            with urllib.request.urlopen(request, timeout=START_TIMEOUT_S) as response:
+            with _open(request, timeout=START_TIMEOUT_S) as response:
                 response.read()
         except urllib.error.HTTPError as failure:
             status = failure.code
@@ -168,8 +201,10 @@ class CloudRuntime:
             if status in AUTH_STATUS:
                 raise RuntimeError(f"cloud provider {host} rejected the API key (HTTP {status}); "
                                    "use --runtime local to fly offline") from None
+            if 300 <= status < 400:
+                raise _redirected(f"cloud provider {host}", status) from None
             # Any other status means the provider answered; some have no /models route.
-        except (urllib.error.URLError, TimeoutError) as failure:
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError) as failure:
             reason = failure.reason if isinstance(failure, urllib.error.URLError) else failure
             raise RuntimeError(f"cannot reach cloud provider {host} ({' '.join(str(reason).split())[:200]}); "
                                "use --runtime local to fly offline") from None
@@ -276,7 +311,8 @@ class CloudVision:
     prompts and answer schemas. The tools hand over a llama.cpp grammar; it is
     mapped back to the JSON schema it was generated from and sent as a strict
     `json_schema` response format. A provider that answers that with a 400 is retried once
-    with `json_object` plus the schema in the prompt, and remembered.
+    with `json_object` plus the schema in the prompt; that fallback is remembered only after
+    it succeeds, so an unrelated 400 changes nothing.
     """
 
     def __init__(self, runtime):

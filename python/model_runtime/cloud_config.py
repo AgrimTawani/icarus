@@ -15,6 +15,27 @@ class MissingCloudSetting(ValueError):
     """A required cloud environment variable is unset or blank."""
 
 
+class InvalidCloudSetting(MissingCloudSetting):
+    """A cloud setting is present but unusable; callers handle it like a missing one."""
+
+
+LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _require_https(name, url):
+    """`url` unchanged if it is https (or plain http to this machine); else InvalidCloudSetting naming `name`.
+
+    The API key travels in a header, so a plain-HTTP URL to another host would send it in clear.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme == "https" and parsed.hostname:
+        return url
+    if parsed.scheme == "http" and parsed.hostname in LOOPBACK_HOSTS:
+        return url
+    raise InvalidCloudSetting(
+        f"{name} must be an https:// URL (plain http:// is allowed only for localhost, 127.0.0.1 or ::1)")
+
+
 @dataclasses.dataclass(frozen=True)
 class CloudSettings:
     base_url: str
@@ -41,16 +62,23 @@ class CloudSettings:
                 raise MissingCloudSetting(f"{name} is not set")
             return default
 
-        base_url = value("ICARUS_LLM_BASE_URL")
+        base_url = _require_https("ICARUS_LLM_BASE_URL", value("ICARUS_LLM_BASE_URL"))
         api_key = value("ICARUS_LLM_API_KEY")
         model = value("ICARUS_LLM_MODEL")
         vision = dict(block["vision"])
         vision["grounding_format"] = value("ICARUS_VLM_GROUNDING_FORMAT", vision["grounding_format"])
+        from python.perception.vlm import JSON_BOX_FORMATS
+
+        if vision["grounding_format"] not in JSON_BOX_FORMATS:
+            source = ("ICARUS_VLM_GROUNDING_FORMAT" if (environ.get("ICARUS_VLM_GROUNDING_FORMAT") or "").strip()
+                      else "cloud.vision.grounding_format in the manifest")
+            raise InvalidCloudSetting(
+                f"{source} is {vision['grounding_format']!r}; use one of {', '.join(JSON_BOX_FORMATS)}")
         fields = {
             "base_url": base_url.rstrip("/"),
             "api_key": api_key,
             "model": model,
-            "vision_base_url": value("ICARUS_VLM_BASE_URL", base_url).rstrip("/"),
+            "vision_base_url": _require_https("ICARUS_VLM_BASE_URL", value("ICARUS_VLM_BASE_URL", base_url)).rstrip("/"),
             "vision_api_key": value("ICARUS_VLM_API_KEY", api_key),
             "vision_model": value("ICARUS_VLM_MODEL", model),
             "context_length": block["context_length"],

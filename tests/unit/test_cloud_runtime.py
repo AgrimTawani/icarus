@@ -1,3 +1,5 @@
+import http.client
+import http.server
 import io
 import json
 import threading
@@ -68,7 +70,7 @@ class FakeHttp:
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         if isinstance(item, BaseException):
             raise item
-        return Reply(item)
+        return item if isinstance(item, Reply) else Reply(item)
 
     @property
     def last_json(self):
@@ -83,7 +85,7 @@ class FakeHttp:
 def fake_http(monkeypatch):
     http = FakeHttp()
     http.script = [completion()]
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", http)
+    monkeypatch.setattr("python.model_runtime.cloud._open", http)
     return http
 
 
@@ -253,7 +255,7 @@ class SlowHttp:
 
 def test_stop_abandons_inflight_and_discards_late_reply(monkeypatch):
     slow = SlowHttp()
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", slow)
+    monkeypatch.setattr("python.model_runtime.cloud._open", slow)
     rt = runtime()
     outcome = {}
 
@@ -271,7 +273,8 @@ def test_stop_abandons_inflight_and_discards_late_reply(monkeypatch):
     assert time.monotonic() - started < 0.2
     caller.join(0.5)
     assert not caller.is_alive()
-    assert isinstance(outcome.get("error"), (InterruptedError, DeadlineExceeded)) and "message" not in outcome
+    assert isinstance(outcome.get("error"), InterruptedError) and "model call abandoned" in str(outcome["error"])
+    assert "message" not in outcome
     slow.release.set()  # the late reply arrives after the abandon and is dropped
     time.sleep(0.05)
     assert rt.last_stats is None and "message" not in outcome
@@ -285,7 +288,7 @@ def test_a_stopped_runtime_serves_the_next_decision(fake_http):
 
 def test_deadline_abandons_a_hung_call(monkeypatch):
     slow = SlowHttp()
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", slow)
+    monkeypatch.setattr("python.model_runtime.cloud._open", slow)
     started = time.monotonic()
     with pytest.raises(DeadlineExceeded):
         runtime(deadline_ms=100).decide(USER, TOOLS)
@@ -331,3 +334,152 @@ def test_start_tolerates_a_provider_without_a_models_route(fake_http, code):
 def test_start_without_scheme_asks_for_https():
     with pytest.raises(RuntimeError, match="https://"):
         CloudRuntime(settings(base_url="api.sarvam.ai/v2")).start()
+
+
+# ---- redirects never carry the key ----
+
+class _Hits(http.server.BaseHTTPRequestHandler):
+    def _answer(self):
+        self.server.hits.append((self.command, self.path, self.headers.get("Authorization")))
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:
+            self.rfile.read(length)
+        target = self.server.redirect_to
+        if target:
+            self.send_response(302)
+            self.send_header("Location", target)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            body = b"{}"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    do_GET = do_POST = _answer
+
+    def log_message(self, *_):
+        pass
+
+
+@pytest.fixture
+def servers():
+    """Two loopback HTTP servers: `first` redirects to `second` when asked; both record what reached them."""
+    made = []
+
+    def make(redirect_to=None):
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Hits)
+        server.hits, server.redirect_to = [], redirect_to
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        made.append(server)
+        return server
+
+    yield make
+    for server in made:
+        server.shutdown()
+        server.server_close()
+
+
+def _url(server):
+    return f"http://127.0.0.1:{server.server_address[1]}/v1"
+
+
+def test_a_redirect_is_never_followed_and_the_key_stays_home(servers):
+    second = servers()
+    first = servers(redirect_to=_url(second) + "/chat/completions")
+    rt = CloudRuntime(settings(base_url=_url(first), max_retries=0))
+    with pytest.raises(RuntimeError) as raised:
+        rt.decide(USER, TOOLS)
+    assert second.hits == [] and len(first.hits) == 1
+    message = str(raised.value)
+    assert "127.0.0.1" in message and "302" in message and "redirect" in message and KEY not in message
+
+
+def test_start_does_not_follow_a_redirect_either(servers):
+    second = servers()
+    first = servers(redirect_to=_url(second) + "/models")
+    with pytest.raises(RuntimeError) as raised:
+        CloudRuntime(settings(base_url=_url(first))).start()
+    assert second.hits == [] and "redirect" in str(raised.value) and KEY not in str(raised.value)
+
+
+def test_the_camera_call_does_not_follow_a_redirect(servers):
+    from python.model_runtime.cloud import _post_json
+
+    second = servers()
+    first = servers(redirect_to=_url(second) + "/chat/completions")
+    with pytest.raises(RuntimeError, match="redirect"):
+        _post_json(_url(first) + "/chat/completions", KEY, {}, time.monotonic() + 5, 0)
+    assert second.hits == []
+
+
+# ---- a connection that breaks part-way through is retried ----
+
+@pytest.mark.parametrize("failure", [
+    http.client.RemoteDisconnected("Remote end closed connection without response"),
+    ConnectionResetError("reset by peer"),
+    http.client.IncompleteRead(b"par", 100),
+])
+def test_a_connection_broken_mid_response_is_retried(fake_http, fake_clock, failure):
+    fake_http.script = [failure, completion()]
+    assert runtime(fake_clock).decide(USER, TOOLS)["tool_calls"]
+    assert len(fake_http.requests) == 2 and fake_clock.sleeps == [1.0]
+
+
+def test_a_connection_that_keeps_breaking_names_the_host_after_the_retries(fake_http, fake_clock):
+    fake_http.script = [http.client.RemoteDisconnected("closed")]
+    with pytest.raises(RuntimeError) as raised:
+        runtime(fake_clock, max_retries=1).decide(USER, TOOLS)
+    assert "api.sarvam.ai" in str(raised.value) and "mid-response" in str(raised.value)
+    assert KEY not in str(raised.value) and len(fake_http.requests) == 2
+
+
+def test_a_bare_read_timeout_is_a_missed_deadline(fake_http):
+    fake_http.script = [TimeoutError("timed out")]
+    with pytest.raises(DeadlineExceeded):
+        runtime().decide(USER, TOOLS)
+    assert len(fake_http.requests) == 1
+
+
+def test_a_body_that_breaks_while_being_read_is_retried(fake_http, fake_clock):
+    class Breaking(Reply):
+        def read(self, *_):
+            raise http.client.IncompleteRead(b"{", 50)
+
+    fake_http.script = [Breaking({}), completion()]
+    assert runtime(fake_clock).decide(USER, TOOLS)["tool_calls"]
+    assert len(fake_http.requests) == 2
+
+
+def test_start_reports_a_connection_that_breaks_mid_response(fake_http):
+    fake_http.script = [http.client.RemoteDisconnected("closed")]
+    with pytest.raises(RuntimeError) as raised:
+        CloudRuntime(settings()).start()
+    assert "api.sarvam.ai" in str(raised.value) and "--runtime local" in str(raised.value)
+
+
+# ---- a bad URL is not reported as a bad reply ----
+
+def test_a_malformed_url_is_not_reported_as_not_json(fake_http):
+    with pytest.raises(RuntimeError) as raised:
+        runtime(base_url="api.sarvam.ai/v2").decide(USER, TOOLS)
+    assert "not a usable URL" in str(raised.value) and "not JSON" not in str(raised.value)
+    assert fake_http.requests == []
+
+
+def test_an_invalid_url_found_while_connecting_is_not_retried_or_called_a_bad_reply(fake_http, fake_clock):
+    fake_http.script = [http.client.InvalidURL("nonnumeric port")]
+    with pytest.raises(RuntimeError, match="not a usable URL"):
+        runtime(fake_clock).decide(USER, TOOLS)
+    assert len(fake_http.requests) == 1
+
+
+def test_a_non_json_reply_is_still_reported_as_such(fake_http):
+    class Text(Reply):
+        def read(self, *_):
+            return b"<html>gateway</html>"
+
+    fake_http.script = [Text({})]
+    with pytest.raises(RuntimeError, match="not JSON"):
+        runtime().decide(USER, TOOLS)

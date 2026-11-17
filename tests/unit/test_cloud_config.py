@@ -97,3 +97,48 @@ def test_shipped_manifest_has_the_cloud_block():
     assert (s.deadline_ms, s.context_length, s.max_retries) == (60000, 16384, 3)
     assert s.vision == {"grounding_format": "json_norm1000_xyxy", "image_max_side_px": 1024,
                         "jpeg_quality": 85, "minimum_request_interval_s": 0.5}
+
+
+@pytest.mark.parametrize("url", ["http://api.example.com/v1", "api.example.com/v1", "ftp://api.example.com", "https://"])
+def test_a_non_https_base_url_is_refused_naming_the_variable(tmp_path, url):
+    with pytest.raises(MissingCloudSetting, match="ICARUS_LLM_BASE_URL.*https"):
+        settings(tmp_path, environ={**ENV, "ICARUS_LLM_BASE_URL": url})
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:8080/v1", "http://localhost:8000/v1", "http://[::1]:8000/v1",
+                                 "https://api.example.com/v1"])
+def test_https_and_loopback_http_base_urls_are_accepted(tmp_path, url):
+    assert settings(tmp_path, environ={**ENV, "ICARUS_LLM_BASE_URL": url}).base_url == url
+
+
+def test_a_plain_http_vision_url_is_refused_naming_its_variable(tmp_path):
+    with pytest.raises(MissingCloudSetting, match="ICARUS_VLM_BASE_URL"):
+        settings(tmp_path, environ={**ENV, "ICARUS_VLM_BASE_URL": "http://vision.example.com/v1"})
+
+
+def test_a_loopback_http_vision_url_is_accepted(tmp_path):
+    s = settings(tmp_path, environ={**ENV, "ICARUS_VLM_BASE_URL": "http://127.0.0.1:8081/v1"})
+    assert s.vision_base_url == "http://127.0.0.1:8081/v1"
+
+
+def test_the_refusal_never_echoes_the_key(tmp_path):
+    with pytest.raises(MissingCloudSetting) as raised:
+        settings(tmp_path, environ={**ENV, "ICARUS_LLM_BASE_URL": "http://api.example.com/v1"})
+    assert "sk-secret" not in str(raised.value)
+
+
+@pytest.mark.parametrize("name", ["json_pixel_xyxy", "json_norm1000_xyxy"])
+def test_known_grounding_formats_are_accepted_from_the_environment(tmp_path, name):
+    assert settings(tmp_path, environ={**ENV, "ICARUS_VLM_GROUNDING_FORMAT": name}).vision["grounding_format"] == name
+
+
+def test_an_unknown_grounding_format_from_the_environment_is_refused(tmp_path):
+    with pytest.raises(MissingCloudSetting, match="ICARUS_VLM_GROUNDING_FORMAT.*json_pixel_xyxy"):
+        settings(tmp_path, environ={**ENV, "ICARUS_VLM_GROUNDING_FORMAT": "qwen2vl_box_1000"})
+
+
+def test_an_unknown_grounding_format_in_the_manifest_is_refused(tmp_path):
+    path = manifest(tmp_path, vision={"grounding_format": "bogus", "image_max_side_px": 1024,
+                                      "jpeg_quality": 85, "minimum_request_interval_s": 0.5})
+    with pytest.raises(MissingCloudSetting, match="manifest.*bogus"):
+        CloudSettings.from_manifest(path, environ=ENV)

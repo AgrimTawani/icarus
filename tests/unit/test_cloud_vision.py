@@ -48,7 +48,7 @@ def fake_http(monkeypatch):
     http = FakeHttp()
     http.script = [completion({"role": "assistant", "content": '{"seen": "a house", "found": true}'},
                               finish="stop")]
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", http)
+    monkeypatch.setattr("python.model_runtime.cloud._open", http)
     return http
 
 
@@ -232,7 +232,7 @@ def test_timeout_raises_timeouterror(monkeypatch):
         release.wait(5)
         raise AssertionError("late call must have been abandoned")
 
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", slow)
+    monkeypatch.setattr("python.model_runtime.cloud._open", slow)
     started = time.monotonic()
     try:
         with pytest.raises(TimeoutError):
@@ -246,7 +246,7 @@ def test_provider_deadline_becomes_timeouterror(monkeypatch):
     def refuse(request, timeout=None):
         raise urllib.error.URLError(TimeoutError("timed out"))
 
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", refuse)
+    monkeypatch.setattr("python.model_runtime.cloud._open", refuse)
     with pytest.raises(TimeoutError):
         make_vision().complete(PPM_B64, "Q?", "", 160, timeout_s=5)
 
@@ -255,7 +255,7 @@ def test_failures_never_carry_the_key(monkeypatch):
     def reject(request, timeout=None):
         raise http_error(401)
 
-    monkeypatch.setattr("python.model_runtime.cloud.urllib.request.urlopen", reject)
+    monkeypatch.setattr("python.model_runtime.cloud._open", reject)
     with pytest.raises(RuntimeError, match="API key") as raised:
         make_vision().complete(PPM_B64, "Q?", "", 160)
     assert "vk-secret" not in str(raised.value) and KEY not in str(raised.value)

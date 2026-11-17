@@ -122,7 +122,7 @@ def test_unreachable_provider_is_caught_through_the_real_runtime(cloud_environme
     with (
         patch("sys.argv", ["dcm-fly", *argv]),
         patch.object(fly_cli, "_load_mission_client", return_value=make_client),
-        patch("python.model_runtime.cloud.urllib.request.urlopen",
+        patch("python.model_runtime.cloud._open",
               side_effect=urllib.error.URLError("connection refused")),
         pytest.raises(SystemExit) as stop,
     ):
