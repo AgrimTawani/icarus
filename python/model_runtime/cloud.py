@@ -11,6 +11,8 @@ joins until the deadline, and `stop()` or a missed deadline abandons it so a lat
 reply is dropped. The API key is sent only in the Authorization header; it is
 never put in a message, a stat or a record.
 """
+import base64
+import io
 import json
 import socket
 import threading
@@ -24,6 +26,7 @@ from python.dcm.runtime_config import (
     DeadlineExceeded,
     IncompleteModelResponse,
 )
+from python.perception import vlm
 
 START_TIMEOUT_S = 5
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
@@ -32,6 +35,19 @@ CONTEXT_MARKERS = ("context_length_exceeded", "maximum context length", "too man
 INCOMPLETE_MARKERS = ("tool_use_failed", "failed to call a function")
 ERROR_BODY_LIMIT = 4096
 MAX_TOKENS = 768  # the reply cap LlamaCppRuntime.decide uses
+
+
+class RejectedRequest(RuntimeError):
+    """The provider refused the request itself (a non-retryable 4xx).
+
+    `detail` is the provider's error text, lower-cased and size-limited, with the
+    API key removed; callers classify on it. It is never part of the message.
+    """
+
+    def __init__(self, message, status, detail):
+        super().__init__(message)
+        self.status = status
+        self.detail = detail
 
 
 def _host(url):
@@ -92,7 +108,8 @@ def _post_json(url, key, body, deadline_at, max_retries, *, clock=time.monotonic
                 if any(marker in text for marker in INCOMPLETE_MARKERS):
                     raise IncompleteModelResponse(
                         f"{host} could not form a valid tool call (HTTP {status})") from None
-                raise RuntimeError(f"{host} returned HTTP {status}") from None
+                raise RejectedRequest(f"{host} returned HTTP {status}", status,
+                                      text.replace(str(key).lower(), "") if key else text) from None
             failed = RuntimeError(f"{host} returned HTTP {status} after {attempt} retries")
             wait = _retry_after(failure)
         except urllib.error.URLError as failure:
@@ -129,6 +146,7 @@ class CloudRuntime:
         self._sleep = None  # None: wait on the abandon flag, so stop() cuts a backoff short
         self._current = None
         self._lock = threading.Lock()
+        self._vision = None
 
     @property
     def _provider_host(self):
@@ -158,6 +176,13 @@ class CloudRuntime:
 
     def warm(self, tools):
         self.start()
+
+    def vision(self):
+        """The one shared server for camera questions (a plain HTTP call: no lock with decisions)."""
+        with self._lock:
+            if self._vision is None:
+                self._vision = CloudVision(self)
+            return self._vision
 
     def stop(self):
         """Abandon the in-flight call, if any; its late reply is dropped."""
@@ -238,3 +263,122 @@ class CloudRuntime:
                 f"prompt tokens={prompt}, generated tokens={completion}. No complete tool response was returned.")
         message = choice.get("message") or {}
         return {key: message[key] for key in ("role", "content", "tool_calls") if key in message}
+
+
+SCHEMA_REJECTION_MARKERS = ("response_format", "json_schema")
+RESULT_TYPES = ("boolean", "count", "description", "pixel_box", "pixel_boxes")
+PIXEL_FORMAT = "json_pixel_xyxy"
+
+
+class CloudVision:
+    """Camera questions answered by the hosted multimodal model.
+
+    Same `complete` surface as `ResidentVision`, so the camera tools keep their
+    prompts and answer schemas. The tools hand over a llama.cpp grammar; it is
+    mapped back to the JSON schema it was generated from and sent as a strict
+    `json_schema` response format. A provider that rejects that is retried once
+    with `json_object` plus the schema in the prompt, and remembered.
+    """
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+        settings = runtime.settings
+        self._settings = settings
+        self._schemas = {vlm.measurement_grammar(kind): (kind, schema) for kind, schema in (
+            ("boolean", vlm.CONDITION_SCHEMA), ("count", vlm.COUNT_SCHEMA),
+            ("description", vlm.DESCRIPTION_SCHEMA), ("pixel_box", vlm.PIXEL_BOX_SCHEMA),
+            ("pixel_boxes", vlm.PIXEL_BOXES_SCHEMA))}
+        self._json_object = False  # set once the provider refuses json_schema
+        record = runtime.descriptor_record
+        self.artifact = {"family": "cloud", "model": settings.vision_model,
+                         "provider_host": record["vision_provider_host"], "resident": True,
+                         "grounding_format": settings.vision["grounding_format"],
+                         "minimum_request_interval_s": settings.vision["minimum_request_interval_s"]}
+
+    def __repr__(self):
+        return f"CloudVision(model={self.artifact['model']!r}, provider_host={self.artifact['provider_host']!r})"
+
+    def _jpeg_data_url(self, image_b64):
+        """The camera file as a JPEG data URL; shrunk only when the box format is resolution-free.
+
+        Pixel-box answers are coordinates in the image the model saw, and the
+        callers read them against the source frame, so that image is never resized.
+        """
+        from PIL import Image
+        try:
+            with Image.open(io.BytesIO(base64.b64decode(image_b64))) as source:
+                image = source.convert("RGB")
+        except Exception:  # noqa: BLE001 - PIL raises many types for corrupt input
+            raise ValueError("camera image could not be decoded") from None
+        if self._settings.vision["grounding_format"] != PIXEL_FORMAT:
+            side = self._settings.vision["image_max_side_px"]
+            image.thumbnail((side, side))
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=self._settings.vision["jpeg_quality"])
+        return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+    def _body(self, text, data_url, n_predict, response_format):
+        body = {"model": self._settings.vision_model, "temperature": 0, "max_tokens": n_predict,
+                "messages": [{"role": "user", "content": [
+                    {"type": "text", "text": text}, {"type": "image_url", "image_url": {"url": data_url}}]}]}
+        if response_format is not None:
+            body["response_format"] = response_format
+        return body
+
+    def complete(self, image_b64, question, prefill, n_predict, *, grammar=None, timeout_s=45.0):
+        """The model's text answer; TimeoutError if no answer arrives within `timeout_s`."""
+        entry = None
+        if grammar is not None:
+            entry = self._schemas.get(grammar)
+            if entry is None:
+                raise ValueError("grammar is not one of the measurement grammars")
+        data_url = self._jpeg_data_url(image_b64)
+        text = question + (f"\nStart your answer with: {prefill}" if prefill else "")
+        url = self._settings.vision_base_url + "/chat/completions"
+        runtime = self.runtime
+        abandoned, finished = threading.Event(), threading.Event()
+        outcome = {}
+        deadline_at = runtime._clock() + timeout_s
+
+        def post(response_format, prompt):
+            return _post_json(url, self._settings.vision_api_key,
+                              self._body(prompt, data_url, n_predict, response_format), deadline_at,
+                              self._settings.max_retries, clock=runtime._clock,
+                              sleep=lambda seconds: abandoned.wait(seconds), abandoned=abandoned)
+
+        def call():
+            try:
+                if entry is None:
+                    outcome["payload"] = post(None, text)
+                    return
+                kind, schema = entry
+                fallback = (f"{text}\nReply with only a JSON object that matches this JSON schema: "
+                            f"{json.dumps(schema)}")
+                if not self._json_object:
+                    try:
+                        outcome["payload"] = post({"type": "json_schema", "json_schema": {
+                            "name": f"icarus_{kind}", "strict": True, "schema": schema}}, text)
+                        return
+                    except RejectedRequest as failure:
+                        if not any(marker in failure.detail for marker in SCHEMA_REJECTION_MARKERS):
+                            raise
+                        self._json_object = True
+                outcome["payload"] = post({"type": "json_object"}, fallback)
+            except BaseException as failure:  # noqa: BLE001 - relayed to the asking thread
+                outcome["failure"] = failure
+            finally:
+                finished.set()
+
+        threading.Thread(target=call, daemon=True).start()
+        finished.wait(timeout_s)
+        if not finished.is_set():
+            abandoned.set()
+            raise TimeoutError(f"no answer from {self.artifact['provider_host']} within {timeout_s:g} s")
+        failure = outcome.get("failure")
+        if isinstance(failure, DeadlineExceeded):
+            raise TimeoutError(str(failure)) from None
+        if failure is not None:
+            raise failure
+        choices = outcome["payload"].get("choices") or []
+        message = (choices[0].get("message") if choices else None) or {}
+        return message.get("content") or ""
