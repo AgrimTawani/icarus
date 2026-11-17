@@ -8,6 +8,7 @@ import json
 import math
 import os
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -150,7 +151,7 @@ def build(scenario_value):
     model_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
-            "/usr/bin/python3",
+            sys.executable,
             str(ROOT / "scripts/simulation/build_compact_flight.py"),
             "--sensor-profile",
             scenario["sensor_profile"],
