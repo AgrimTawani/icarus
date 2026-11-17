@@ -93,6 +93,39 @@ autonomy clients to use the same local MAVLink endpoint without rebuilding the
 world. Generated worlds, logs, external source checkouts and local environments
 are intentionally not versioned.
 
+## Model runtime (cloud or local)
+
+`dcm-fly`, the operator evaluation and the acceptance runner pick the mission
+model with `--runtime`. The default is `cloud`, a hosted OpenAI-compatible API.
+`--runtime local` runs the local llama.cpp server and needs no network, so use it
+for offline flights. YOLO detection always stays local.
+
+Cloud settings come from the environment (limits such as the deadline and retries
+come from `config/dcm/agent-runtime.json`):
+
+```bash
+export ICARUS_LLM_BASE_URL=https://api.example.com/v1   # https only (plain http only for localhost)
+export ICARUS_LLM_API_KEY=...                            # sent only in the Authorization header
+export ICARUS_LLM_MODEL=model-id
+# Camera questions: each defaults to the ICARUS_LLM_* value above
+# ICARUS_VLM_BASE_URL, ICARUS_VLM_API_KEY, ICARUS_VLM_MODEL
+# ICARUS_VLM_GROUNDING_FORMAT   json_norm1000_xyxy (default) or json_pixel_xyxy
+```
+
+Never put a key in the manifest, a script or any file that gets committed; export
+it in your shell. Check a provider before flying with it (no simulator needed):
+
+```bash
+.venv/bin/python scripts/autonomy/check_cloud_provider.py
+```
+
+It prints one line per check: `PASS`, `FAIL` (with the provider's reason when it
+refused the request) or `SKIP` (could not run, for example the stored frames are
+missing; a skip is not a pass). Exit status: `0` every check passed, `1` any check
+failed, `2` settings missing or unusable, `3` nothing failed but something was
+skipped. Fly with the same settings: `./scripts/dcm-fly --profile edge-vision`.
+`--context-length` has no effect with `--runtime cloud` (it is only recorded; the provider sets the window).
+
 ## Safety Boundary
 
 The language model is not a flight controller. It may request bounded,
