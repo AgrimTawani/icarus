@@ -37,9 +37,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from python.dcm.llama_runtime import LlamaCppRuntime  # noqa: E402
-from python.dcm.runtime_config import RuntimeDescriptor  # noqa: E402
-from python.model_runtime.select import ALIASES, KINDS, make_runtime  # noqa: E402
+from python.dcm.llama_runtime import LlamaCppRuntime
+from python.dcm.runtime_config import RuntimeDescriptor
+from python.model_runtime.select import ALIASES, KINDS, make_runtime
 
 
 def decisions(episode):

@@ -34,7 +34,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from python.dcm.runtime_config import (  # noqa: F401 - IncompleteModelResponse is re-exported
+from python.dcm.runtime_config import (
     ContextBudgetExceeded,
     DeadlineExceeded,
     IncompleteModelResponse,

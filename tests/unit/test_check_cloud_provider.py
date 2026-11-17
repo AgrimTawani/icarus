@@ -239,7 +239,7 @@ def test_the_catalogue_check_is_built_from_a_flight_shaped_context():
     assert context["motion_limits"]["maximum_climb_speed_mps"] > 0
     assert context["motion_limits"]["maximum_horizontal_speed_mps"] > 0
     assert "person" in context["detector_classes"] and context["defaults"]["takeoff_altitude_agl_m"] == 3.0
-    messages, tools = check_cloud_provider.takeoff_request(context)
+    _messages, tools = check_cloud_provider.takeoff_request(context)
     schemas = {tool["function"]["name"]: tool["function"]["parameters"] for tool in tools}
     # the session's limits and detector vocabulary are bound into the schemas the provider sees
     assert schemas["detect"]["properties"]["classes"]["items"]["enum"] == context["detector_classes"]
@@ -314,7 +314,7 @@ def test_the_provider_reason_is_one_line_and_capped(monkeypatch, capsys, tmp_pat
     def answers(url):
         return {"data": []} if url.endswith("/models") else (400, json.dumps({"error": long_reason}))
 
-    code, out, _ = run_real(monkeypatch, capsys, tmp_path, answers)
+    _code, out, _ = run_real(monkeypatch, capsys, tmp_path, answers)
     line = next(line for line in out.out.splitlines() if line.startswith("FAIL catalogue_takeoff"))
     assert "oneof" in line and len(line) < 700
 
@@ -414,6 +414,7 @@ def test_cloud_replay_summary_still_prints_when_every_decision_fails(monkeypatch
 
 def test_cloud_replay_errors_never_carry_the_key(monkeypatch, capsys, tmp_path):
     from test_cloud_runtime import settings
+
     from python.model_runtime.cloud import CloudRuntime
 
     runtime = CloudRuntime(settings(api_key=KEY))

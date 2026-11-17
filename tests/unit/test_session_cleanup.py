@@ -18,7 +18,7 @@ def test_failed_exit_recovery_cannot_seal_a_successful_episode(raises):
     with (
         patch('sys.argv', ['dcm-fly', '--runtime', 'local', '--mission', 'test']),
         patch.object(fly_cli, '_load_mission_client', return_value=lambda *a: client),
-        patch.object(fly_cli, 'build_runtime', return_value=(runtime, SimpleNamespace(model_id='test', as_record=lambda: {}))),
+        patch.object(fly_cli, 'build_runtime', return_value=(runtime, SimpleNamespace(model_id='test', as_record=dict))),
         patch.object(fly_cli, 'fly_mission', return_value=result),
         patch.object(fly_cli, 'safe_exit_recovery', recovery),
         patch.object(fly_cli, 'OperatorConsole'),
@@ -39,7 +39,7 @@ def test_failed_exit_recovery_cannot_seal_a_successful_episode(raises):
 def test_interrupted_or_failed_first_mission_is_never_sealed_completed(failure):
     client, runtime = Mock(episode=None), Mock()
     runtime.start.side_effect = failure
-    descriptor = SimpleNamespace(model_id='test', as_record=lambda: {})
+    descriptor = SimpleNamespace(model_id='test', as_record=dict)
     with (
         patch('sys.argv', ['dcm-fly', '--runtime', 'local', '--mission', 'test']),
         patch.object(fly_cli, '_load_mission_client', return_value=lambda *a: client),
@@ -69,7 +69,7 @@ def test_console_model_cleanup_failure_still_closes_client():
         "decisions": 1,
         "executed": [],
     }
-    descriptor = SimpleNamespace(model_id="test", as_record=lambda: {})
+    descriptor = SimpleNamespace(model_id="test", as_record=dict)
     with (
         patch("sys.argv", ["dcm-fly", "--runtime", "local", "--mission", "test"]),
         patch.object(fly_cli, "_load_mission_client", return_value=lambda *a: client),

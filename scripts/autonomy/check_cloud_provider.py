@@ -30,9 +30,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from python.model_runtime.cloud import RejectedRequest  # noqa: E402
-from python.model_runtime.cloud_config import InvalidCloudSetting, MissingCloudSetting  # noqa: E402
-from python.model_runtime.select import make_runtime  # noqa: E402
+from python.model_runtime.cloud import RejectedRequest
+from python.model_runtime.cloud_config import (
+    InvalidCloudSetting,
+    MissingCloudSetting,
+)
+from python.model_runtime.select import make_runtime
 
 DEFAULT_MANIFEST = ROOT / "config/dcm/agent-runtime.json"
 DEFAULT_FRAMES = ROOT / "output/laya-speed-20261106/vision-bench/frames"

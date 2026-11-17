@@ -193,6 +193,6 @@ def test_operator_evaluation_defaults_to_cloud_and_needs_the_key_before_any_dron
     environment = {k: v for k, v in os.environ.items() if not k.startswith("ICARUS_")}
     done = subprocess.run(
         [sys.executable, str(root / "scripts/autonomy/evaluate_operator_missions.py"), "--output", str(tmp_path)],
-        capture_output=True, text=True, env=environment, timeout=60)
+        capture_output=True, text=True, env=environment, timeout=60, check=False)
     assert done.returncode != 0
     assert "ICARUS_LLM_BASE_URL" in done.stderr
