@@ -13,6 +13,7 @@ from python.dcm.fly import (
     dumps,
     fly_mission,
     prepare_runtime,
+    record as record_event,
     safe_exit_recovery,
     session_episode_summary,
     summarize,
@@ -119,6 +120,9 @@ def main():
     exit_code = 0
     try:
         client.connect()
+        # Which model made this episode's decisions: provider host and model ids for the cloud
+        # (never a key), the full descriptor for the local server.
+        record_event(client, "runtime_provenance", record if args.runtime == "cloud" else record.as_record())
         client.acquire()
         connected = True
         print("Preparing camera tools…", flush=True)

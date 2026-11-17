@@ -1,4 +1,5 @@
 """dcm-fly picks its mission runtime: hosted model by default, local llama on request."""
+import json
 import os
 from unittest.mock import Mock, patch
 
@@ -92,6 +93,35 @@ def test_cloud_banner_shows_host_and_model_not_key(cloud_environment, capsys):
     assert "api.sarvam.ai" in shown.out and "gemma4" in shown.out
     assert "sk-secret" not in shown.out + shown.err
     assert "direct-agent-v1" in shown.out
+
+
+def _recorded(client):
+    return [call.args for call in client.episode.record.call_args_list]
+
+
+def test_a_cloud_episode_records_which_provider_and_models_decided(cloud_environment, monkeypatch, capsys):
+    monkeypatch.setenv("ICARUS_VLM_MODEL", "vision-model")
+    _, record = fly_cli.build_runtime(fly_cli.parse_args([]))
+    client = Mock(episode=Mock())
+    assert _main(["--mission", "m"], Mock(), record, Mock(return_value=client)) == 0
+    events = [args for args in _recorded(client) if args[0] == "runtime_provenance"]
+    assert len(events) == 1
+    value = events[0][1]
+    assert value["provider_host"] == "api.sarvam.ai" and value["model"] == "gemma4"
+    assert value["vision_model"] == "vision-model" and value["vision_provider_host"] == "api.sarvam.ai"
+    assert "sk-secret" not in json.dumps(value)
+    assert "api_key" not in json.dumps(value)
+    # recorded once the episode exists (after connect) and before any flying
+    order = [call[0] for call in client.mock_calls if call[0] in ("connect", "episode.record", "acquire")]
+    assert order[:2] == ["connect", "episode.record"] and order.index("acquire") > order.index("episode.record")
+
+
+def test_a_local_episode_records_its_runtime_descriptor():
+    descriptor = Mock(model_id="local-model")
+    descriptor.as_record.return_value = {"model_id": "local-model", "runtime": "llama.cpp"}
+    client = Mock(episode=Mock())
+    assert _main(["--runtime", "local", "--mission", "m"], Mock(), descriptor, Mock(return_value=client)) == 0
+    assert ("runtime_provenance", {"model_id": "local-model", "runtime": "llama.cpp"}) in _recorded(client)
 
 
 @pytest.mark.parametrize("failure", [
