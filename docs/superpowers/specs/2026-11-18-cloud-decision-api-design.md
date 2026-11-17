@@ -1,7 +1,7 @@
 # Design: cloud decision API (and a Jev test), then a physical drone
 
-Date: 2026-11-18. Branch `feat/cloud-decision-api`, cut from `feat/laya-decision-speed` at `38c742e`
-(that branch is not merged into `main` yet; this work builds on its resident-vision and slot code).
+Date: 2026-11-18. Branch `feat/cloud-decision-api`, on `main` after the Laya decision-speed branch was merged
+(`8a17fb9`); this work builds on its resident-vision and slot code.
 
 ## Intent
 
