@@ -40,7 +40,7 @@ def test_forced_parent_cleanup_stops_detached_child_but_preserves_unrelated_proc
 def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path/'run', cases=tmp_path/'cases.json',
-                         manifest=tmp_path/'selected-runtime.json', max_decisions=20, clarification_answer=['Use a measured viewpoint.'])
+                         manifest=tmp_path/'selected-runtime.json', max_decisions=20, clarification_answer=['Use a measured viewpoint.'], runtime='cloud')
     calls=[]; cleaned=[]
     class Finished:
         pid=123456789
@@ -72,7 +72,7 @@ def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monk
 def test_interrupt_recovers_current_stack_and_never_starts_next_case(tmp_path, monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path/'run',cases=tmp_path/'cases.json',
-                         manifest=tmp_path/'selected-runtime.json',max_decisions=20,clarification_answer=[])
+                         manifest=tmp_path/'selected-runtime.json',max_decisions=20,clarification_answer=[],runtime='cloud')
     calls=[]; cleaned=[]
     class Interrupted:
         pid=123456789
@@ -120,7 +120,7 @@ def test_primary_manifest_reaches_the_evaluator_without_starting_a_simulator(tmp
     module=load_runner()
     args=SimpleNamespace(cases=tmp_path/'cases.json',output=tmp_path/'run',
         manifest=tmp_path/'candidate-runtime.json',case=['one'],
-        max_decisions=20,clarification_answer=['Use another view.'])
+        max_decisions=20,clarification_answer=['Use another view.'],runtime='local')
     command=module.evaluation_command(args)
     assert command[command.index('--manifest')+1]==str(args.manifest.resolve())
     assert command.count('--manifest')==1 and command[command.index('--case')+1]=='one'
@@ -161,7 +161,7 @@ print(json.dumps(result))
 def test_parent_stop_still_collects_the_childs_terminal_recovery_report(tmp_path,monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path,cases=tmp_path/'cases.json',manifest=tmp_path/'model.json',
-                         max_decisions=4,clarification_answer=[])
+                         max_decisions=4,clarification_answer=[],runtime='cloud')
     case={'id':'case'}
     class Child:
         pid=123
@@ -187,3 +187,39 @@ def test_fixture_answer_does_not_amend_an_unrelated_operator_question():
     assert module.fixture_reply(item,'May I use the downward camera?')==item['answer']
     assert module.fixture_reply(item,'What appearance identifies the subject?') is None
     assert module.fixture_reply(item,'Should I change the flight height?') is None
+
+
+def test_runtime_choice_reaches_both_evaluator_commands(tmp_path):
+    module=load_runner()
+    for runtime in ('cloud','local'):
+        args=SimpleNamespace(cases=tmp_path/'cases.json',output=tmp_path/'run',manifest=tmp_path/'m.json',
+                             case=[],max_decisions=4,clarification_answer=[],runtime=runtime)
+        for command in (module.evaluation_command(args),module.isolated_case_command(args,'one',tmp_path/'one')):
+            assert command[command.index('--runtime')+1]==runtime
+
+
+def test_acceptance_runtime_defaults_to_cloud_and_accepts_llama_alias(monkeypatch):
+    import argparse
+    import pytest
+    module=load_runner()
+    original=argparse.ArgumentParser.parse_args
+    seen=[]
+    def spy(self,*a,**k):
+        seen.append(original(self,*a,**k))
+        raise SystemExit(0)
+    monkeypatch.setattr(argparse.ArgumentParser,'parse_args',spy)
+    for extra,expected in (([],'cloud'),(['--runtime','local'],'local'),(['--runtime','llama'],'local')):
+        monkeypatch.setattr(sys,'argv',['acceptance','--cases','c.json','--output','out',*extra])
+        with pytest.raises(SystemExit):
+            module.main()
+        assert seen[-1].runtime==expected
+
+
+def test_model_runtime_sources_are_pinned_for_operator_evaluation():
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('pinned_eval',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    names={p.relative_to(module.ROOT).as_posix() for p in module.pinned_python_sources()}
+    assert 'python/model_runtime/cloud.py' in names
+    assert 'python/model_runtime/select.py' in names
+    assert 'python/dcm/fly.py' in names

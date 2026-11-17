@@ -53,6 +53,13 @@ def defer_stop_during_recovery(result):
         signal.signal(signal.SIGINT, previous)
 
 
+def pinned_python_sources():
+    """Python that shapes mission decisions; hashed for provenance and change detection."""
+    return [*sorted((ROOT / 'python/dcm').glob('*.py')),
+            *sorted((ROOT / 'python/perception').glob('*.py')),
+            *sorted((ROOT / 'python/model_runtime').glob('*.py'))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', type=Path, default=ROOT / 'tests/fixtures/operator_phase1_missions.json')
@@ -86,8 +93,7 @@ def main():
             parser.exit(1, f'{parser.prog}: {error}\n')
     runtime_started = False
     results = []
-    paths = [*sorted((ROOT / 'python/dcm').glob('*.py')),
-             *sorted((ROOT / 'python/perception').glob('*.py')),
+    paths = [*pinned_python_sources(),
              ROOT / 'scripts/autonomy/run_mission.py',
              ROOT / 'scripts/autonomy/evaluate_operator_missions.py',
              ROOT / 'scripts/autonomy/run_operator_acceptance.py',
