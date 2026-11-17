@@ -401,3 +401,30 @@ git commit -m "Optionally answer visual conditions with Jev, never treating unsu
 ## Phase 2 (outline, not tasks yet)
 
 Blocked on choosing the drone. When it is chosen, write a new spec and plan covering, per the design doc: MAVLink transport over serial/UDP (or mavlink-router in front of the TCP gateway) and PX4 mode mapping if needed, a `hardware-flight` launch profile with real limits and geofence, a camera adapter and video downlink the laptop can read, camera calibration, an independent internet link on the laptop, and the bench → tethered hover → first mission test ladder. Physical flight needs the operator's regulatory approval.
+
+## Timeline and process (Phase 1)
+
+Reference design: Aerial Claw (`_reference/AerialClaw`). Its live model path (`llm_client.py`) is an
+OpenAI-compatible client chosen by `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`, with `VLM_*` falling back to the
+`LLM_*` values. Its `AnthropicClient` in `llm/base_client.py` is defined but not used. This plan follows the same
+pattern with `ICARUS_*` names; Claude can be reached the same way through Anthropic's OpenAI-compatible endpoint,
+checked with `check_cloud_provider.py` like any other provider.
+
+| Days (working) | Work | Done when |
+|---|---|---|
+| 0.5 | Branch clean-up and merge of `feat/laya-decision-speed` into `main` | `main` at `38c742e` or later, dead branches gone |
+| 0.5 | Task 1: settings | unit suite green |
+| 1 | Task 2: cloud decisions | unit suite green |
+| 1 | Task 3: cloud camera answers | unit suite green |
+| 0.5 | Task 4: runtime switch in the CLIs | unit suite green |
+| 0.5 | Task 5: provider check and cloud replay | unit suite green; PR opened for Tasks 1-5 |
+| 2-3 | Task 6: provider acceptance, replay, Gazebo and AirSim flights | results doc committed; cloud no worse than local |
+| 0.5-1 | Task 7: Jev benchmark (needs a key) | verdict recorded |
+| 1-2 | Task 8: Jev checker and A/B flights (only if Task 7's gate passes) | A/B recorded |
+| 2 | Buffer: provider quirks (schema rejections, box conventions, rate limits) | |
+
+Total: about 8 working days without Jev, 10-12 with it. Starting 2026-11-19, code (Tasks 1-5) lands by
+2026-11-25, sim acceptance by about 2026-11-28, and Jev, if a key exists, by about 2026-12-03.
+
+Process per task: failing test, code, unit suite, commit (TDD as written above). One PR for Tasks 1-5 into `main`;
+Tasks 6-8 follow as their own commits and PR. Sims run headless on AC power with the stock scripts.
