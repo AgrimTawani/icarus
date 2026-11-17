@@ -206,6 +206,14 @@ def main():
     args.manifest = args.manifest.resolve()
     if not args.manifest.is_file():
         parser.error('Mission runtime manifest is missing: ' + str(args.manifest))
+    if args.runtime == 'cloud':
+        # Nothing is started for a run that cannot reach its model: check the settings first.
+        from python.model_runtime.cloud_config import CloudSettings
+        try:
+            CloudSettings.from_manifest(args.manifest)
+        except (OSError, KeyError, ValueError) as error:
+            parser.exit(2, f'{parser.prog}: cloud runtime settings: {error}; '
+                           'set ICARUS_LLM_BASE_URL, ICARUS_LLM_API_KEY and ICARUS_LLM_MODEL, or use --runtime local\n')
     requested = json.loads(args.cases.read_text())['cases']
     unknown = set(args.case) - {case['id'] for case in requested}
     if unknown:

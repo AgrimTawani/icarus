@@ -223,3 +223,76 @@ def test_model_runtime_sources_are_pinned_for_operator_evaluation():
     assert 'python/model_runtime/cloud.py' in names
     assert 'python/model_runtime/select.py' in names
     assert 'python/dcm/fly.py' in names
+
+
+def test_cloud_settings_are_checked_before_anything_is_started(tmp_path,monkeypatch,capsys):
+    import pytest
+    module=load_runner()
+    for name in ('ICARUS_LLM_BASE_URL','ICARUS_LLM_API_KEY','ICARUS_LLM_MODEL'):
+        monkeypatch.delenv(name,raising=False)
+    cases=tmp_path/'cases.json';cases.write_text(json.dumps({'cases':[{'id':'one','mission':'m'}]}))
+    started=[]
+    monkeypatch.setattr(module.subprocess,'Popen',lambda *a,**k:started.append(a))
+    monkeypatch.setattr(module,'run_isolated_cases',lambda *a,**k:started.append(a))
+    output=tmp_path/'out'
+    monkeypatch.setattr(sys,'argv',['acceptance','--cases',str(cases),'--output',str(output)])
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert stop.value.code==2
+    err=capsys.readouterr().err
+    assert 'ICARUS_LLM_BASE_URL is not set' in err and '--runtime local' in err and 'Traceback' not in err
+    assert started==[] and not output.exists()
+
+
+def test_an_unusable_cloud_setting_also_stops_the_runner_before_the_simulator(tmp_path,monkeypatch,capsys):
+    import pytest
+    module=load_runner()
+    monkeypatch.setenv('ICARUS_LLM_BASE_URL','http://api.example.com/v1')
+    monkeypatch.setenv('ICARUS_LLM_API_KEY','sk-secret');monkeypatch.setenv('ICARUS_LLM_MODEL','m')
+    cases=tmp_path/'cases.json';cases.write_text(json.dumps({'cases':[{'id':'one','mission':'m'}]}))
+    started=[]
+    monkeypatch.setattr(module.subprocess,'Popen',lambda *a,**k:started.append(a))
+    monkeypatch.setattr(sys,'argv',['acceptance','--cases',str(cases),'--output',str(tmp_path/'out')])
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert stop.value.code==2 and started==[]
+    err=capsys.readouterr().err
+    assert 'ICARUS_LLM_BASE_URL must be an https:// URL' in err and 'sk-secret' not in err
+
+
+def test_the_local_runtime_does_not_need_cloud_settings_to_start_the_runner(tmp_path,monkeypatch,capsys):
+    import pytest
+    module=load_runner()
+    for name in ('ICARUS_LLM_BASE_URL','ICARUS_LLM_API_KEY','ICARUS_LLM_MODEL'):
+        monkeypatch.delenv(name,raising=False)
+    cases=tmp_path/'cases.json';cases.write_text(json.dumps({'cases':[{'id':'one','mission':'m'}]}))
+    monkeypatch.setattr(module.socket.socket,'connect_ex',lambda self,address:0)  # a Drone API "already listening"
+    monkeypatch.setattr(sys,'argv',['acceptance','--cases',str(cases),'--output',str(tmp_path/'out'),'--runtime','local'])
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert stop.value.code==2
+    err=capsys.readouterr().err  # stopped by the port guard: it got past the skipped cloud check
+    assert 'already listening' in err and 'ICARUS_LLM' not in err
+
+
+def test_local_provenance_records_the_descriptor_and_pins_the_server_binary_library_and_patches(tmp_path):
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('provenance_eval',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    binary=tmp_path/'bin/llama-server';binary.parent.mkdir();binary.write_text('x')
+    (binary.parent/'libllama-common.so.0.0.1').write_text('x');(binary.parent/'libllama-common.so.0.0.2').write_text('x')
+    descriptor=SimpleNamespace(as_record=lambda:{'model_id':'local-model','runtime':'llama.cpp'})
+    record,paths=module.runtime_provenance('local',SimpleNamespace(binary=binary),descriptor)
+    assert record=={'model_id':'local-model','runtime':'llama.cpp'}
+    assert paths[0]==binary.resolve()
+    assert paths[1]==binary.parent/'libllama-common.so.0.0.1'  # the first library only, as before
+    patches=sorted((module.ROOT/'config/dependencies/patches').glob('*.patch'))
+    assert patches and paths[2:]==patches
+
+
+def test_cloud_provenance_is_the_settings_record_and_pins_no_local_server():
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('provenance_eval_cloud',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    record={'provider_host':'api.example.com','model':'m'}
+    assert module.runtime_provenance('cloud',object(),record)==(record,[])

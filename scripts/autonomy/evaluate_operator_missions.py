@@ -60,6 +60,21 @@ def pinned_python_sources():
             *sorted((ROOT / 'python/model_runtime').glob('*.py'))]
 
 
+def runtime_provenance(kind, runtime, descriptor):
+    """`(record, extra_paths)` for the report: what served the decisions and what to hash for it.
+
+    Local: the descriptor's record plus the serving executable, its native parser library and
+    the tracked backend patches (a patch changes the library). Cloud: the settings record
+    (provider host and model ids, never a key) and no local files.
+    """
+    if kind != 'local':
+        return descriptor, []
+    return descriptor.as_record(), [
+        runtime.binary.resolve(),
+        *sorted(runtime.binary.parent.glob('libllama-common.so.*'))[:1],
+        *sorted((ROOT / 'config/dependencies/patches').glob('*.patch'))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', type=Path, default=ROOT / 'tests/fixtures/operator_phase1_missions.json')
@@ -106,10 +121,8 @@ def main():
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
     # Pin the actual serving executable and native parser library as well as
     # the upstream revision; a tracked backend patch changes the latter.
-    if args.runtime == 'local':
-        paths.append(runtime.binary.resolve())
-        paths.extend(sorted((runtime.binary.parent).glob('libllama-common.so.*'))[:1])
-        paths.extend(sorted((ROOT / 'config/dependencies/patches').glob('*.patch')))
+    runtime_record, runtime_paths = runtime_provenance(args.runtime, runtime, descriptor)
+    paths.extend(runtime_paths)
     if os.environ.get('ICARUS_WAYPOINTS_FILE'):
         paths.append(Path(os.environ['ICARUS_WAYPOINTS_FILE']).resolve())
     # Camera artifacts may be provisioned outside the checkout or supplied as
@@ -117,7 +130,7 @@ def main():
     paths.append(Path(os.environ.get('EDGE_VISION_MANIFEST') or
                       (Path.home() / 'models/edge/MANIFEST.json')).resolve())
     provenance = {
-        'runtime': descriptor.as_record() if args.runtime == 'local' else descriptor,
+        'runtime': runtime_record,
         'git_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
         'source_sha256': {(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p)):
                           hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
