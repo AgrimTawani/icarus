@@ -16,10 +16,12 @@ def _module():
 
 def test_native_full_vocabulary_request_reaches_fixed_detector_and_returns_complete_counts(monkeypatch):
     import time
+
     from icarus.v1 import state_pb2
+
     from python.dcm.agent_tools import validate_call
-    from python.perception.classes import YOLO_CLASSES
     from python.perception import edge_vision
+    from python.perception.classes import YOLO_CLASSES
     module=_module()
     client=module.MissionClient.__new__(module.MissionClient)
     client.vision_profile='edge-vision'

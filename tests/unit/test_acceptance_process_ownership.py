@@ -40,7 +40,7 @@ def test_forced_parent_cleanup_stops_detached_child_but_preserves_unrelated_proc
 def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path/'run', cases=tmp_path/'cases.json',
-                         manifest=tmp_path/'selected-runtime.json', max_decisions=20, clarification_answer=['Use a measured viewpoint.'])
+                         manifest=tmp_path/'selected-runtime.json', max_decisions=20, clarification_answer=['Use a measured viewpoint.'], runtime='cloud')
     calls=[]; cleaned=[]
     class Finished:
         pid=123456789
@@ -72,7 +72,7 @@ def test_cases_use_separate_owned_stacks_and_keep_partial_results(tmp_path, monk
 def test_interrupt_recovers_current_stack_and_never_starts_next_case(tmp_path, monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path/'run',cases=tmp_path/'cases.json',
-                         manifest=tmp_path/'selected-runtime.json',max_decisions=20,clarification_answer=[])
+                         manifest=tmp_path/'selected-runtime.json',max_decisions=20,clarification_answer=[],runtime='cloud')
     calls=[]; cleaned=[]
     class Interrupted:
         pid=123456789
@@ -120,7 +120,7 @@ def test_primary_manifest_reaches_the_evaluator_without_starting_a_simulator(tmp
     module=load_runner()
     args=SimpleNamespace(cases=tmp_path/'cases.json',output=tmp_path/'run',
         manifest=tmp_path/'candidate-runtime.json',case=['one'],
-        max_decisions=20,clarification_answer=['Use another view.'])
+        max_decisions=20,clarification_answer=['Use another view.'],runtime='local')
     command=module.evaluation_command(args)
     assert command[command.index('--manifest')+1]==str(args.manifest.resolve())
     assert command.count('--manifest')==1 and command[command.index('--case')+1]=='one'
@@ -161,7 +161,7 @@ print(json.dumps(result))
 def test_parent_stop_still_collects_the_childs_terminal_recovery_report(tmp_path,monkeypatch):
     module=load_runner()
     args=SimpleNamespace(output=tmp_path,cases=tmp_path/'cases.json',manifest=tmp_path/'model.json',
-                         max_decisions=4,clarification_answer=[])
+                         max_decisions=4,clarification_answer=[],runtime='cloud')
     case={'id':'case'}
     class Child:
         pid=123
@@ -187,3 +187,113 @@ def test_fixture_answer_does_not_amend_an_unrelated_operator_question():
     assert module.fixture_reply(item,'May I use the downward camera?')==item['answer']
     assert module.fixture_reply(item,'What appearance identifies the subject?') is None
     assert module.fixture_reply(item,'Should I change the flight height?') is None
+
+
+def test_runtime_choice_reaches_both_evaluator_commands(tmp_path):
+    module=load_runner()
+    for runtime in ('cloud','local'):
+        args=SimpleNamespace(cases=tmp_path/'cases.json',output=tmp_path/'run',manifest=tmp_path/'m.json',
+                             case=[],max_decisions=4,clarification_answer=[],runtime=runtime)
+        for command in (module.evaluation_command(args),module.isolated_case_command(args,'one',tmp_path/'one')):
+            assert command[command.index('--runtime')+1]==runtime
+
+
+def test_acceptance_runtime_defaults_to_cloud_and_accepts_llama_alias(monkeypatch):
+    import argparse
+
+    import pytest
+    module=load_runner()
+    original=argparse.ArgumentParser.parse_args
+    seen=[]
+    def spy(self,*a,**k):
+        seen.append(original(self,*a,**k))
+        raise SystemExit(0)
+    monkeypatch.setattr(argparse.ArgumentParser,'parse_args',spy)
+    for extra,expected in (([],'cloud'),(['--runtime','local'],'local'),(['--runtime','llama'],'local')):
+        monkeypatch.setattr(sys,'argv',['acceptance','--cases','c.json','--output','out',*extra])
+        with pytest.raises(SystemExit):
+            module.main()
+        assert seen[-1].runtime==expected
+
+
+def test_model_runtime_sources_are_pinned_for_operator_evaluation():
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('pinned_eval',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    names={p.relative_to(module.ROOT).as_posix() for p in module.pinned_python_sources()}
+    assert 'python/model_runtime/cloud.py' in names
+    assert 'python/model_runtime/select.py' in names
+    assert 'python/dcm/fly.py' in names
+
+
+def test_cloud_settings_are_checked_before_anything_is_started(tmp_path,monkeypatch,capsys):
+    import pytest
+    module=load_runner()
+    for name in ('ICARUS_LLM_BASE_URL','ICARUS_LLM_API_KEY','ICARUS_LLM_MODEL'):
+        monkeypatch.delenv(name,raising=False)
+    cases=tmp_path/'cases.json';cases.write_text(json.dumps({'cases':[{'id':'one','mission':'m'}]}))
+    started=[]
+    monkeypatch.setattr(module.subprocess,'Popen',lambda *a,**k:started.append(a))
+    monkeypatch.setattr(module,'run_isolated_cases',lambda *a,**k:started.append(a))
+    output=tmp_path/'out'
+    monkeypatch.setattr(sys,'argv',['acceptance','--cases',str(cases),'--output',str(output)])
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert stop.value.code==2
+    err=capsys.readouterr().err
+    assert 'ICARUS_LLM_BASE_URL is not set' in err and '--runtime local' in err and 'Traceback' not in err
+    assert started==[] and not output.exists()
+
+
+def test_an_unusable_cloud_setting_also_stops_the_runner_before_the_simulator(tmp_path,monkeypatch,capsys):
+    import pytest
+    module=load_runner()
+    monkeypatch.setenv('ICARUS_LLM_BASE_URL','http://api.example.com/v1')
+    monkeypatch.setenv('ICARUS_LLM_API_KEY','sk-secret');monkeypatch.setenv('ICARUS_LLM_MODEL','m')
+    cases=tmp_path/'cases.json';cases.write_text(json.dumps({'cases':[{'id':'one','mission':'m'}]}))
+    started=[]
+    monkeypatch.setattr(module.subprocess,'Popen',lambda *a,**k:started.append(a))
+    monkeypatch.setattr(sys,'argv',['acceptance','--cases',str(cases),'--output',str(tmp_path/'out')])
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert stop.value.code==2 and started==[]
+    err=capsys.readouterr().err
+    assert 'ICARUS_LLM_BASE_URL must be an https:// URL' in err and 'sk-secret' not in err
+
+
+def test_the_local_runtime_does_not_need_cloud_settings_to_start_the_runner(tmp_path,monkeypatch,capsys):
+    import pytest
+    module=load_runner()
+    for name in ('ICARUS_LLM_BASE_URL','ICARUS_LLM_API_KEY','ICARUS_LLM_MODEL'):
+        monkeypatch.delenv(name,raising=False)
+    cases=tmp_path/'cases.json';cases.write_text(json.dumps({'cases':[{'id':'one','mission':'m'}]}))
+    monkeypatch.setattr(module.socket.socket,'connect_ex',lambda self,address:0)  # a Drone API "already listening"
+    monkeypatch.setattr(sys,'argv',['acceptance','--cases',str(cases),'--output',str(tmp_path/'out'),'--runtime','local'])
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert stop.value.code==2
+    err=capsys.readouterr().err  # stopped by the port guard: it got past the skipped cloud check
+    assert 'already listening' in err and 'ICARUS_LLM' not in err
+
+
+def test_local_provenance_records_the_descriptor_and_pins_the_server_binary_library_and_patches(tmp_path):
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('provenance_eval',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    binary=tmp_path/'bin/llama-server';binary.parent.mkdir();binary.write_text('x')
+    (binary.parent/'libllama-common.so.0.0.1').write_text('x');(binary.parent/'libllama-common.so.0.0.2').write_text('x')
+    descriptor=SimpleNamespace(as_record=lambda:{'model_id':'local-model','runtime':'llama.cpp'})
+    record,paths=module.runtime_provenance('local',SimpleNamespace(binary=binary),descriptor)
+    assert record=={'model_id':'local-model','runtime':'llama.cpp'}
+    assert paths[0]==binary.resolve()
+    assert paths[1]==binary.parent/'libllama-common.so.0.0.1'  # the first library only, as before
+    patches=sorted((module.ROOT/'config/dependencies/patches').glob('*.patch'))
+    assert patches and paths[2:]==patches
+
+
+def test_cloud_provenance_is_the_settings_record_and_pins_no_local_server():
+    path=Path(__file__).resolve().parents[2]/'scripts/autonomy/evaluate_operator_missions.py'
+    spec=importlib.util.spec_from_file_location('provenance_eval_cloud',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    record={'provider_host':'api.example.com','model':'m'}
+    assert module.runtime_provenance('cloud',object(),record)==(record,[])

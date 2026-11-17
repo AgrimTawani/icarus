@@ -1,8 +1,9 @@
 """Native generation and dispatch must agree on configured sensor labels."""
 import pytest
 from jsonschema import Draft202012Validator
-from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
 from test_direct_agent import FakeClient
+
+from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
 
 
 def test_native_schemas_constrain_labels_before_generation_and_dispatch():

@@ -133,7 +133,7 @@ def test_localization_retains_sensor_to_model_coordinate_provenance():
 
 
 def test_target_anchor_is_read_only_and_keeps_live_sensor_failures_separate():
-    from test_target_registry import static_reference_fixture, state, perception
+    from test_target_registry import perception, state, static_reference_fixture
     registry, target_id, now = static_reference_fixture()
     now[0] = 30
     module = _module()

@@ -1,9 +1,10 @@
 """Workflow stop filters disclose their own predicate, never mission verdicts."""
 import pytest
-from python.dcm.angular_scan import AngularScan
-from python.dcm.scan_workflow import ScanWorkflow
 from test_angular_scan import Executor as AngularExecutor
 from test_scan_workflow import Executor as AreaExecutor
+
+from python.dcm.angular_scan import AngularScan
+from python.dcm.scan_workflow import ScanWorkflow
 
 
 def run(kind, evidence, minimum=1):

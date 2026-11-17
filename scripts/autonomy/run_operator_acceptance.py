@@ -14,6 +14,9 @@ from contextlib import ExitStack
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from python.model_runtime.select import ALIASES, KINDS
 
 
 def terminate_as_interrupt(signum, frame):
@@ -83,7 +86,7 @@ def stop_owned(process, timeout=15, tracked=()):
 def isolated_case_command(args, case_id, directory):
     command = [sys.executable, str(Path(__file__).resolve()),
                '--cases', str(args.cases), '--case', case_id,
-               '--manifest', str(args.manifest),
+               '--manifest', str(args.manifest), '--runtime', args.runtime,
                '--output', str(directory), '--max-decisions', str(args.max_decisions)]
     for answer in args.clarification_answer:
         command += ['--clarification-answer', answer]
@@ -93,6 +96,7 @@ def isolated_case_command(args, case_id, directory):
 def evaluation_command(args):
     command = [sys.executable, str(ROOT/'scripts/autonomy/evaluate_operator_missions.py'),
                '--cases', str(args.cases.resolve()), '--manifest', str(args.manifest.resolve()),
+               '--runtime', args.runtime,
                '--output', str((args.output/'missions').resolve()),
                '--max-decisions', str(args.max_decisions)]
     for value in args.case:
@@ -188,6 +192,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, default=ROOT/'config/dcm/agent-runtime.json')
+    parser.add_argument('--runtime', type=lambda name: ALIASES.get(name, name), choices=KINDS, default='cloud',
+                        help='mission model: the hosted API from ICARUS_LLM_* (default) or the local llama.cpp server')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', action='append', default=[])
     parser.add_argument('--clarification-answer', action='append', default=[])
@@ -200,6 +206,14 @@ def main():
     args.manifest = args.manifest.resolve()
     if not args.manifest.is_file():
         parser.error('Mission runtime manifest is missing: ' + str(args.manifest))
+    if args.runtime == 'cloud':
+        # Nothing is started for a run that cannot reach its model: check the settings first.
+        from python.model_runtime.cloud_config import CloudSettings
+        try:
+            CloudSettings.from_manifest(args.manifest)
+        except (OSError, KeyError, ValueError) as error:
+            parser.exit(2, f'{parser.prog}: cloud runtime settings: {error}; '
+                           'set ICARUS_LLM_BASE_URL, ICARUS_LLM_API_KEY and ICARUS_LLM_MODEL, or use --runtime local\n')
     requested = json.loads(args.cases.read_text())['cases']
     unknown = set(args.case) - {case['id'] for case in requested}
     if unknown:
@@ -279,7 +293,7 @@ def main():
             for name, timeout in (('evaluation',120),('camera',5),('autonomy',15),('simulator',20)):
                 try:
                     stop_owned(processes.get(name), timeout=timeout, tracked=tracked.get(name, ()))
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - stop every owned process before reporting
                     cleanup_errors.append(name + ': ' + str(error))
             if cleanup_errors:
                 print('Cleanup needs review: ' + '; '.join(cleanup_errors), flush=True)

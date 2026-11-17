@@ -1,9 +1,14 @@
 """Object descriptions resolve measured identities without a planning layer."""
 import pytest
 from jsonschema import Draft202012Validator
-
-from python.dcm.agent_tools import known_target_ids, ToolExecutor, decision_tools, validate_call
 from test_target_motion import Client
+
+from python.dcm.agent_tools import (
+    ToolExecutor,
+    decision_tools,
+    known_target_ids,
+    validate_call,
+)
 
 
 class DescribedClient(Client):

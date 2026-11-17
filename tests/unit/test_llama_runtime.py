@@ -172,8 +172,8 @@ class DeadlineTests(unittest.TestCase):
 class ConfigurationTests(unittest.TestCase):
 
     def test_explicit_sampling_reaches_native_request_and_provenance(self):
-        settings = dict(temperature=.6, top_p=.95, top_k=20, min_p=0,
-                        presence_penalty=0, repetition_penalty=1, seed=0)
+        settings = {'temperature': .6, 'top_p': .95, 'top_k': 20, 'min_p': 0,
+                    'presence_penalty': 0, 'repetition_penalty': 1, 'seed': 0}
         configured = dataclasses.replace(descriptor(2000), **settings)
         class Fast(StubHandler):
             pass

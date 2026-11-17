@@ -3,8 +3,8 @@ import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -50,7 +50,7 @@ def provision_inputs(tmp_path, family):
 
 def install(env):
     return subprocess.run(['bash', str(ROOT / 'scripts/setup-edge-vision-runtime')],
-        cwd=ROOT, env=env, capture_output=True, text=True, timeout=45)
+        cwd=ROOT, env=env, capture_output=True, text=True, timeout=45, check=False)
 
 
 @pytest.mark.parametrize('family', ['qwen2-vl', 'qwen2.5-vl'])

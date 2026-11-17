@@ -42,8 +42,9 @@ def test_context_exposes_advertised_policy_without_rounding_bounds(monkeypatch):
     ensure_generated_proto_on_path()
     from icarus.v1 import drone_api_pb2 as api
     from icarus.v1 import drone_api_pb2_grpc as rpc
-    from icarus.v1 import state_pb2 as state
     from icarus.v1 import perception_pb2 as perception
+    from icarus.v1 import state_pb2 as state
+
     from python.dcm.agent_context import capture_context
 
     caps = api.VehicleCapabilities()

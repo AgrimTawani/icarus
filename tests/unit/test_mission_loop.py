@@ -1,9 +1,10 @@
 """The mission loop: one tool per step, brief results, no hidden extra work."""
 import json
 
+from test_direct_agent import FakeClient, Runtime, call, run
+
 from python.dcm.agent_tools import AGENT_TOOLS, decision_tools
-from python.dcm.fly import AgentSession, brief, drop_oldest_exchange, fly_mission
-from test_direct_agent import FakeClient, Runtime, call, context, run
+from python.dcm.fly import AgentSession, brief, drop_oldest_exchange
 
 
 def airborne():

@@ -3,6 +3,7 @@ import dataclasses
 import io
 import json
 from contextlib import contextmanager
+from typing import ClassVar
 from unittest.mock import Mock, patch
 
 import pytest
@@ -73,7 +74,7 @@ def test_resident_question_is_serialized_with_decisions_and_keeps_the_server():
 
 
 class Server:
-    artifact = {'family': 'qwen3.5', 'grounding_format': 'json_norm1000_xyxy', 'resident': True}
+    artifact: ClassVar[dict] = {'family': 'qwen3.5', 'grounding_format': 'json_norm1000_xyxy', 'resident': True}
 
     def __init__(self, reply):
         self.reply, self.questions = reply, []
@@ -228,8 +229,11 @@ def test_text_only_runtime_keeps_one_slot():
 
 
 def test_mission_budget_leaves_room_for_the_camera_slot():
-    from python.dcm.llama_runtime import (VISION_CPU_IMAGE_MAX_TOKENS, VISION_IMAGE_MAX_TOKENS,
-                                          VISION_SLOT_TEXT_TOKENS)
+    from python.dcm.llama_runtime import (
+        VISION_CPU_IMAGE_MAX_TOKENS,
+        VISION_IMAGE_MAX_TOKENS,
+        VISION_SLOT_TEXT_TOKENS,
+    )
     runtime = LlamaCppRuntime(dataclasses.replace(descriptor(), mmproj_path='/p', mmproj_sha256='a'),
                               binary=__file__, verify_artifact=False)
     assert runtime._vision_slot_tokens() == VISION_IMAGE_MAX_TOKENS + VISION_SLOT_TEXT_TOKENS

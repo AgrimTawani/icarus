@@ -3,10 +3,12 @@ import copy
 import json
 import time
 from types import SimpleNamespace
+
 import pytest
+from test_direct_agent import FakeClient
+
 from python.dcm.agent_tools import ToolExecutor, decision_tools, validate_call
 from python.dcm.destinations import execute_destination, waypoint_catalogue
-from test_direct_agent import FakeClient
 
 
 class Executor:

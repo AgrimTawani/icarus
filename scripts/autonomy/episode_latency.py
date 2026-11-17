@@ -19,7 +19,7 @@ def summarize(episode):
             stats = payload.get("stats") or {}
             call = ((payload.get("response") or {}).get("tool_calls") or [{}])[0].get("function", {}).get("name")
             decisions.append(payload["latency_ms"])
-            print(f"{(event['unix_ms'] - start) / 1000:7.1f}s decision {str(call):18s} {payload['latency_ms']:6d} ms"
+            print(f"{(event['unix_ms'] - start) / 1000:7.1f}s decision {call!s:18s} {payload['latency_ms']:6d} ms"
                   f"  prefilled={stats.get('tokens_prefilled')} cached={stats.get('tokens_cached')}"
                   f" gen={stats.get('tokens_predicted')} @ {stats.get('predicted_per_second') or 0:.0f} tok/s")
         elif event["kind"] in ("semantic_visual_inspection", "semantic_visual_location", "target_grounding"):

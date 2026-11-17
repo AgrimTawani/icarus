@@ -1,9 +1,11 @@
 """Question answerability is separate from condition truth and transport success."""
 import json
+
 import pytest
-from python.perception.vlm import decode_measurement, measurement_grammar
+from test_direct_agent import FakeClient
+
 from python.dcm.agent_tools import ToolExecutor
-from test_direct_agent import FakeClient, Runtime, call, run
+from python.perception.vlm import decode_measurement, measurement_grammar
 
 
 @pytest.mark.parametrize('value,validity', [(True,'valid'),(False,'unknown'),(None,'unknown')])

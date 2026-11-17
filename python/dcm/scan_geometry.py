@@ -16,7 +16,7 @@ _MAX_DIMENSION_M = 10_000.0
 
 def _number(name: str, value: object, *, positive: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, Real):
-        raise ValueError(f"{name} must be a finite number")
+        raise ValueError(f"{name} must be a finite number")  # noqa: TRY004 - callers and tests expect ValueError
     result = float(value)
     if not math.isfinite(result) or (positive and result <= 0):
         raise ValueError(f"{name} must be a finite {'positive ' if positive else ''}number")
@@ -62,7 +62,7 @@ def generate_scan(
     if coverage not in {"perimeter", "area"}:
         raise ValueError("coverage must be perimeter or area")
     if not isinstance(clockwise, bool):
-        raise ValueError("clockwise must be a boolean")
+        raise ValueError("clockwise must be a boolean")  # noqa: TRY004 - callers and tests expect ValueError
     if isinstance(max_points, bool) or not isinstance(max_points, int) or not 4 <= max_points <= 100_000:
         raise ValueError("max_points must be an integer between 4 and 100000")
     north = _number("start_north_m", start_north_m)

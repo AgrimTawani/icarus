@@ -29,10 +29,10 @@ class AngularScan:
         if not origin or 'yaw_rad' not in state.get('attitude', {}):
             raise ValueError('Measured heading and origin required')
         ident = 'angular_' + uuid.uuid4().hex[:16]
-        self.client._angular_scans[ident] = dict(args=copy.deepcopy(args), origin=origin,
-            initial_heading_deg=math.degrees(state['attitude']['yaw_rad']) % 360,
-            swept_deg=0.0, phase='turn', observations=[], completed=False,
-            heading_after_turn=None)
+        self.client._angular_scans[ident] = {'args': copy.deepcopy(args), 'origin': origin,
+            'initial_heading_deg': math.degrees(state['attitude']['yaw_rad']) % 360,
+            'swept_deg': 0.0, 'phase': 'turn', 'observations': [], 'completed': False,
+            'heading_after_turn': None}
         return self.resume_heading_scan(ident)
 
     def resume_heading_scan(self, scan_id):

@@ -1,5 +1,6 @@
 import math
 from types import SimpleNamespace
+
 from python.dcm.angular_scan import AngularScan
 
 

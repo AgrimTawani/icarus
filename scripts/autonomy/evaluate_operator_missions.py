@@ -12,8 +12,8 @@ import json
 import os
 import re
 import signal
-import sys
 import subprocess
+import sys
 import time
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
@@ -21,9 +21,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from python.dcm.fly import AgentSession, fly_mission, safe_exit_recovery, session_episode_summary
-from python.dcm.llama_runtime import LlamaCppRuntime
-from python.dcm.runtime_config import RuntimeDescriptor
+from python.dcm.fly import (
+    AgentSession,
+    fly_mission,
+    safe_exit_recovery,
+    session_episode_summary,
+)
+from python.model_runtime.cloud_config import MissingCloudSetting
+from python.model_runtime.select import ALIASES, KINDS, make_runtime
 
 
 def fixture_reply(item, question):
@@ -53,11 +58,35 @@ def defer_stop_during_recovery(result):
         signal.signal(signal.SIGINT, previous)
 
 
+def pinned_python_sources():
+    """Python that shapes mission decisions; hashed for provenance and change detection."""
+    return [*sorted((ROOT / 'python/dcm').glob('*.py')),
+            *sorted((ROOT / 'python/perception').glob('*.py')),
+            *sorted((ROOT / 'python/model_runtime').glob('*.py'))]
+
+
+def runtime_provenance(kind, runtime, descriptor):
+    """`(record, extra_paths)` for the report: what served the decisions and what to hash for it.
+
+    Local: the descriptor's record plus the serving executable, its native parser library and
+    the tracked backend patches (a patch changes the library). Cloud: the settings record
+    (provider host and model ids, never a key) and no local files.
+    """
+    if kind != 'local':
+        return descriptor, []
+    return descriptor.as_record(), [
+        runtime.binary.resolve(),
+        *sorted(runtime.binary.parent.glob('libllama-common.so.*'))[:1],
+        *sorted((ROOT / 'config/dependencies/patches').glob('*.patch'))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cases', type=Path, default=ROOT / 'tests/fixtures/operator_phase1_missions.json')
     parser.add_argument('--case', action='append')
     parser.add_argument('--manifest', type=Path, default=ROOT / 'config/dcm/agent-runtime.json')
+    parser.add_argument('--runtime', type=lambda name: ALIASES.get(name, name), choices=KINDS, default='cloud',
+                        help='mission model: the hosted API from ICARUS_LLM_* (default) or the local llama.cpp server')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--max-decisions', type=int, default=32)
     parser.add_argument('--clarification-answer', action='append', default=[],
@@ -73,12 +102,18 @@ def main():
     spec = importlib.util.spec_from_file_location('icarus_eval_client', ROOT / 'scripts/autonomy/run_mission.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    descriptor = RuntimeDescriptor.from_manifest(args.manifest)
-    runtime = LlamaCppRuntime(descriptor)
+    try:
+        runtime, descriptor = make_runtime(args.runtime, args.manifest)
+    except MissingCloudSetting as error:
+        parser.exit(1, f'{parser.prog}: {error}\n')
+    if args.runtime == 'cloud':
+        try:
+            runtime.start()  # fail before any drone is connected; local starts after the camera detector
+        except RuntimeError as error:
+            parser.exit(1, f'{parser.prog}: {error}\n')
     runtime_started = False
     results = []
-    paths = [*sorted((ROOT / 'python/dcm').glob('*.py')),
-             *sorted((ROOT / 'python/perception').glob('*.py')),
+    paths = [*pinned_python_sources(),
              ROOT / 'scripts/autonomy/run_mission.py',
              ROOT / 'scripts/autonomy/evaluate_operator_missions.py',
              ROOT / 'scripts/autonomy/run_operator_acceptance.py',
@@ -91,9 +126,8 @@ def main():
              ROOT / 'config/safety/v1.yaml', args.cases, args.manifest]
     # Pin the actual serving executable and native parser library as well as
     # the upstream revision; a tracked backend patch changes the latter.
-    paths.append(runtime.binary.resolve())
-    paths.extend(sorted((runtime.binary.parent).glob('libllama-common.so.*'))[:1])
-    paths.extend(sorted((ROOT / 'config/dependencies/patches').glob('*.patch')))
+    runtime_record, runtime_paths = runtime_provenance(args.runtime, runtime, descriptor)
+    paths.extend(runtime_paths)
     if os.environ.get('ICARUS_WAYPOINTS_FILE'):
         paths.append(Path(os.environ['ICARUS_WAYPOINTS_FILE']).resolve())
     # Camera artifacts may be provisioned outside the checkout or supplied as
@@ -101,7 +135,7 @@ def main():
     paths.append(Path(os.environ.get('EDGE_VISION_MANIFEST') or
                       (Path.home() / 'models/edge/MANIFEST.json')).resolve())
     provenance = {
-        'runtime': descriptor.as_record(),
+        'runtime': runtime_record,
         'git_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
         'source_sha256': {(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p)):
                           hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
@@ -127,7 +161,8 @@ def main():
             capture = client._capture_rgb
             camera_directory = args.output / case['id'] / 'camera'
             camera_directory.mkdir(parents=True, exist_ok=True)
-            def retain_capture(output, camera='forward_d435i'):
+            def retain_capture(output, camera='forward_d435i', *, capture=capture,
+                               camera_directory=camera_directory, client=client):
                 source = capture(output, camera=camera)
                 from PIL import Image
                 stamp = time.time_ns()
@@ -177,14 +212,14 @@ def main():
                 except KeyboardInterrupt:
                     result.update(status='cancelled', message='Evaluation interrupted by operator')
                     client.episode_outcome = 'incomplete'
-                except Exception as error:
+                except Exception as error:  # noqa: BLE001 - record the failure and still run exit recovery
                     result.update(status='error', message=f'{type(error).__name__}: {error}')
                     client.episode_outcome = 'failed'
                 finally:
                     with defer_stop_during_recovery(result):
                         try:
                             result['recovery'] = safe_exit_recovery(client)
-                        except Exception as error:
+                        except Exception as error:  # noqa: BLE001 - recovery failure must be recorded
                             result['recovery'] = {'status': 'FAILED', 'message': str(error)}
                         finally:
                             if result.get('recovery', {}).get('status') not in ('SUCCEEDED', 'manual_override'):
@@ -197,7 +232,7 @@ def main():
                             result['episode'] = str(episode.directory) if episode is not None else None
                             try:
                                 client.close()
-                            except Exception as error:
+                            except Exception as error:  # noqa: BLE001 - cleanup failure must be recorded
                                 result['cleanup_error'] = str(error)
                         result['seconds'] = round(time.monotonic() - started, 2)
                         changed = [name for name, digest in provenance['source_sha256'].items()

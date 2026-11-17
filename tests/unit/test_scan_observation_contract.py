@@ -1,11 +1,12 @@
 """Embedded sensor calls must share the public contract before any motion."""
 import pytest
+from test_angular_scan import Executor as AngularExecutor
+from test_scan_workflow import Executor as AreaExecutor
+
 from python.dcm.agent_tools import SCHEMAS, validate_call
 from python.dcm.angular_scan import AngularScan
 from python.dcm.scan_workflow import ScanWorkflow
 from python.perception.classes import YOLO_CLASSES
-from test_angular_scan import Executor as AngularExecutor
-from test_scan_workflow import Executor as AreaExecutor
 
 
 @pytest.mark.parametrize('kind', ['angular', 'area'])

@@ -21,8 +21,9 @@ sys.path.insert(0, str(ROOT / 'build/generated/python'))
 def main():
     import grpc
     from google.protobuf.json_format import MessageToDict
+    from icarus.v1 import drone_api_pb2 as api
+    from icarus.v1 import drone_api_pb2_grpc as rpc
     from PIL import Image
-    from icarus.v1 import drone_api_pb2 as api, drone_api_pb2_grpc as rpc
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', required=True, type=Path)
     parser.add_argument('--process', required=True, type=int)

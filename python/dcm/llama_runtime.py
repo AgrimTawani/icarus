@@ -33,17 +33,19 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import ClassVar
 
-from python.dcm.runtime_config import ContextBudgetExceeded, DeadlineExceeded, RuntimeDescriptor
+from python.dcm.runtime_config import (
+    ContextBudgetExceeded,
+    DeadlineExceeded,
+    IncompleteModelResponse,
+    RuntimeDescriptor,
+)
 
 DEFAULT_BINARY = (Path(__file__).resolve().parents[2]
                   / "third_party/llama.cpp/build/bin/llama-server")
 STARTUP_TIMEOUT_S = 180
 STDERR_TAIL_BYTES = 64 * 1024
-
-
-class IncompleteModelResponse(RuntimeError):
-    """No tool executed; one concise retry may repair unusable model output."""
 
 
 VISION_IMAGE_MAX_TOKENS = 1024
@@ -70,7 +72,7 @@ class ResidentVision:
     """
 
     # Qwen3.5 boxes are 0-1000 normalized whatever the prompt says.
-    artifact_fields = {"grounding_format": "json_norm1000_xyxy", "minimum_request_interval_s": 0.5}
+    artifact_fields: ClassVar[dict] = {"grounding_format": "json_norm1000_xyxy", "minimum_request_interval_s": 0.5}
 
     def __init__(self, runtime):
         self.runtime = runtime
@@ -241,7 +243,7 @@ class LlamaCppRuntime:
             # A CPU projector encodes every camera frame on the CPU. The flight
             # stack's sensor bridges must win that contention: measured AirSim
             # surveys aborted twice on stale perception without this.
-            preexec_fn=_yield_cpu_to_flight_stack if self.projector_on_gpu is False else None)
+            preexec_fn=_yield_cpu_to_flight_stack if self.projector_on_gpu is False else None)  # noqa: PLW1509 - only lowers CPU priority before exec; measured flight-stack need
         self._start_stderr_drain()
         try:
             self._await_ready()

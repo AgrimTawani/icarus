@@ -7,7 +7,11 @@ from unittest.mock import patch
 
 import numpy as np
 
-from python.perception.depth_feedback import DepthFrameCache, GazeboDepthSource, decode_gazebo_depth
+from python.perception.depth_feedback import (
+    DepthFrameCache,
+    GazeboDepthSource,
+    decode_gazebo_depth,
+)
 
 
 def cache(**kwargs):
@@ -70,12 +74,13 @@ class DepthFeedbackTests(unittest.TestCase):
         from python.dcm._paths import ensure_generated_proto_on_path
         ensure_generated_proto_on_path()
         from icarus.v1 import drone_api_pb2_grpc as rpc
+
         from python.dcm.agent_context import capture_context
 
         frames = cache()
         frames.update(np.full((10, 10), 2.5))
         client = SimpleNamespace(
-            state=lambda: {}, session_id="test", channel=None,
+            state=dict, session_id="test", channel=None,
             state_api=SimpleNamespace(GetHealth=lambda *a, **k: {}),
             depth_feedback=frames.summary,
             target_feedback=lambda: [{"target_id": "measured-1"}],

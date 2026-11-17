@@ -3,6 +3,7 @@ import copy
 import json
 
 import pytest
+
 from python.dcm.agent_tools import validate_call
 
 
@@ -24,7 +25,7 @@ def test_large_invalid_array_reports_actual_length_and_limit_without_dumping_val
 
 
 def test_duplicate_classes_identified_without_replaying_array():
-    message, result = rejected('detect', {'classes': ['person', 'car', 'person']})
+    _message, result = rejected('detect', {'classes': ['person', 'car', 'person']})
     assert result['validator'] == 'uniqueItems'
     assert result['duplicate_values'] == ['person']
     assert result['actual']['length'] == 3
@@ -52,7 +53,7 @@ def test_object_reference_alternatives_remain_visible():
     ({'angle_deg': 'ninety'}, 'type', 'number', 'ninety'),
 ])
 def test_numeric_bounds_and_types_preserve_constraint_and_actual_value(arguments, validator, expected, actual):
-    message, result = rejected('yaw', arguments)
+    _message, result = rejected('yaw', arguments)
     assert result['validator'] == validator
     assert result['expected'] == expected and result['actual']['value'] == actual
 
@@ -66,6 +67,7 @@ def test_missing_and_unknown_fields_are_explicit():
 
 def diagnostic(schema, value):
     from jsonschema import Draft202012Validator
+
     from python.dcm.validation_diagnostics import schema_diagnostic
     return schema_diagnostic(next(Draft202012Validator(schema).iter_errors(value)))
 

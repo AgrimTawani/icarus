@@ -1,6 +1,7 @@
 """Behavior tests for the direct agent, independent of model and simulator."""
 
 import io
+import itertools
 import json
 import math
 import threading
@@ -34,7 +35,7 @@ def call(name, **arguments):
 
 
 def test_model_completion_is_labelled_as_assessment_not_independent_verification():
-    from python.dcm.fly import summarize, session_episode_summary
+    from python.dcm.fly import session_episode_summary, summarize
     result = {'status': 'completed', 'message': 'Done.', 'decisions': 1,
               'assessment_source': 'mission_model'}
     assert 'Agent assessment: completed' in summarize(result)
@@ -462,7 +463,7 @@ def test_small_route_cannot_accept_one_stationary_pose_at_all_corners():
     result = ToolExecutor(c).execute('execute_route', {'points': points})
     assert result['status'] == 'SUCCEEDED'
     route = c.sent[-1][1].points
-    for left, right in zip(route, route[1:]):
+    for left, right in itertools.pairwise(route):
         a, b = left.position.local_ned, right.position.local_ned
         separation = math.hypot(a.north_m-b.north_m, a.east_m-b.east_m)
         assert left.acceptance_radius_m + right.acceptance_radius_m < separation

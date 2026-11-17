@@ -2,8 +2,8 @@
 import math
 import uuid
 
-from python.dcm.scan_geometry import generate_scan
 from python.dcm.observation_receipt import stop_filter_receipt
+from python.dcm.scan_geometry import generate_scan
 from python.dcm.scan_policy import failure_receipt
 
 
@@ -70,8 +70,7 @@ class ScanWorkflow:
             'path_completed': result['status']=='SUCCEEDED'}}
 
     def scan_area(self, **args):
-        from python.dcm.agent_tools import message_dict
-        from python.dcm.agent_tools import observation_call
+        from python.dcm.agent_tools import message_dict, observation_call
         from python.dcm.scan_policy import scan_arguments
         args = scan_arguments(args, default_observation='scene', coverage_return='completion')
         observation_call(args, default_observation='scene', default_camera='downward_brio', client=self.client)
